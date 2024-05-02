@@ -1,1 +1,1 @@
-# SaProtHub
+# ColabSaProt

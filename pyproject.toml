@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "saprot"
+version = "0.4.3"
+description = ""
+authors = ["Zhikai Li <luckydogqaq@163.com>"]
+readme = "README.md"
+
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pytorch-lightning = "1.8.3"
+wandb = "*"
+transformers = "4.28.0"
+easydict = "*"
+biopython = "*"
+scipy = "*"                                                                                                                 
+peft = "*"
+lmdb = "*"
+torchmetrics = "0.9.3"
+pandas = "*"
+fair-esm = "*"
+matplotlib = "*"
+multiprocess = "*"
+loguru = "*"
+bio = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
