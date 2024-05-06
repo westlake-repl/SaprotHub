@@ -64,6 +64,9 @@ def my_load_dataset(config):
     if dataset_type == "esm/esm_regression_dataset":
       from dataset.esm.esm_regression_dataset import EsmRegressionDataset
       return EsmRegressionDataset(**dataset_config)
+    if dataset_type == "esm/esm_pair_regression_dataset":
+      from dataset.esm.esm_pair_regression_dataset import EsmPairRegressionDataset
+      return EsmPairRegressionDataset(**dataset_config)
 
 def load_wandb(config):
     # initialize wandb

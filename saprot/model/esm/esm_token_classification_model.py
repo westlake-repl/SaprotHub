@@ -105,7 +105,7 @@ class EsmTokenClassificationModel(EsmBaseModel):
         
         # if dist.get_rank() == 0:
         #     print(log_dict)
-        # print(log_dict)
+        print(log_dict)
         self.log_info(log_dict)
         self.reset_metrics("test")
 
