@@ -74,16 +74,18 @@ def create_pdb_from_backbone(backbone_coords_dict: dict, output_file: str, resid
     io.save(output_file)
     
 
-def is_residue_valid(residue) -> bool:
+def is_residue_valid(residue, CA_only: bool = False) -> bool:
     """
-    Check if the residue has all atoms(N, CA, C, O)
+    Check if the residue has all atoms (N, CA, C, O)
     Args:
-        residue: Bio.PDB.Residue object
+        residue: Bio.PDB.Residue object.
+
+        CA_only: If True, only check if the residue has CA atom.
 
     Returns:
         True if the residue has all atoms
     """
-    atoms = ['N', 'CA', 'C', 'O']
+    atoms = ['N', 'CA', 'C', 'O'] if not CA_only else ['CA']
     
     res_name = residue.get_resname()
     if res_name not in aa3to1 or sum([0 if atom in residue else 1 for atom in atoms]) > 0:
@@ -416,13 +418,16 @@ def remove_pdb_section(input_pdb, output_pdb, chain_id, remove_residues: list) -
             io.save(output_pdb)
 
 
-def parse_structure(path, chains: list = None) -> dict:
+def parse_structure(path, chains: list = None, CA_only: bool = False) -> dict:
     """
     Parse a pdb file into a list of dict.
 
     Args:
         path: Path to the pdb file.
+
         chains: A list of chains to be parsed. If None, all chains will be parsed.
+
+        CA_only: If True, only CA atoms will be parsed.
 
     Returns:
         A dict of parsed chains. The keys are chain ids and the values are dicts of parsed chains.
@@ -431,7 +436,6 @@ def parse_structure(path, chains: list = None) -> dict:
             name: Name of the pdb.
             chain: Chain ID.
     """
-    
     _, file = os.path.split(path)
     name, format = os.path.splitext(file)
 
@@ -444,12 +448,12 @@ def parse_structure(path, chains: list = None) -> dict:
     chains = structure[0].get_chains() if chains is None else [structure[0][chain_id] for chain_id in chains]
     for chain in chains:
         residues = chain.get_residues()
-        atoms = ['N', 'CA', 'C', 'O']
-        coords = {'N': [], 'CA': [], 'C': [], 'O': []}
+        atoms = ['N', 'CA', 'C', 'O'] if not CA_only else ['CA']
+        coords = {atom: [] for atom in atoms}
 
         seq = []
         for residue in residues:
-            if is_residue_valid(residue):
+            if is_residue_valid(residue, CA_only):
                 res_name = residue.get_resname()
                 seq.append(aa3to1[res_name])
                 for atom in atoms:

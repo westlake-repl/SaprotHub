@@ -2,10 +2,6 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
-
-from scipy.spatial.transform import Rotation
-
-
 aa = 'ACDEFGHIKLMNPQRSTVWY'
 aa2id = {aa: i for i, aa in enumerate(aa)}
 
