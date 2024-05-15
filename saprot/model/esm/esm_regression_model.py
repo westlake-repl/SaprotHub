@@ -82,7 +82,12 @@ class EsmRegressionModel(EsmBaseModel):
         
         log_dict = self.get_log_dict("test")
         
-        print(log_dict)
+        # print(log_dict)
+        print('#'*100)
+        print('Test Result:')
+        for key, value in log_dict.items():
+            print(f"{key}: {value.item()}")
+        print('#'*100)
         self.log_info(log_dict)
         self.reset_metrics("test")
 
