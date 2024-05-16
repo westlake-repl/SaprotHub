@@ -62,11 +62,11 @@ class EsmClassificationModel(EsmBaseModel):
         log_dict["test_loss"] = torch.mean(torch.stack(outputs))
 
         # print(log_dict)
-        print('#'*100)
+        print('='*100)
         print('Test Result:')
         for key, value in log_dict.items():
             print(f"{key}: {value.item()}")
-        print('#'*100)
+        print('='*100)
         self.log_info(log_dict)
 
         self.reset_metrics("test")
