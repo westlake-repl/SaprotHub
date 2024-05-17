@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 
 
 
-class EsmBaseModel(AbstractModel):
+class SaprotBaseModel(AbstractModel):
     """
     ESM base model. It cannot be used directly but provides model initialization for downstream tasks.
     """

@@ -13,7 +13,7 @@ from data.data_transform import *
 
 
 @register_dataset
-class EsmLMDataset(LMDBDataset):
+class SaprotLMDataset(LMDBDataset):
 	"""
 	Dataset of Mask Token Reconstruction with Structure information
 	"""

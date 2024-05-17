@@ -31,18 +31,18 @@ def my_load_model(config):
     
     model_config.update(kwargs)
 
-    if model_type == "esm/esm_classification_model":
-      from model.esm.esm_classification_model import EsmClassificationModel
-      return EsmClassificationModel(**model_config)
+    if model_type == "saprot/saprot_classification_model":
+      from model.saprot.saprot_classification_model import SaprotClassificationModel
+      return SaprotClassificationModel(**model_config)
     
-    if model_type == "esm/esm_token_classification_model":
-      from model.esm.esm_token_classification_model import EsmTokenClassificationModel
-      return EsmTokenClassificationModel(**model_config)
+    if model_type == "saprot/saprot_token_classification_model":
+      from model.saprot.saprot_token_classification_model import SaprotTokenClassificationModel
+      return SaprotTokenClassificationModel(**model_config)
     
-    if model_type == "esm/esm_regression_model":
+    if model_type == "saprot/saprot_regression_model":
       if 'num_labels' in model_config: del model_config['num_labels']
-      from model.esm.esm_regression_model import EsmRegressionModel
-      return EsmRegressionModel(**model_config)
+      from model.saprot.saprot_regression_model import SaprotRegressionModel
+      return SaprotRegressionModel(**model_config)
 
 
 ################################################################################
@@ -54,19 +54,19 @@ def my_load_dataset(config):
     kwargs = dataset_config.pop('kwargs')
     dataset_config.update(kwargs)
 
-    if dataset_type == "esm/esm_classification_dataset":
-      from dataset.esm.esm_classification_dataset import EsmClassificationDataset
-      return EsmClassificationDataset(**dataset_config)
-    if dataset_type == "esm/esm_token_classification_dataset":
+    if dataset_type == "saprot/saprot_classification_dataset":
+      from dataset.saprot.saprot_classification_dataset import SaprotClassificationDataset
+      return SaprotClassificationDataset(**dataset_config)
+    if dataset_type == "saprot/saprot_token_classification_dataset":
       if 'plddt_threshold' in dataset_config: del dataset_config['plddt_threshold']
-      from dataset.esm.esm_token_classification_dataset import EsmTokenClassificationDataset
-      return EsmTokenClassificationDataset(**dataset_config)
-    if dataset_type == "esm/esm_regression_dataset":
-      from dataset.esm.esm_regression_dataset import EsmRegressionDataset
-      return EsmRegressionDataset(**dataset_config)
-    if dataset_type == "esm/esm_pair_regression_dataset":
-      from dataset.esm.esm_pair_regression_dataset import EsmPairRegressionDataset
-      return EsmPairRegressionDataset(**dataset_config)
+      from dataset.saprot.saprot_token_classification_dataset import SaprotTokenClassificationDataset
+      return SaprotTokenClassificationDataset(**dataset_config)
+    if dataset_type == "saprot/saprot_regression_dataset":
+      from dataset.saprot.saprot_regression_dataset import SaprotRegressionDataset
+      return SaprotRegressionDataset(**dataset_config)
+    if dataset_type == "saprot/saprot_pair_regression_dataset":
+      from dataset.saprot.saprot_pair_regression_dataset import SaprotPairRegressionDataset
+      return SaprotPairRegressionDataset(**dataset_config)
 
 def load_wandb(config):
     # initialize wandb

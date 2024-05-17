@@ -8,11 +8,11 @@ import numpy as np
 
 from utils.constants import aa_set, foldseek_struc_vocab, aa_list
 from ..model_interface import register_model
-from .base import EsmBaseModel
+from .base import SaprotBaseModel
 
 
 @register_model
-class EsmFoldseekMutationModel(EsmBaseModel):
+class SaprotFoldseekMutationModel(SaprotBaseModel):
     def __init__(self,
                  foldseek_path: str,
                  plddt_threshold: float = 0.,
@@ -38,7 +38,7 @@ class EsmFoldseekMutationModel(EsmBaseModel):
             
             log_dir: If log_clinvar is True, the model will save the predicted evolutionary indices for ClinVar variants
             
-            **kwargs: Other arguments for EsmBaseModel
+            **kwargs: Other arguments for SaprotBaseModel
         """
         self.foldseek_path = foldseek_path
         self.plddt_threshold = plddt_threshold
@@ -70,8 +70,8 @@ class EsmFoldseekMutationModel(EsmBaseModel):
         # Sample a random rank to avoid file conflict
         rank = random.randint(0, 1000000)
         
-        tmp_pdb_path = f"EsmFoldseekMutationModel_{self.global_rank}_{rank}.{structure_type}"
-        tmp_save_path = f"EsmFoldseekMutationModel_{self.global_rank}_{rank}.tsv"
+        tmp_pdb_path = f"SaprotFoldseekMutationModel_{self.global_rank}_{rank}.{structure_type}"
+        tmp_save_path = f"SaprotFoldseekMutationModel_{self.global_rank}_{rank}.tsv"
         
         # Save structure content to temporary file
         with open(tmp_pdb_path, "w") as w:

@@ -4,15 +4,15 @@ import torch.distributed as dist
 
 from torch.nn.functional import cross_entropy
 from ..model_interface import register_model
-from .base import EsmBaseModel
+from .base import SaprotBaseModel
 
 @register_model
-class EsmTokenClassificationModel(EsmBaseModel):
+class SaprotTokenClassificationModel(SaprotBaseModel):
     def __init__(self, num_labels: int, **kwargs):
         """
         Args:
             num_labels: number of labels
-            **kwargs: other arguments for EsmBaseModel
+            **kwargs: other arguments for SaprotBaseModel
         """
         self.num_labels = num_labels
         # For MCC calculation

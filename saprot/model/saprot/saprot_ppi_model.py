@@ -1,43 +1,47 @@
 import torchmetrics
 import torch
 
+from torch.nn import Linear, ReLU
 from torch.nn.functional import cross_entropy
 from ..model_interface import register_model
-from .base import EsmBaseModel
+from .base import SaprotBaseModel
 
 
 @register_model
-class EsmClassificationModel(EsmBaseModel):
-    def __init__(self, num_labels: int, **kwargs):
+class SaprotPPIModel(SaprotBaseModel):
+    def __init__(self, **kwargs):
         """
         Args:
-            num_labels: number of labels
-            **kwargs: other arguments for EsmBaseModel
+            **kwargs: other arguments for SaprotBaseModel
         """
-        self.num_labels = num_labels
-        super().__init__(task="classification", **kwargs)
+        super().__init__(task="base", **kwargs)
+
+    def initialize_model(self):
+        super().initialize_model()
         
+        hidden_size = self.model.config.hidden_size * 2
+        classifier = torch.nn.Sequential(
+                        Linear(hidden_size, hidden_size),
+                        ReLU(),
+                        Linear(hidden_size, 2)
+                    )
+        
+        setattr(self.model, "classifier", classifier)
+
     def initialize_metrics(self, stage):
         return {f"{stage}_acc": torchmetrics.Accuracy()}
 
-    def forward(self, inputs, coords=None):
-        if coords is not None:
-            inputs = self.add_bias_feature(inputs, coords)
-
-        # If backbone is frozen, the embedding will be the average of all residues
+    def forward(self, inputs_1, inputs_2):
         if self.freeze_backbone:
-            repr = torch.stack(self.get_hidden_states(inputs, reduction="mean"))
-            x = self.model.classifier.dropout(repr)
-            x = self.model.classifier.dense(x)
-            x = torch.tanh(x)
-            x = self.model.classifier.dropout(x)
-            logits = self.model.classifier.out_proj(x)
-
+            hidden_1 = torch.stack(self.get_hidden_states(inputs_1, reduction="mean"))
+            hidden_2 = torch.stack(self.get_hidden_states(inputs_2, reduction="mean"))
         else:
-            logits = self.model(**inputs).logits
+            hidden_1 = self.model.esm(**inputs_1)[0][:, 0, :]
+            hidden_2 = self.model.esm(**inputs_2)[0][:, 0, :]
 
-        return logits
-
+        hidden_concat = torch.cat([hidden_1, hidden_2], dim=-1)
+        return self.model.classifier(hidden_concat)
+    
     def loss_func(self, stage, logits, labels):
         label = labels['labels']
         loss = cross_entropy(logits, label)
@@ -59,14 +63,9 @@ class EsmClassificationModel(EsmBaseModel):
     def test_epoch_end(self, outputs):
         log_dict = self.get_log_dict("test")
         # log_dict["test_loss"] = torch.cat(self.all_gather(outputs), dim=-1).mean()
-        log_dict["test_loss"] = torch.mean(torch.stack(outputs))
+        log_dict["valid_loss"] = torch.mean(torch.stack(outputs))
 
-        # print(log_dict)
-        print('='*100)
-        print('Test Result:')
-        for key, value in log_dict.items():
-            print(f"{key}: {value.item()}")
-        print('='*100)
+        print(log_dict)
         self.log_info(log_dict)
 
         self.reset_metrics("test")
@@ -75,8 +74,7 @@ class EsmClassificationModel(EsmBaseModel):
         log_dict = self.get_log_dict("valid")
         # log_dict["valid_loss"] = torch.cat(self.all_gather(outputs), dim=-1).mean()
         log_dict["valid_loss"] = torch.mean(torch.stack(outputs))
+
         self.log_info(log_dict)
         self.reset_metrics("valid")
         self.check_save_condition(log_dict["valid_acc"], mode="max")
-
-        self.plot_valid_metrics_curve(log_dict)

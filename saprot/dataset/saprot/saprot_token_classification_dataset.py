@@ -9,7 +9,7 @@ from data.data_transform import pad_sequences
 
 
 @register_dataset
-class EsmTokenClassificationDataset(LMDBDataset):
+class SaprotTokenClassificationDataset(LMDBDataset):
     def __init__(self,
                  tokenizer: str,
                  max_length: int = 1024,

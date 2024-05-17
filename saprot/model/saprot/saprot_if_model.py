@@ -5,11 +5,11 @@ import torchmetrics
 from torch.nn.functional import cross_entropy
 
 from ..model_interface import register_model
-from .base import EsmBaseModel
+from .base import SaprotBaseModel
 
 
 @register_model
-class SaProtIFModel(EsmBaseModel):
+class SaProtIFModel(SaprotBaseModel):
     """
     SaProt inverse folding model.
     """

@@ -7,7 +7,7 @@ from ..data_interface import register_dataset
 
 
 @register_dataset
-class EsmPairRegressionDataset(LMDBDataset):
+class SaprotPairRegressionDataset(LMDBDataset):
     def __init__(self,
                  tokenizer: str,
                  max_length: int = 1024,

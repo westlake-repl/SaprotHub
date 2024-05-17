@@ -8,11 +8,11 @@ import torchmetrics
 
 from utils.constants import aa_set
 from ..model_interface import register_model
-from .base import EsmBaseModel
+from .base import SaprotBaseModel
 
 
 @register_model
-class EsmMutationModel(EsmBaseModel):
+class SaprotMutationModel(SaprotBaseModel):
     def __init__(self,
                  use_bias_feature: bool = False,
                  MSA_log_path: str = None,
@@ -29,7 +29,7 @@ class EsmMutationModel(EsmBaseModel):
             
             log_dir: If log_clinvar is True, the model will save the predicted evolutionary indices for ClinVar variants
             
-            **kwargs: other arguments for EsmBaseModel
+            **kwargs: other arguments for SaprotBaseModel
         """
         self.use_bias_feature = use_bias_feature
         self.MSA_log_path = MSA_log_path
@@ -54,7 +54,7 @@ class EsmMutationModel(EsmBaseModel):
     def forward(self, wild_type, seqs, mut_info, structure_content, structure_type, plddt):
         # if self.use_bias_feature and getattr(self, "coords", None) is None:
         #     structure_type = "cif" if structure_type == "mmcif" else structure_type
-        #     tmp_path = f"EsmMutationModel_{self.global_rank}.{structure_type}"
+        #     tmp_path = f"SaprotMutationModel_{self.global_rank}.{structure_type}"
         #     with open(tmp_path, "w") as f:
         #         f.write(structure_content)
         #
