@@ -7,20 +7,20 @@ from ..data_interface import register_dataset
 
 
 @register_dataset
-class SaprotPairRegressionDataset(LMDBDataset):
+class SaprotPairClassificationDataset(LMDBDataset):
     def __init__(self,
-                 tokenizer: str,
-                 max_length: int = 1024,
-                 plddt_threshold: float = None,
-                 **kwargs):
+             tokenizer: str,
+             max_length: int = 1024,
+             plddt_threshold: float = None,
+             **kwargs):
         """
         Args:
             tokenizer: Path to tokenizer
-
+            
             max_length: Max length of sequence
-
+            
             plddt_threshold: If not None, mask structure tokens with pLDDT < threshold
-
+            
             **kwargs:
         """
         super().__init__(**kwargs)
@@ -35,7 +35,7 @@ class SaprotPairRegressionDataset(LMDBDataset):
         if not isinstance(self.tokenizer, EsmTokenizer):
             seq_1 = " ".join(seq_1)
             seq_2 = " ".join(seq_2)
-
+        
         # Mask structure tokens with pLDDT < threshold
         if self.plddt_threshold is not None:
             plddt_1, plddt_2 = entry['plddt_1'], entry['plddt_2']
@@ -47,7 +47,7 @@ class SaprotPairRegressionDataset(LMDBDataset):
                     seq_1 += token[:-1] + "#"
                 else:
                     seq_1 += token
-
+            
             tokens = self.tokenizer.tokenize(seq_2)
             seq_2 = ""
             assert len(tokens) == len(plddt_2)
@@ -56,14 +56,14 @@ class SaprotPairRegressionDataset(LMDBDataset):
                     seq_2 += token[:-1] + "#"
                 else:
                     seq_2 += token
-
+                    
         tokens = self.tokenizer.tokenize(seq_1)[:self.max_length]
         seq_1 = " ".join(tokens)
 
         tokens = self.tokenizer.tokenize(seq_2)[:self.max_length]
         seq_2 = " ".join(tokens)
-
-        return seq_1, seq_2, entry["label"]
+        
+        return seq_1, seq_2, int(entry["label"])
 
     def __len__(self):
         return int(self._get("length"))
@@ -71,7 +71,7 @@ class SaprotPairRegressionDataset(LMDBDataset):
     def collate_fn(self, batch):
         seqs_1, seqs_2, label_ids = tuple(zip(*batch))
 
-        label_ids = torch.tensor(label_ids)
+        label_ids = torch.tensor(label_ids, dtype=torch.long)
         labels = {"labels": label_ids}
 
         encoder_info_1 = self.tokenizer.batch_encode_plus(seqs_1, return_tensors='pt', padding=True)

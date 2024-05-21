@@ -44,6 +44,15 @@ def my_load_model(config):
       from model.saprot.saprot_regression_model import SaprotRegressionModel
       return SaprotRegressionModel(**model_config)
 
+    if model_type == "saprot/saprot_pair_classification_model":
+      from model.saprot.saprot_pair_classification_model import SaprotPairClassificationModel
+      return SaprotPairClassificationModel(**model_config)
+    
+    if model_type == "saprot/saprot_pair_regression_model":
+      from model.saprot.saprot_pair_regression_model import SaprotPairRegressionModel
+      return SaprotPairRegressionModel(**model_config)
+
+
 
 ################################################################################
 ################################ load dataset ##################################
@@ -57,13 +66,20 @@ def my_load_dataset(config):
     if dataset_type == "saprot/saprot_classification_dataset":
       from dataset.saprot.saprot_classification_dataset import SaprotClassificationDataset
       return SaprotClassificationDataset(**dataset_config)
+    
     if dataset_type == "saprot/saprot_token_classification_dataset":
       if 'plddt_threshold' in dataset_config: del dataset_config['plddt_threshold']
       from dataset.saprot.saprot_token_classification_dataset import SaprotTokenClassificationDataset
       return SaprotTokenClassificationDataset(**dataset_config)
+    
     if dataset_type == "saprot/saprot_regression_dataset":
       from dataset.saprot.saprot_regression_dataset import SaprotRegressionDataset
       return SaprotRegressionDataset(**dataset_config)
+    
+    if dataset_type == "saprot/saprot_pair_classification_dataset":
+      from dataset.saprot.saprot_pair_classification_dataset import SaprotPairClassificationDataset
+      return SaprotPairClassificationDataset(**dataset_config)
+    
     if dataset_type == "saprot/saprot_pair_regression_dataset":
       from dataset.saprot.saprot_pair_regression_dataset import SaprotPairRegressionDataset
       return SaprotPairRegressionDataset(**dataset_config)

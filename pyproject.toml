@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "saprot"
-version = "0.4.5"
+version = "0.4.6"
 description = ""
 authors = ["Zhikai Li <luckydogqaq@163.com>"]
 readme = "README.md"
