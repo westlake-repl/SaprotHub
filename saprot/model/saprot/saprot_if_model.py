@@ -74,26 +74,44 @@ class SaProtIFModel(SaprotBaseModel):
         valid_acc = log_dict["valid_acc"]
         self.check_save_condition(valid_acc, mode="max")
     
-    def predict(self, seq: str) -> str:
+    def predict(self, aa_seq: str, struc_seq: str, method: str = "argmax") -> str:
         """
         Predict all masked amino acids in the sequence.
         Args:
-            seq: Structure-aware sequence with masked amino acids (could be all masked or partially masked).
+            aa_seq: Amino acid sequence (could be all masked or partially masked).
+
+            struc_seq: Foldseek sequence.
+
+            method: Prediction method. It could be either "argmax" or "multinomial". If "argmax", the most probable
+                    amino acid will be selected. If "multinomial", the amino acid will be sampled from the multinomial
+                    distribution.
 
         Returns:
             Predicted residue sequence.
         """
-        
+        assert len(aa_seq) == len(struc_seq), "The length of the amino acid sequence and the foldseek sequence must be the same."
+        assert method in ["argmax", "multinomial"], "The prediction method must be either 'argmax' or 'multinomial'."
+        sa_seq = "".join(f"{aa}{struc}" for aa, struc in zip(aa_seq, struc_seq))
+
+        # Record the index of masked amino acids
+        mask_indices = [i for i, aa in enumerate(aa_seq) if aa == '#']
+
         with torch.no_grad():
-            inputs = self.tokenizer(seq, return_tensors='pt')
+            inputs = self.tokenizer(sa_seq, return_tensors='pt')
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            
+
             outputs = self.model(**inputs)
             logits = outputs.logits[0, 1: -1]
             probs = torch.softmax(logits, dim=-1)
-            
-            preds = probs.argmax(dim=-1)
-            tokens = self.tokenizer.convert_ids_to_tokens(preds)
-            pred_aa_seq = "".join(token[0] for token in tokens)
-            
+
+            # Predict amino acids
+            preds = probs.argmax(dim=-1) if method == "argmax" else torch.multinomial(probs, 1).squeeze(-1)
+            masked_preds = preds[mask_indices]
+            pred_tokens = self.tokenizer.convert_ids_to_tokens(masked_preds)
+
+            tokens = list(aa_seq)
+            for i, pred_token in zip(mask_indices, pred_tokens):
+                tokens[i] = pred_token[0]
+
+            pred_aa_seq = "".join(tokens)
             return pred_aa_seq
