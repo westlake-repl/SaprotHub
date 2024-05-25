@@ -1,3 +1,11 @@
 dist/
 dev/
 *.pyc
+/.idea/SaprotHub.iml
+/.idea/.gitignore
+/.idea/deployment.xml
+/.idea/jupyter-settings.xml
+/.idea/modules.xml
+/.idea/inspectionProfiles/profiles_settings.xml
+/.idea/inspectionProfiles/Project_Default.xml
+/.idea/vcs.xml
