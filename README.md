@@ -2,7 +2,7 @@
 <a href="https://huggingface.co/SaProtHub"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-red?label=SaprotHub" style="max-width: 100%;"></a>
 <a href="https://colab.research.google.com/drive/1nxYBed32rkAvoUpt8996Ge6D--Su4_oK"><img src="Figure/colab-badge.svg" style="max-width: 100%;"></a>
 
-SaprotHub is under the construction...!
+SaprotHub is under the construction...! But the [ColabSaprot](https://colab.research.google.com/drive/1nxYBed32rkAvoUpt8996Ge6D--Su4_oK) and [SaprotHub](https://huggingface.co/SaProtHub) are ready now. Try it and raise a question if you have.
 
 ## FAQs
 ### Q1: It seems like OPMC and SaprotHub are intertwined but not exactly the same.
