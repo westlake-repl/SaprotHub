@@ -4,6 +4,10 @@
 
 SaprotHub is under the construction...! But the [ColabSaprot](https://colab.research.google.com/drive/1nxYBed32rkAvoUpt8996Ge6D--Su4_oK) and [SaprotHub](https://huggingface.co/SaProtHub) are ready now. Try it and raise a question if you have.
 
+### Open Protein Modeling Consortium (OPMC):
+
+The Open Protein Modeling Consortium (OPMC) is a collaborative initiative aimed at unifying the efforts of the protein research community. Its mission is to facilitate the sharing and co-construction of resources, particularly individually trained models, and to advance protein modeling through collective contributions. OPMC provides a platform that supports a wide range of protein function predictions, striving to make advanced protein modeling accessible to researchers, regardless of their machine learning expertise.
+
 ## FAQs
 ### Q1: It seems like OPMC and SaprotHub are intertwined but not exactly the same.
 Yes, OPMC is a grand goal, and in this paper, it is primarily presented as a concept and vision. The paper introduces 
