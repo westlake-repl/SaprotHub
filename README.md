@@ -43,7 +43,7 @@ may not be sufficient for some of your tasks.
 
 In the future, we may explore options such as applying for funding or accepting donations to provide some free 
 computational resources to users. Please note that the purpose of SaprotHub and OPMC is not to provide computational
-resources to the community. We are not rich!
+resources to the community. 
 
 ### Q5: We are open sourcing models as well, so it would be interesting to collaborate once we release these models. However, it seems like currently the hub is geared towards SaProt as the main model of choice.
 Saprot is the first model to join the hub, so we named it SaprotHub. However, SaprotHub can also accept other protein
