@@ -70,7 +70,7 @@ interested in OPMC to join us, and if you have better suggestions, we welcome yo
 ### Q6: ESM, AlphaFold, and Openfold models are not mentioned in the hub.
 OPMC mainly focuses on protein function prediction. So ESM is a good fit, AlphaFold and OpenFold target at protein 
 structure prediction, and could be independent of OPMC or SaprotHub. But please note that developing another ColabESM 
-will also take a lot of time, and we welcome researchers to integrate the ESM or other models onto the hub.
+will also take some time, and we welcome researchers to integrate the ESM or other models onto the hub.
 
 ### Q7: How do you foresee collaborating and sharing other open models?
 The SaprotHub paper primarily focuses on collaboration and sharing within the framework of one backbone model, as this
