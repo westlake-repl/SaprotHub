@@ -106,3 +106,21 @@ training aspect.
 
 SaprotHub is dedicated to establishing the AI model community for proteins, while Hugging Face has a broader scope.
 Therefore, SaprotHub's Adapter store can be built on top of Hugging Face or developed independently.
+
+
+### Q9: If I develop other protein language models (PLMs) and online platforms following SaprotHub and ColabSaprot, can I be an author on a SaprotHub paper?
+
+All OPMC members will be listed as authors in the SaprotHub paper before its final revision, which is expected to take 4-12 months. Author's name will be included in the paper. Please note that eligibility to become an OPMC member is determined by the steering committee.
+
+If an author is acknowledged for their contribution in developing a different protein language model (whether it's a new model or an existing one) that is not directly related to SaprotHub's functions, it is required that they acknowledge this new protein language model as automatically being part of the OPMC framework. In case they publish a paper, they should mention this affiliation within the paper. Additionally, any scientific literature that utilizes this language model should cite the SaprotHub paper as a reference
+
+### Q10: How to be a member of OPMC or an author of SaprotHub.
+
+Before the final revision of SaprotHub, all OPMC members will be automatically included as authors. However, after the publication of SaprotHub, individuals can still join OPMC but will not be able to be listed as authors in the paper, as it is subject to the requirements of the journal publication - the final version needs to determine the author list.
+
+Regarding how to join OPMC, please refer to: [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg).
+
+### Q11: If I have made a lot of valuable contributions to OPMC, can I become an OPMC member together with my supervisor?
+
+Yes. If you have made significant valuable contributions to OPMC, it is possible to become an OPMC member alongside your PhD/postgraduate or internship supervisor. However, the acceptance of your contributions and membership status will be determined by the steering committee. Generally, in such cases, you would need to demonstrate more substantial contributions compared to regular OPMC members. You need to provide official documentation of your relationship with your supervisor, such as an official letter or document confirming their role and support.
+
