@@ -21,7 +21,7 @@ contribute: either independently of SaprotHub, such as building ESMHub or ProtTr
 SaprotHub is named after its first model, Saprot, it is not limited to Saprot alone and welcomes the inclusion of 
 other  language models. The concept of OPMC originated from the SaprotHub paper, so if you would like your protein 
 model to be part of OPMC or if you adopt the similar construction approach of SaprotHub, we encourage you to cite the
-source paper.
+source paper. Also see Q9.
 
 ### Q3: What's the relation between OPMC and the OpenFold Consortium?
 The goal of the OpenFold Consortium is to develop free and open-source software tools. This differs from the goals of
@@ -112,7 +112,7 @@ Therefore, SaprotHub's Adapter store can be built on top of Hugging Face or deve
 
 All OPMC members will be listed as authors in the SaprotHub paper before its final revision, which is expected to take 4-12 months. Author's name will be included in the paper. Please note that eligibility to become an OPMC member is determined by the steering committee.
 
-If an author is acknowledged for their contribution in developing a different protein language model (whether it's a new model or an existing one) that is not directly related to SaprotHub's functions, it is required that they acknowledge this new protein language model as automatically being part of the OPMC framework. In case they publish a paper, they should mention this affiliation within the paper. Additionally, any scientific literature that utilizes this language model should cite the SaprotHub paper as a reference
+If an author is acknowledged for their contribution in developing a different protein language model (whether it's a new model or an existing one) that is not directly related to SaprotHub's functions, it is required that they acknowledge this new protein language model as automatically being part of the OPMC framework. In case they publish a paper, they should mention this affiliation within the paper. Additionally, any scientific literature that utilizes this language model should cite the SaprotHub paper as a reference.
 
 ### Q10: How to be a member of OPMC or an author of SaprotHub.
 
