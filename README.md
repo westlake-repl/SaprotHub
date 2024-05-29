@@ -110,7 +110,7 @@ SaprotHub is dedicated to establishing the AI model community for proteins, whil
 Therefore, SaprotHub's Adapter store can be built on top of Hugging Face or developed independently.
 
 
-### Q9: If I develop other protein language models (PLMs) and online platforms following SaprotHub and ColabSaprot, can I be an author on a SaprotHub paper?
+### Q9: If I develop other protein language models (PLMs) and online platforms following SaprotHub and ColabSaprot, can I be an author on the SaprotHub paper?
 
 All OPMC members will be listed as authors in the SaprotHub paper before its final revision, which is expected to take 4-12 months. Author's name will be included in the paper. Please note that eligibility to become an OPMC member is determined by the steering committee.
 
