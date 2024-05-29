@@ -13,7 +13,7 @@ The Open Protein Modeling Consortium (OPMC) is a collaborative initiative aimed 
 ## FAQs
 ### Q1: It seems like OPMC and SaprotHub are intertwined but not exactly the same.
 Yes, OPMC is a grand goal, and in this paper, it is primarily presented as a concept and vision. The paper introduces 
-OPMC for the first time and implements SaprotHub as a pioneering example to drive the initial realization of OPMC. 
+OPMC and implements SaprotHub as a pioneering example to drive the initial realization of OPMC. 
 Achieving a broader implementation of OPMC requires continuous efforts from the entire community.
 
 ### Q2:  I'm very interested in the OPMC side of this project? Would I be able to support OMPC independently?
