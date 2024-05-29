@@ -127,3 +127,5 @@ Regarding how to join OPMC, please refer to: [here](https://github.com/westlake-
 
 Yes. If you have made significant valuable contributions to OPMC, it is possible to become an OPMC member alongside your PhD/postgraduate or internship supervisor. However, the acceptance of your contributions and membership status will be determined by the steering committee. Generally, in such cases, you would need to demonstrate more substantial contributions compared to regular OPMC members. You need to provide official documentation of your relationship with your supervisor, such as an official letter or document confirming their role and support.
 
+### Q11: Would the paper be submitted to a journal.
+Yes, we plan to submit it to Nature Biotechnology or Nature Methods in the form of brief communication. The editor-in-chief of NBT said that the author list of OPMC could be confirmed in the final version. So you have several months time to contribute and join us.
