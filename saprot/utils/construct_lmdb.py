@@ -18,7 +18,7 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
         task_type: Type of the task
     """
 
-    assert task_type in ["classification", "regression", "token_classification"]
+    assert task_type in ["classification", "regression", "token_classification", "pair_regression", "pair_classification"]
 
     # Load CSV file
     df = pd.read_csv(csv_file)
@@ -38,23 +38,53 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
         "classification": "label",
         "token_classification": "label",
         "regression": "fitness",
+        "pair_regression": "label",
+        "pair_classification": "label"
     }
 
-    # Go through each row of the CSV file
-    for i, row in tqdm(df.iterrows()):
-        # seq, label, stage = row
-        seq = row['sequence']
-        label = row['label']
-        stage = row['stage']
+    if task_type in ["pair_regression", "pair_classification"]:
+        # Go through each row of the CSV file
+        for i, row in tqdm(df.iterrows()):
+            # seq, label, stage = row
+            name_1 = row["name_1"]
+            name_2 = row["name_2"]
+            chain_1 = row["chain_1"]
+            chain_2 = row["chain_2"]
+            seq_1 = row["seq_1"]
+            seq_2 = row["seq_2"]
+            label = row["label"]
+            stage = row["stage"]
 
-        tmp_dict = data_dicts[stage]
+            tmp_dict = data_dicts[stage]
 
-        # Add data to the dictionary
-        sample = {
-            "seq": seq,
-            label_keys[task_type]: label
-        }
-        tmp_dict[len(tmp_dict)] = json.dumps(sample)
+            # Add data to the dictionary
+            sample = {
+                "seq_1": seq_1,
+                "seq_2": seq_2,
+                "name_1": name_1, 
+                "name_2": name_2, 
+                "chain_1": chain_1,
+                "chain_2": chain_2,
+                label_keys[task_type]: label
+            }
+            tmp_dict[len(tmp_dict)] = json.dumps(sample)
+        
+    else:
+        # Go through each row of the CSV file
+        for i, row in tqdm(df.iterrows()):
+            # seq, label, stage = row
+            seq = row['sequence']
+            label = row["label"]
+            stage = row["stage"]
+
+            tmp_dict = data_dicts[stage]
+
+            # Add data to the dictionary
+            sample = {
+                "seq": seq,
+                label_keys[task_type]: label
+            }
+            tmp_dict[len(tmp_dict)] = json.dumps(sample)
 
     for stage in ["train", "valid", "test"]:
         tmp_dict = data_dicts[stage]

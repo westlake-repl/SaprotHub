@@ -1,6 +1,7 @@
 dist/
 dev/
 *.pyc
+.vscode/
 /.idea/SaprotHub.iml
 /.idea/.gitignore
 /.idea/deployment.xml

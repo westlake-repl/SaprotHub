@@ -58,7 +58,8 @@ class SaprotPairRegressionModel(SaprotBaseModel):
             metric.update(logits.detach().float(), fitness.float())
 
         if stage == "train":
-            log_dict = self.get_log_dict("train")
+            log_dict = {"train_loss": loss.item()}
+            # log_dict = self.get_log_dict("train")
             self.log_info(log_dict)
 
             # Reset train metrics
@@ -66,19 +67,28 @@ class SaprotPairRegressionModel(SaprotBaseModel):
 
         return loss
 
-    def on_test_epoch_end(self):
+    def test_epoch_end(self, outputs):
         log_dict = self.get_log_dict("test")
+        log_dict["test_loss"] = torch.mean(torch.stack(outputs))
 
-        if dist.get_rank() == 0:
-            print(log_dict)
+        # if dist.get_rank() == 0:
+        #     print(log_dict)
+        print('='*100)
+        print('Test Result:')
+        for key, value in log_dict.items():
+            print(f"{key}: {value.item()}")
+        print('='*100)
         self.log_info(log_dict)
         self.reset_metrics("test")
 
-    def on_validation_epoch_end(self):
+    def validation_epoch_end(self, outputs):
         log_dict = self.get_log_dict("valid")
+        log_dict["valid_loss"] = torch.mean(torch.stack(outputs))
 
-        if dist.get_rank() == 0:
-            print(log_dict)
+        # if dist.get_rank() == 0:
+        #     print(log_dict)
         self.log_info(log_dict)
         self.reset_metrics("valid")
         self.check_save_condition(log_dict["valid_loss"], mode="min")
+
+        self.plot_valid_metrics_curve(log_dict)
