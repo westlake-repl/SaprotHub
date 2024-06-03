@@ -123,7 +123,7 @@ Before the final revision of SaprotHub, all OPMC members will be automatically i
 
 Regarding how to join OPMC, please refer to: [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg). 
 
-All in all, if you can come up with some cool ideas to contribute to Saprot, ColabSaprot, SaprotHub or OPMC, you have a chance to be listed as an author.  The greater the impact you make on them, the more chances you will become an author.
+All in all, if you can come up with some cool ideas or novel ways to enhance the impact and influence of Saprot, ColabSaprot, SaprotHub, or OPMC, you may have the opportunity to be listed as an author.
 
 ### Q11: If I have made a lot of valuable contributions to OPMC, can I become an OPMC member together with my supervisor?
 
