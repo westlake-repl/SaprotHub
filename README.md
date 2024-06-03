@@ -121,7 +121,9 @@ In case they publish a paper, just menton this somewhere in the paper. Additiona
 
 Before the final revision of SaprotHub, all OPMC members will be automatically included as authors. However, after the publication of SaprotHub, individuals can still join OPMC but will not be able to be listed as authors in the paper, as it is subject to the requirements of the journal publication - the final version needs to determine the author list.
 
-Regarding how to join OPMC, please refer to: [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg).
+Regarding how to join OPMC, please refer to: [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg). 
+
+All in all, if you can come up with some cool ideas to contribute to Saprot, ColabSaprot, SaprotHub or OPMC, you have a chance to be listed as an author.  The greater the impact you make on them, the more chances you will become an author.
 
 ### Q11: If I have made a lot of valuable contributions to OPMC, can I become an OPMC member together with my supervisor?
 
