@@ -37,27 +37,30 @@ def finetune(config):
     trainer = load_trainer(config)
 
     ############################################################################
-    if config.setting.run_mode == 'train':
-        trainer.fit(model=model, datamodule=data_module)
+    # if config.setting.run_mode == 'train':
+    trainer.fit(model=model, datamodule=data_module)
+    # Load best model and test performance
+    if model.save_path is not None:
+        if config.model.kwargs.get("lora_kwargs", None):
+            # Load LoRA model
+            if len(getattr(config.model.kwargs.lora_kwargs, "config_list", [])) == 0:
+                config.model.kwargs.lora_kwargs.num_lora = 1
+                config.model.kwargs.lora_kwargs.config_list = [{"lora_config_path": model.save_path}]
+                
+            model = my_load_model(config.model)
 
-        if model.save_path is not None:
-            if config.model.kwargs.get("use_lora", False):
-                # Load LoRA model
-                config.model.kwargs.lora_config_path = model.save_path
-                config.model.kwargs.lora_inference = True
-                model = my_load_model(config.model)
-            else:
-                model.load_checkpoint(model.save_path, load_prev_scheduler=model.load_prev_scheduler)
-        
+        else:
+            model.load_checkpoint(model.save_path)
+
         trainer.test(model=model, datamodule=data_module)
 
 
     ############################################################################
-    if config.setting.run_mode == 'test':
-        if config.model.kwargs.get("use_lora", False):
-            if config.model.kwargs.lora_config_path is not None:
-                config.model.kwargs.lora_inference = True
-        trainer.test(model=model, datamodule=data_module)
+    # if config.setting.run_mode == 'test':
+    #     if config.model.kwargs.get("use_lora", False):
+    #         if config.model.kwargs.lora_config_path is not None:
+    #             config.model.kwargs.lora_inference = True
+    #     trainer.test(model=model, datamodule=data_module)
     
 
 def run(config):
@@ -79,15 +82,18 @@ def run(config):
 
     # Load best model and test performance
     if model.save_path is not None:
-        if config.model.kwargs.get("use_lora", False):
+        if config.model.kwargs.get("lora_kwargs", None):
             # Load LoRA model
-            config.model.kwargs.lora_config_path = model.save_path
+            if len(getattr(config.model.kwargs.lora_kwargs, "config_list", [])) == 0:
+                config.model.kwargs.lora_kwargs.num_lora = 1
+                config.model.kwargs.lora_kwargs.config_list = [{"lora_config_path": model.save_path}]
+                
             model = load_model(config.model)
 
         else:
-            model.load_checkpoint(model.save_path, load_prev_scheduler=model.load_prev_scheduler)
+            model.load_checkpoint(model.save_path)
 
-    trainer.test(model=model, datamodule=data_module)
+        trainer.test(model=model, datamodule=data_module)
 
 
 def get_args():

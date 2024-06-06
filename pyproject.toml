@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "saprot"
-version = "0.4.6"
+version = "0.4.7"
 description = ""
 authors = ["Zhikai Li <luckydogqaq@163.com>"]
 readme = "README.md"
@@ -14,7 +14,7 @@ transformers = "4.28.0"
 easydict = "*"
 biopython = "*"
 scipy = "*"                                                                                                                 
-peft = "*"
+peft = "0.10.0"
 lmdb = "*"
 torchmetrics = "0.9.3"
 pandas = "*"
