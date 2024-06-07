@@ -13,3 +13,4 @@ matplotlib
 multiprocess
 loguru
 bio
+colorama
