@@ -1,5 +1,6 @@
 import torchmetrics
 import torch
+import torch.distributed as dist
 
 from torch.nn.functional import cross_entropy
 from ..model_interface import register_model
@@ -26,7 +27,7 @@ class SaprotClassificationModel(SaprotBaseModel):
 
         # If backbone is frozen, the embedding will be the average of all residues
         if self.freeze_backbone:
-            repr = torch.stack(self.get_hidden_states(inputs, reduction="mean"))
+            repr = torch.stack(self.get_hidden_states_from_dict(inputs, reduction="mean"))
             x = self.model.classifier.dropout(repr)
             x = self.model.classifier.dense(x)
             x = torch.tanh(x)
@@ -35,7 +36,7 @@ class SaprotClassificationModel(SaprotBaseModel):
 
         else:
             logits = self.model(**inputs).logits
-
+        
         return logits
 
     def loss_func(self, stage, logits, labels):
@@ -56,26 +57,28 @@ class SaprotClassificationModel(SaprotBaseModel):
 
         return loss
 
-    def test_epoch_end(self, outputs):
+    def on_test_epoch_end(self):
         log_dict = self.get_log_dict("test")
-        # log_dict["test_loss"] = torch.cat(self.all_gather(outputs), dim=-1).mean()
-        log_dict["test_loss"] = torch.mean(torch.stack(outputs))
+        # log_dict["test_loss"] = torch.cat(self.all_gather(self.test_outputs), dim=-1).mean()
+        log_dict["test_loss"] = torch.mean(torch.stack(self.test_outputs))
 
-        # print(log_dict)
+        # if dist.get_rank() == 0:
+        #     print(log_dict)
         print('='*100)
         print('Test Result:')
         for key, value in log_dict.items():
             print(f"{key}: {value.item()}")
         print('='*100)
         self.log_info(log_dict)
-
         self.reset_metrics("test")
 
-    def validation_epoch_end(self, outputs):
+    def on_validation_epoch_end(self):
         log_dict = self.get_log_dict("valid")
-        # log_dict["valid_loss"] = torch.cat(self.all_gather(outputs), dim=-1).mean()
-        log_dict["valid_loss"] = torch.mean(torch.stack(outputs))
-        
+        # log_dict["valid_loss"] = torch.cat(self.all_gather(self.valid_outputs), dim=-1).mean()
+        log_dict["valid_loss"] = torch.mean(torch.stack(self.valid_outputs))
+
+        # if dist.get_rank() == 0:
+        #     print(log_dict)
         self.log_info(log_dict)
         self.reset_metrics("valid")
         self.check_save_condition(log_dict["valid_acc"], mode="max")

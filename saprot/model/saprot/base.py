@@ -339,17 +339,23 @@ class SaprotBaseModel(AbstractModel):
         inputs["pair_feature"] = batch_coords2feature(coords, self.model.device)
         return inputs
     
-    def save_checkpoint(self, save_info: dict = None) -> None:
+    def save_checkpoint(self, save_path: str, save_info: dict = None, save_weights_only: bool = True) -> None:
         """
-        Rewrite this function for saving LoRA parameters
+        Rewrite this function to save LoRA parameters
         """
+
         if not self.lora_kwargs:
-            return super().save_checkpoint(save_info)
-
+            return super().save_checkpoint(save_path, save_info, save_weights_only)
+        
         else:
-            self.model.save_pretrained(self.save_path)
-
-
+            try:
+                if hasattr(self.trainer.strategy, "deepspeed_engine"):
+                    save_path = os.path.dirname(save_path)
+            except Exception as e:
+                pass
+            
+            self.model.save_pretrained(save_path)
+        
     def plot_valid_metrics_curve(self, log_dict):
         if not hasattr(self, 'grid'):
             from google.colab import widgets

@@ -23,14 +23,9 @@ model:
 
 #    Arguments to initialize the basic class AbstractModel
   lr_scheduler_kwargs:
-    last_epoch: -1
+    class: ConstantLRScheduler
     init_lr: 2.0e-5
-#    Weather to use this scheduler or not
-    on_use: false
 
-  optimizer_kwargs:
-    betas: [0.9, 0.98]
-    weight_decay: 0.01
 
 #  save_path: /content/saprot/weights/DeepLoc/cls2/SaProt_35M_AF2.pt
 
@@ -55,8 +50,8 @@ dataset:
 Trainer:
   max_epochs: 2
   log_every_n_steps: 1
-  # strategy:
-  #   find_unused_parameters: True
+  strategy: 
+    class: auto
   logger: False
   enable_checkpointing: false
   val_check_interval: 0.5

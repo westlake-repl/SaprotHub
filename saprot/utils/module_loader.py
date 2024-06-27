@@ -1,10 +1,3 @@
-import sys
-import os
-current_file = os.path.abspath(__file__)
-saprot_dir = os.path.dirname(current_file)
-colabsaprot_dir = os.path.dirname(saprot_dir)
-sys.path.append(colabsaprot_dir)
-
 import os
 import copy
 import pytorch_lightning as pl
@@ -14,8 +7,7 @@ import wandb
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from model.model_interface import ModelInterface
 from dataset.data_interface import DataInterface
-from pytorch_lightning.strategies import DDPStrategy, DeepSpeedStrategy, DataParallelStrategy
-
+from pytorch_lightning.strategies import DDPStrategy, DeepSpeedStrategy, Strategy
 
 ################################################################################
 ################################ load model ####################################
@@ -149,12 +141,8 @@ def load_strategy(config):
         timeout = int(config.pop('timeout'))
         config["timeout"] = datetime.timedelta(seconds=timeout)
     
-    if 'class' in config:
-        cls = config.pop('class')
-        return eval(cls)(**config)
-    else:
-        return None
-        
+    cls = config.pop('class')
+    return eval(cls)(**config)
 
 
 # Initialize a pytorch lightning trainer
@@ -168,5 +156,8 @@ def load_trainer(config):
         trainer_config.logger = False
     
     # Initialize strategy
-    strategy = load_strategy(trainer_config.pop('strategy'))
-    return pl.Trainer(**trainer_config, strategy=strategy, callbacks=[])
+    # strategy = load_strategy(trainer_config.pop('strategy'))
+    # Strategy is not used in Colab
+    trainer_config.pop('strategy')
+    
+    return pl.Trainer(**trainer_config, callbacks=[])

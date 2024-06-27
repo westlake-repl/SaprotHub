@@ -25,7 +25,7 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
     df.columns = df.columns.str.lower()
     if task_type == "token_classification":
         for index, value in df["label"].items():
-            df.loc[index, "label"] = [int(item.strip()) for item in value.split(",")]
+            df.loc[index, "label"] = [int(item.strip()) for item in value.split(",")][:1024]
         
     # Construct data dictionary
     data_dicts = {
@@ -50,8 +50,8 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
             name_2 = row["name_2"]
             chain_1 = row["chain_1"]
             chain_2 = row["chain_2"]
-            seq_1 = row["seq_1"]
-            seq_2 = row["seq_2"]
+            seq_1 = row["seq_1"][:2048]
+            seq_2 = row["seq_2"][:2048]
             label = row["label"]
             stage = row["stage"]
 
@@ -73,7 +73,7 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
         # Go through each row of the CSV file
         for i, row in tqdm(df.iterrows()):
             # seq, label, stage = row
-            seq = row['sequence']
+            seq = row['sequence'][:2048]
             label = row["label"]
             stage = row["stage"]
 
