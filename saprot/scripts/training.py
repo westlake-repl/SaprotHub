@@ -43,7 +43,7 @@ def finetune(config):
     if model.save_path is not None:
         if config.model.kwargs.get("lora_kwargs", None):
             # Load LoRA model
-            if len(getattr(config.model.kwargs.lora_kwargs, "config_list", [])) == 0:
+            if len(getattr(config.model.kwargs.lora_kwargs, "config_list", [])) <= 1:
                 config.model.kwargs.lora_kwargs.num_lora = 1
                 config.model.kwargs.lora_kwargs.config_list = [{"lora_config_path": model.save_path}]
                 
@@ -84,7 +84,7 @@ def run(config):
     if model.save_path is not None:
         if config.model.kwargs.get("lora_kwargs", None):
             # Load LoRA model
-            if len(getattr(config.model.kwargs.lora_kwargs, "config_list", [])) == 0:
+            if len(getattr(config.model.kwargs.lora_kwargs, "config_list", [])) <= 1:
                 config.model.kwargs.lora_kwargs.num_lora = 1
                 config.model.kwargs.lora_kwargs.config_list = [{"lora_config_path": model.save_path}]
                 
