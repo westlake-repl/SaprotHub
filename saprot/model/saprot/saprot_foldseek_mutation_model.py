@@ -3,9 +3,13 @@ import os
 import torch
 import json
 import torchmetrics
+import torch.distributed as dist
+import time
 import random
 import numpy as np
 
+from utils.others import merge_file
+from utils.foldseek_util import extract_plddt
 from utils.constants import aa_set, foldseek_struc_vocab, aa_list
 from ..model_interface import register_model
 from .base import SaprotBaseModel
@@ -17,7 +21,9 @@ class SaprotFoldseekMutationModel(SaprotBaseModel):
                  foldseek_path: str,
                  plddt_threshold: float = 0.,
                  mask_rate: float = None,
+                 mask_seq: bool = False,
                  substitute_rate: float = None,
+                 seq_substitute_rate: float = None,
                  MSA_log_path: str = None,
                  log_clinvar: bool = False,
                  log_dir: str = None,
@@ -29,8 +35,12 @@ class SaprotFoldseekMutationModel(SaprotBaseModel):
             plddt_threshold: The threshold for plddt to determine whether a structure token should be masked
 
             mask_rate: If not None, the model will randomly mask structure tokens with this rate
+            
+            mask_seq: If True, the model will mask the sequence tokens
 
             substitute_rate: If not None, the model will randomly substitute structure tokens with this rate
+            
+            seq_substitute_rate: If not None, the model will randomly substitute sequence tokens with this rate
             
             MSA_log_path: If not None, the model will load MSA log from this path (follow Tranception paper)
             
@@ -43,7 +53,9 @@ class SaprotFoldseekMutationModel(SaprotBaseModel):
         self.foldseek_path = foldseek_path
         self.plddt_threshold = plddt_threshold
         self.mask_rate = mask_rate
+        self.mask_seq = mask_seq
         self.substitute_rate = substitute_rate
+        self.seq_substitute_rate = seq_substitute_rate
         
         self.MSA_log_path = MSA_log_path
         self.MSA_info_dict = {}
@@ -64,14 +76,17 @@ class SaprotFoldseekMutationModel(SaprotBaseModel):
     def initialize_metrics(self, stage):
         return {f"{stage}_spearman": torchmetrics.SpearmanCorrCoef()}
     
-    def get_struc_seq(self, structure_content, structure_type, plddt):
+    def get_struc_seq(self, structure_content, structure_type, plddt, struc_seq):
+        if struc_seq is not None:
+            return struc_seq
+        
         structure_type = "cif" if structure_type == "mmcif" else structure_type
         
         # Sample a random rank to avoid file conflict
         rank = random.randint(0, 1000000)
         
-        tmp_pdb_path = f"SaprotFoldseekMutationModel_{self.global_rank}_{rank}.{structure_type}"
-        tmp_save_path = f"SaprotFoldseekMutationModel_{self.global_rank}_{rank}.tsv"
+        tmp_pdb_path = f"EsmFoldseekMutationModel_{self.global_rank}_{rank}.{structure_type}"
+        tmp_save_path = f"EsmFoldseekMutationModel_{self.global_rank}_{rank}.tsv"
         
         # Save structure content to temporary file
         with open(tmp_pdb_path, "w") as w:
@@ -88,14 +103,16 @@ class SaprotFoldseekMutationModel(SaprotBaseModel):
             line = r.readline()
             struc_seq = line.split("\t")[2]
         
-        if plddt is not None:
-            plddts = np.array(plddt)
-            
-            # Mask regions with plddt < threshold
-            indices = np.where(plddts < self.plddt_threshold)[0]
-            np_seq = np.array(list(struc_seq))
-            np_seq[indices] = "#"
-            struc_seq = "".join(np_seq)
+        # if plddt is not None:
+        # plddts = np.array(plddt)
+        plddts = extract_plddt(tmp_pdb_path)
+        assert len(plddts) == len(struc_seq), f"Length mismatch: {len(plddts)} != {len(struc_seq)}"
+        
+        # Mask regions with plddt < threshold
+        indices = np.where(plddts < self.plddt_threshold)[0]
+        np_seq = np.array(list(struc_seq))
+        np_seq[indices] = "#"
+        struc_seq = "".join(np_seq)
 
         if self.mask_rate is not None:
             # Mask random structure tokens
@@ -116,11 +133,23 @@ class SaprotFoldseekMutationModel(SaprotBaseModel):
         os.remove(tmp_save_path + ".dbtype")
         return struc_seq
     
-    def forward(self, wild_type, seqs, mut_info, structure_content, structure_type, plddt):
+    def forward(self, wild_type, seqs, mut_info, structure_content, structure_type, plddt, struc_seq):
         device = self.device
         
         if getattr(self, "struc_seq", None) is None:
-            self.struc_seq = self.get_struc_seq(structure_content, structure_type, plddt)
+            self.struc_seq = self.get_struc_seq(structure_content, structure_type, plddt, struc_seq)
+        
+        if getattr(self, "wild_type", None) is None:
+            self.wild_type = wild_type
+            if self.mask_seq:
+                self.wild_type = "#" * len(wild_type)
+            
+            if self.seq_substitute_rate is not None:
+                # Substitute random sequence tokens
+                indices = np.random.choice(len(wild_type), int(len(wild_type) * self.seq_substitute_rate), replace=False)
+                np_seq = np.array(list(wild_type))
+                np_seq[indices] = np.random.choice(list(aa_list), len(indices))
+                self.wild_type = "".join(np_seq)
         
         ins_seqs = []
         ori_seqs = []
@@ -131,8 +160,8 @@ class SaprotFoldseekMutationModel(SaprotBaseModel):
         ins_dict = {}
         
         for i, (seq, info) in enumerate(zip(seqs, mut_info)):
-            # We adopt the same strategy for esm2 model as in esm2 inverse folding paper
-            ori_seq = [a+b.lower() for a, b in zip(wild_type, self.struc_seq)]
+            # We adopt the same strategy for esm2 model as in esm inverse folding paper
+            ori_seq = [a+b.lower() for a, b in zip(self.wild_type, self.struc_seq)]
             ins_seq = copy.deepcopy(ori_seq)
             tmp_data = []
             ins_num = 0
@@ -165,7 +194,7 @@ class SaprotFoldseekMutationModel(SaprotBaseModel):
 
             if flag:
                 ins_seqs.append(" ".join(ins_seq))
-                
+            
             ori_seqs.append(" ".join(ori_seq))
             mut_data.append(tmp_data)
         
@@ -239,15 +268,16 @@ class SaprotFoldseekMutationModel(SaprotBaseModel):
                 # compute zero-shot score
                 else:
                     pred += torch.log(mut_prob / ori_prob)
+                    # pred += torch.log(compute_mut_probs).sum() - torch.log(compute_ori_probs).sum()
                     # ori_prob = ori_probs[i, ori_pos, ori_st: ori_st + len(foldseek_struc_vocab)]
                     # mut_prob = ori_probs[i, ori_pos, mut_st: mut_st + len(foldseek_struc_vocab)]
                     # pred += torch.log(mut_prob / ori_prob).mean()
-
+            
             preds.append(pred)
-        
+
         if self.log_clinvar:
             self.mut_info_list.append((mut_info, -torch.tensor(preds)))
-
+        
         return torch.tensor(preds).to(ori_probs)
 
     def loss_func(self, stage, outputs, labels):
@@ -257,19 +287,21 @@ class SaprotFoldseekMutationModel(SaprotBaseModel):
         for metric in self.metrics[stage].values():
             metric.update(outputs.detach().float(), fitness.float())
 
-    def test_epoch_end(self, outputs):
+    def on_test_epoch_end(self):
         spearman = self.test_spearman.compute()
         self.struc_seq = None
+        self.wild_type = None
         self.reset_metrics("test")
         self.log("spearman", spearman)
-        
+
         if self.log_clinvar:
             # Get dataset name
             name = os.path.basename(self.trainer.datamodule.test_lmdb)
-            log_path = f"{self.log_dir}/{name}.csv"
+            device_rank = dist.get_rank()
+            log_path = f"{self.log_dir}/{name}_{device_rank}.csv"
+ 
             with open(log_path, "w") as w:
                 w.write("protein_name,mutations,evol_indices\n")
-                
                 for mut_info, preds in self.mut_info_list:
                     for mut, pred in zip(mut_info, preds):
                         w.write(f"{name},{mut},{pred}\n")
@@ -278,21 +310,21 @@ class SaprotFoldseekMutationModel(SaprotBaseModel):
     
     def predict_mut(self, seq: str, mut_info: str) -> float:
         """
-               Predict the mutational effect of a given mutation
-               Args:
-                   seq: The wild type sequence
+        Predict the mutational effect of a given mutation
+        Args:
+            seq: The wild type structure-aware sequence
+            
+            mut_info: The mutation information in the format of "A123B", where A is the original amino acid, 123 is the
+                      position and B is the mutated amino acid. If multiple mutations are provided, they should be
+                      separated by colon, e.g. "A123B:C124D".
 
-                   mut_info: The mutation information in the format of "A123B", where A is the original amino acid, 123 is the
-                             position and B is the mutated amino acid. If multiple mutations are provided, they should be
-                             separated by colon, e.g. "A123B:C124D".
-
-               Returns:
-                   The predicted mutational effect
-               """
+        Returns:
+            The predicted mutational effect
+        """
         tokens = self.tokenizer.tokenize(seq)
         for single in mut_info.split(":"):
             pos = int(single[1:-1])
-            tokens[pos - 1] = "#" + tokens[pos - 1][-1]
+            tokens[pos-1] = "#" + tokens[pos-1][-1]
         
         mask_seq = " ".join(tokens)
         inputs = self.tokenizer(mask_seq, return_tensors="pt")
@@ -314,14 +346,14 @@ class SaprotFoldseekMutationModel(SaprotBaseModel):
                 
                 score += torch.log(mut_prob / ori_prob)
         
-        return score.item()
+        return score
     
     def predict_pos_mut(self, seq: str, pos: int) -> dict:
         """
         Predict the mutational effect of mutations at a given position
         Args:
             seq: The wild type sequence
-
+            
             pos: The position of the mutation
 
         Returns:
@@ -352,7 +384,7 @@ class SaprotFoldseekMutationModel(SaprotBaseModel):
                 scores[f"{ori_aa}{pos}{mut_aa}"] = score.item()
         
         return scores
-    
+
     def predict_pos_prob(self, seq: str, pos: int) -> dict:
         """
         Predict the probability of all amino acids at a given position
@@ -366,21 +398,21 @@ class SaprotFoldseekMutationModel(SaprotBaseModel):
         """
         tokens = self.tokenizer.tokenize(seq)
         tokens[pos - 1] = "#" + tokens[pos - 1][-1]
-        
+
         mask_seq = " ".join(tokens)
         inputs = self.tokenizer(mask_seq, return_tensors="pt")
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
-        
+
         with torch.no_grad():
             outputs = self.model(**inputs)
             logits = outputs.logits
             probs = logits.softmax(dim=-1)[0, pos]
-            
+
             scores = {}
             for aa in aa_list:
                 st = self.tokenizer.get_vocab()[aa + foldseek_struc_vocab[0]]
                 prob = probs[st: st + len(foldseek_struc_vocab)].sum()
-                
+
                 scores[aa] = prob.item()
-        
+
         return scores

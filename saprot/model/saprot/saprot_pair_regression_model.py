@@ -59,7 +59,6 @@ class SaprotPairRegressionModel(SaprotBaseModel):
 
         if stage == "train":
             log_dict = {"train_loss": loss.item()}
-            # log_dict = self.get_log_dict("train")
             self.log_info(log_dict)
 
             # Reset train metrics
@@ -67,9 +66,8 @@ class SaprotPairRegressionModel(SaprotBaseModel):
 
         return loss
 
-    def test_epoch_end(self, outputs):
+    def on_test_epoch_end(self):
         log_dict = self.get_log_dict("test")
-        log_dict["test_loss"] = torch.mean(torch.stack(outputs))
 
         # if dist.get_rank() == 0:
         #     print(log_dict)
@@ -81,9 +79,8 @@ class SaprotPairRegressionModel(SaprotBaseModel):
         self.log_info(log_dict)
         self.reset_metrics("test")
 
-    def validation_epoch_end(self, outputs):
+    def on_validation_epoch_end(self):
         log_dict = self.get_log_dict("valid")
-        log_dict["valid_loss"] = torch.mean(torch.stack(outputs))
 
         # if dist.get_rank() == 0:
         #     print(log_dict)

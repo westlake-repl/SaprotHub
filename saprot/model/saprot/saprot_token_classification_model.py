@@ -6,6 +6,7 @@ from torch.nn.functional import cross_entropy
 from ..model_interface import register_model
 from .base import SaprotBaseModel
 
+
 @register_model
 class SaprotTokenClassificationModel(SaprotBaseModel):
     def __init__(self, num_labels: int, **kwargs):
@@ -82,10 +83,10 @@ class SaprotTokenClassificationModel(SaprotBaseModel):
         
         return loss
     
-    def test_epoch_end(self, outputs):
+    def on_test_epoch_end(self):
         log_dict = self.get_log_dict("test")
-        # log_dict["test_loss"] = torch.cat(self.all_gather(self.outputs), dim=-1).mean()
-        log_dict["test_loss"] = torch.mean(torch.stack(outputs))
+        # log_dict["test_loss"] = torch.cat(self.all_gather(self.test_outputs), dim=-1).mean()
+        log_dict["test_loss"] = torch.mean(torch.stack(self.test_outputs))
 
         
         preds = torch.cat(self.preds, dim=-1)
@@ -93,7 +94,7 @@ class SaprotTokenClassificationModel(SaprotBaseModel):
         tp, tn, fp, fn, _ = self.compute_mcc(preds, target)
         
         # Gather results
-        tmp = torch.tensor([tp, tn, fp, fn])
+        # tmp = torch.tensor([tp, tn, fp, fn])
         # tp, tn, fp, fn = self.all_gather(tmp).sum(dim=0)
         # Square root each denominator respectively to avoid overflow
         mcc = (tp * tn - fp * fn) / ((tp + fp).sqrt() * (tp + fn).sqrt() * (tn + fp).sqrt() * (tn + fn).sqrt())
@@ -105,7 +106,6 @@ class SaprotTokenClassificationModel(SaprotBaseModel):
         
         # if dist.get_rank() == 0:
         #     print(log_dict)
-        # print(log_dict)
         print('='*100)
         print('Test Result:')
         for key, value in log_dict.items():
@@ -113,18 +113,18 @@ class SaprotTokenClassificationModel(SaprotBaseModel):
         print('='*100)
         self.log_info(log_dict)
         self.reset_metrics("test")
-
-    def validation_epoch_end(self, outputs):
+    
+    def on_validation_epoch_end(self):
         log_dict = self.get_log_dict("valid")
-        # log_dict["valid_loss"] = torch.cat(self.all_gather(self.outputs), dim=-1).mean()
-        log_dict["valid_loss"] = torch.mean(torch.stack(outputs))
+        # log_dict["valid_loss"] = torch.cat(self.all_gather(self.valid_outputs), dim=-1).mean()
+        log_dict["valid_loss"] = torch.mean(torch.stack(self.valid_outputs))
 
         preds = torch.cat(self.preds, dim=-1)
         target = torch.cat(self.targets, dim=-1)
         tp, tn, fp, fn, _ = self.compute_mcc(preds, target)
         
         # Gather results
-        tmp = torch.tensor([tp, tn, fp, fn])
+        # tmp = torch.tensor([tp, tn, fp, fn])
         # tp, tn, fp, fn = self.all_gather(tmp).sum(dim=0)
         # Square root each denominator respectively to avoid overflow
         mcc = (tp * tn - fp * fn) / ((tp + fp).sqrt() * (tp + fn).sqrt() * (tn + fp).sqrt() * (tn + fn).sqrt())
@@ -135,8 +135,7 @@ class SaprotTokenClassificationModel(SaprotBaseModel):
         self.targets = []
         
         # if dist.get_rank() == 0:
-            # print(log_dict)
-        # print(log_dict)
+        #     print(log_dict)
         self.log_info(log_dict)
         self.reset_metrics("valid")
         self.check_save_condition(log_dict["valid_acc"], mode="max")
