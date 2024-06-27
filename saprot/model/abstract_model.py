@@ -336,8 +336,8 @@ class AbstractModel(pl.LightningModule):
             
             # For normal situation
             else:
-                if dist.get_rank() == 0:
-                    self.save_checkpoint(save_path, save_info, self.save_weights_only)
+                # if dist.get_rank() == 0:
+                self.save_checkpoint(save_path, save_info, self.save_weights_only)
             
     def reset_metrics(self, stage) -> None:
         """
