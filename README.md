@@ -7,7 +7,7 @@
 
 The repository is an official implementation of [SaprotHub: Making Protein Modeling Accessible to All Biologists](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v1).
 
-OPMC are under the construction...! But [ColabSaprot](https://colab.research.google.com/drive/1nxYBed32rkAvoUpt8996Ge6D--Su4_oK) and [SaprotHub](https://huggingface.co/SaProtHub) should be ready now. Try it and raise a question if you have.
+OPMC are under the construction...! But [ColabSaprot](https://colab.research.google.com/drive/1nxYBed32rkAvoUpt8996Ge6D--Su4_oK) and [SaprotHub](https://huggingface.co/SaProtHub) are ready now. Try it and raise a question if you have.
 
 Join us as an OPMC member [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg)
 
