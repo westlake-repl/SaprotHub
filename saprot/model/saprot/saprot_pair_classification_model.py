@@ -10,11 +10,14 @@ from .base import SaprotBaseModel
 
 @register_model
 class SaprotPairClassificationModel(SaprotBaseModel):
-    def __init__(self, **kwargs):
+    def __init__(self, num_labels, **kwargs):
         """
         Args:
+            num_labels: number of labels
+
             **kwargs: other arguments for SaprotBaseModel
         """
+        self.num_labels = num_labels
         super().__init__(task="base", **kwargs)
 
     def initialize_model(self):
@@ -24,7 +27,7 @@ class SaprotPairClassificationModel(SaprotBaseModel):
         classifier = torch.nn.Sequential(
                         Linear(hidden_size, hidden_size),
                         ReLU(),
-                        Linear(hidden_size, 2)
+                        Linear(hidden_size, self.num_labels)
                     )
         
         setattr(self.model, "classifier", classifier)
