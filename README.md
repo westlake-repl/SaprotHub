@@ -1,5 +1,5 @@
 # SaprotHub: Making Protein Modeling Accessible to All Biologists
-<a href="https://www.biorxiv.org/content/10.1101/2024.05.24.595648v1"><img src="https://img.shields.io/badge/Paper-bioRxiv-green" style="max-width: 100%;"></a>
+<a href="https://www.biorxiv.org/content/10.1101/2024.05.24.595648v2"><img src="https://img.shields.io/badge/Paper-bioRxiv-green" style="max-width: 100%;"></a>
 <a href="https://huggingface.co/SaProtHub"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-red?label=SaprotHub" style="max-width: 100%;"></a>
 <a href="https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb"><img src="Figure/colab-badge.svg" style="max-width: 100%;"></a>
 <a href="https://cbirt.net/no-coding-required-saprothub-brings-protein-modeling-to-every-biologist/" alt="blog"><img src="https://img.shields.io/badge/Blog-Medium-purple" /></a> 
