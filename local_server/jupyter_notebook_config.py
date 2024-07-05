@@ -916,7 +916,7 @@
 # c.KernelSpecManager.kernel_spec_class = 'jupyter_client.kernelspec.KernelSpec'
 
 ## Whitelist of allowed kernel names.
-#  
+#
 #  By default, all installed kernels are allowed.
 #  Default: set()
 # c.KernelSpecManager.whitelist = set()
@@ -929,6 +929,7 @@
 
 c.NotebookApp.ip = '0.0.0.0'
 c.NotebookApp.open_browser = False
+c.NotebookApp.token = "SaprotHub"
 c.NotebookApp.port = 12315
 c.NotebookApp.notebook_dir = "/root/.cache/SaprotHub"
 c.NotebookApp.allow_root = True
