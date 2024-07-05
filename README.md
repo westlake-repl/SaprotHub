@@ -134,5 +134,9 @@ All in all, if you can come up with some cool ideas or novel ways to enhance the
 
 Yes. If you have made significant valuable contributions to OPMC, it is possible to become an OPMC member alongside your PhD/postgraduate or internship supervisor. However, the acceptance of your contributions and membership status will be determined by the steering committee. Generally, in such cases, you would need to demonstrate more substantial contributions compared to regular OPMC members. You need to provide official documentation of your relationship with your supervisor, such as an official letter or document confirming their role and support.
 
-### Q12: Would the paper be submitted to a journal.
+### Q11: Can I use copy the code of ColabSaprot for my own protein language model to build another ColabPLM?
+
+Yes, you can. But you need to agree to join OPMC, and all papers that use your ColabPLM for research should also cite the SaprotHub paper, which is the source literature of OPMC.
+
+### Q13: Would the paper be submitted to a journal.
 Yes, we plan to submit it to Nature Methods in the form of brief communication. The editor-in-chief of NBT said that the author list of OPMC could be confirmed in the final version. So you have several months time to contribute and join us.
