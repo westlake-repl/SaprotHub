@@ -15,6 +15,35 @@ Join us as an OPMC member [here](https://github.com/westlake-repl/SaprotHub/blob
 
 The Open Protein Modeling Consortium (OPMC) is a collaborative initiative aimed at unifying the efforts of the protein research community. Its mission is to facilitate the sharing and co-construction of resources, particularly individually trained models, and to advance protein modeling through collective contributions. OPMC provides a platform that supports a wide range of protein function predictions, striving to make advanced protein modeling accessible to researchers, regardless of their machine learning expertise.
 
+## Deploy ColabSaprot on local server
+For users who want to deploy ColabSaprot on their local server, please follow the instructions below:
+
+### Install the environment
+```
+cd local_server
+bash install.sh
+```
+
+### Start jupyter notebook
+```
+bash run.sh
+```
+
+### Connect to local server on the colab platform
+Open the [SaprotHub.ipynb](https://github.com/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) and click
+``Connect to a local runtime``, then input the address of the local server: ``http://localhost:12315/?token=SaprotHub``.
+
+![img.png](Figure/connect_to_a_local_runtime.png)
+
+![img_1.png](Figure/input_address.png)
+
+### (Optional) SSH port forwarding
+If the GPU is deployed on your remote server, you can use SSH port forwarding to connect to the local server. 
+```
+ssh -L 12315:localhost:12315 user@remote_server
+```
+After that, you can connect to the local server on the colab platform.
+
 ## FAQs
 ### Q1: It seems like OPMC and SaprotHub are intertwined but not exactly the same.
 Yes, OPMC is a grand goal, and in this paper, it is primarily presented as a concept and vision. The paper introduces 

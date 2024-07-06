@@ -1,3 +1,3 @@
 #!/bin/bash
-mkdir -p /root/.cache/SaprotHub
+source activate SaprotHub
 jupyter notebook --config ./jupyter_notebook_config.py
