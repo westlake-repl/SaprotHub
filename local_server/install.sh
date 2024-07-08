@@ -23,6 +23,7 @@ pip install lmdb==1.4.1
 pip install biopython==1.83
 pip install wandb==0.17.4
 pip install matplotlib==3.9.1
+pip install torchmetrics==0.9.3
 
 # Overwrite files for properly calling colab
 colab_dir=$CONDA_PREFIX/lib/python3.10/site-packages/google/colab

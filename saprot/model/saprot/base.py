@@ -363,23 +363,23 @@ class SaprotBaseModel(AbstractModel):
             height = 400
             self.grid = widgets.Grid(1, 1, header_row=False, header_column=False, style=f'width:{width}px; height:{height}px')
         
-        fig = plt.figure(figsize=(4 * len(log_dict), 4))
-        ax = []
-        self.valid_metrics_list['step'].append(self.step)
-        for idx, metric in enumerate(log_dict.keys()):
-            if metric in self.valid_metrics_list:
-                self.valid_metrics_list[metric].append(log_dict[metric].detach().cpu().item())
-            else:
-                self.valid_metrics_list[metric] = [log_dict[metric].detach().cpu().item()]
-
-            ax.append(fig.add_subplot(1, len(log_dict), idx + 1))
-            ax[idx].set_title(metric.upper())
-            ax[idx].set_xlabel('step')
-            ax[idx].set_ylabel(metric)
-            ax[idx].plot(self.valid_metrics_list['step'], self.valid_metrics_list[metric], marker='o', markersize=1)
-                
-        
         with self.grid.output_to(0, 0):
             self.grid.clear_cell()
+            
+            fig = plt.figure(figsize=(4 * len(log_dict), 4))
+            ax = []
+            self.valid_metrics_list['step'].append(self.step)
+            for idx, metric in enumerate(log_dict.keys()):
+                if metric in self.valid_metrics_list:
+                    self.valid_metrics_list[metric].append(log_dict[metric].detach().cpu().item())
+                else:
+                    self.valid_metrics_list[metric] = [log_dict[metric].detach().cpu().item()]
+    
+                ax.append(fig.add_subplot(1, len(log_dict), idx + 1))
+                ax[idx].set_title(metric.upper())
+                ax[idx].set_xlabel('step')
+                ax[idx].set_ylabel(metric)
+                ax[idx].plot(self.valid_metrics_list['step'], self.valid_metrics_list[metric], marker='o', markersize=1)
+                
             plt.tight_layout()
             plt.show()
