@@ -366,7 +366,7 @@ class SaprotBaseModel(AbstractModel):
         with self.grid.output_to(0, 0):
             self.grid.clear_cell()
             
-            fig = plt.figure(figsize=(4 * len(log_dict), 4))
+            fig = plt.figure(figsize=(6 * len(log_dict), 6))
             ax = []
             self.valid_metrics_list['step'].append(self.step)
             for idx, metric in enumerate(log_dict.keys()):
