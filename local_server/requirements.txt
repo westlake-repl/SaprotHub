@@ -1,0 +1,18 @@
+traitlets==5.9.0
+pillow==10.4.0
+httplib2==0.22.0
+ipywidgets==7.7.1
+'numpy<2'
+torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2
+pytorch-lightning==2.1.3
+loguru==0.7.2
+easydict
+colorama==0.4.6
+transformers==4.28.0
+peft==0.10.0
+lmdb==1.4.1
+biopython==1.83
+wandb==0.17.4
+matplotlib==3.9.1
+torchmetrics==0.9.3
+multiprocess
