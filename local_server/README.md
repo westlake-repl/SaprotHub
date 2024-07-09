@@ -25,4 +25,4 @@ If the GPU is deployed on your remote server, you can use SSH port forwarding to
 ```
 ssh -L 12315:localhost:12315 user@remote_server
 ```
-After that, you can connect to the local server on the colab platform.
+After that, you can connect to the local server on the colab platform .
