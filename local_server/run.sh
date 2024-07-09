@@ -17,4 +17,4 @@ fi
 
 # Run the server
 source activate SaprotHub
-jupyter notebook --config $ori_dir/jupyter_notebook_config.py --allow-root
+jupyter notebook --config $ori_dir/jupyter_notebook_config.py  --allow-root
