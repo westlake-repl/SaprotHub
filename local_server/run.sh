@@ -13,7 +13,7 @@ if [ -d "/root/.cache/SaprotHub/SaprotHub" ];then
       echo "The version is not the latest. Updating..."
       git pull
       pip install -r ./requirements.txt
-#      pip uninstall saprot --yes
+      pip uninstall saprot --yes
   fi
 fi
 
