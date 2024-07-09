@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source activate SaprotHub
+
 # Checkout the version
 ori_dir=$(pwd)
 if [ -d "/root/.cache/SaprotHub/SaprotHub" ];then
@@ -16,5 +18,4 @@ if [ -d "/root/.cache/SaprotHub/SaprotHub" ];then
 fi
 
 # Run the server
-source activate SaprotHub
-jupyter notebook --config $ori_dir/jupyter_notebook_config.py  --allow-root
+jupyter notebook --config $ori_dir/jupyter_notebook_config.py --allow-root
