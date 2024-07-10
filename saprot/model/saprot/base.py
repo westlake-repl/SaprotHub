@@ -379,7 +379,7 @@ class SaprotBaseModel(AbstractModel):
                 ax[idx].set_title(metric.upper())
                 ax[idx].set_xlabel('step')
                 ax[idx].set_ylabel(metric)
-                ax[idx].plot(self.valid_metrics_list['step'], self.valid_metrics_list[metric], marker='o', markersize=1)
+                ax[idx].plot(self.valid_metrics_list['step'], self.valid_metrics_list[metric], marker='o')
                 
             plt.tight_layout()
             plt.show()
