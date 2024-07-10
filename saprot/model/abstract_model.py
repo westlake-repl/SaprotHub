@@ -197,6 +197,7 @@ class AbstractModel(pl.LightningModule):
         loss = self.loss_func('train', outputs, labels)
         
         self.log("loss", loss, prog_bar=True)
+        print(self.step)
         return loss
     
     def validation_step(self, batch, batch_idx):
