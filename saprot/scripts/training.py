@@ -75,7 +75,7 @@ def run(config):
 
     # Initialize a dataset
     if str(config.setting.seed):
-        config.dataset.seed= config.setting.seed
+        config.dataset.seed = config.setting.seed
     data_module = load_dataset(config.dataset)
 
     # Initialize a trainer

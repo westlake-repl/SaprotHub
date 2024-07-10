@@ -368,7 +368,7 @@ class SaprotBaseModel(AbstractModel):
 
             fig = plt.figure(figsize=(6 * len(log_dict), 6))
             ax = []
-            self.valid_metrics_list['step'].append(self.step)
+            self.valid_metrics_list['step'].append(int(self.step))
             for idx, metric in enumerate(log_dict.keys()):
                 if metric in self.valid_metrics_list:
                     self.valid_metrics_list[metric].append(log_dict[metric].detach().cpu().item())

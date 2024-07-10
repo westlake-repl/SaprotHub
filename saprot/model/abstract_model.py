@@ -152,10 +152,7 @@ class AbstractModel(pl.LightningModule):
     ) -> None:
         super().optimizer_step(epoch, batch_idx, optimizer, optimizer_closure)
 
-        self.temp_step += 1
-        if self.temp_step == self.trainer.accumulate_grad_batches:
-            self.step += 1
-            self.temp_step = 0
+        self.step += 1
         
     # For pytorch-lightning 1.9.5
     # def optimizer_step(
@@ -197,7 +194,6 @@ class AbstractModel(pl.LightningModule):
         loss = self.loss_func('train', outputs, labels)
         
         self.log("loss", loss, prog_bar=True)
-        print(self.step)
         return loss
     
     def validation_step(self, batch, batch_idx):
