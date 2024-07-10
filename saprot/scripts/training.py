@@ -33,6 +33,8 @@ def finetune(config):
 
     ############################################################################
     model = my_load_model(config.model)
+    if str(config.setting.seed):
+        config.dataset.seed= config.setting.seed
     data_module = my_load_dataset(config.dataset)
     trainer = load_trainer(config)
 
@@ -72,6 +74,8 @@ def run(config):
     # return
 
     # Initialize a dataset
+    if str(config.setting.seed):
+        config.dataset.seed= config.setting.seed
     data_module = load_dataset(config.dataset)
 
     # Initialize a trainer

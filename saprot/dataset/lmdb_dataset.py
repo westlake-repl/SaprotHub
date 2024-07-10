@@ -19,7 +19,8 @@ class LMDBDataset(pl.LightningDataModule):
                  train_lmdb: str = None,
                  valid_lmdb: str = None,
                  test_lmdb: str = None,
-                 dataloader_kwargs: dict = None):
+                 dataloader_kwargs: dict = None,
+                 seed: int = 20000812):
         """
         Args:
             train_lmdb: path to train lmdb
@@ -32,6 +33,7 @@ class LMDBDataset(pl.LightningDataModule):
         self.valid_lmdb = valid_lmdb
         self.test_lmdb = test_lmdb
         self.dataloader_kwargs = dataloader_kwargs if dataloader_kwargs is not None else {}
+        self.seed = seed
 
         self.env = None
         self.operator = None
@@ -68,11 +70,13 @@ class LMDBDataset(pl.LightningDataModule):
         self.dataloader_kwargs["shuffle"] = True if stage == "train" else False
         lmdb_path = getattr(self, f"{stage}_lmdb")
         dataset = copy.copy(self)
-        dataset._init_lmdb(lmdb_path)
         setattr(dataset, "stage", stage)
+        setattr(self, f"{stage}_dataset", dataset)
         
-        return DataLoader(dataset, collate_fn=dataset.collate_fn, **self.dataloader_kwargs)
-    
+        dataset._init_lmdb(lmdb_path)
+        dataloader = DataLoader(dataset, collate_fn=dataset.collate_fn, **self.dataloader_kwargs)
+        return dataloader
+      
     def train_dataloader(self):
         return self._dataloader("train")
 
