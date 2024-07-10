@@ -381,10 +381,5 @@ class SaprotBaseModel(AbstractModel):
                 ax[idx].set_ylabel(metric)
                 ax[idx].plot(self.valid_metrics_list['step'], self.valid_metrics_list[metric], marker='o')
                 
-                # Plot values on the data points
-                for i, txt in enumerate(self.valid_metrics_list[metric]):
-                    ax[idx].annotate(f"{txt:.4f}",
-                                     (self.valid_metrics_list['step'][i], self.valid_metrics_list[metric][i]))
-                
             plt.tight_layout()
             plt.show()
