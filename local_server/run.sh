@@ -11,7 +11,7 @@ if [ -d "/root/.cache/SaprotHub/SaprotHub" ];then
   remote=(${remote//,/ }[0])
   if [ "$local" != "$remote" ]; then
       echo "The version is not the latest. Updating..."
-      git pull
+      git fetch --all &&  git reset --hard origin/main && git pull
       pip install -r ./requirements.txt
       pip uninstall saprot --yes
   fi
