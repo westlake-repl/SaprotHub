@@ -2,7 +2,7 @@
 
 source activate SaprotHub
 
-# Checkout the version
+# Checkout the version in the cache
 ori_dir=$(pwd)
 if [ -d "/root/.cache/SaprotHub/SaprotHub" ];then
   cd /root/.cache/SaprotHub/SaprotHub
@@ -12,7 +12,7 @@ if [ -d "/root/.cache/SaprotHub/SaprotHub" ];then
   if [ "$local" != "$remote" ]; then
       echo "The version is not the latest. Updating..."
       git fetch --all &&  git reset --hard origin/main && git pull
-      pip install -r ./requirements.txt
+      pip install -r local_server/requirements.txt
       pip uninstall saprot --yes
   fi
 fi
