@@ -18,3 +18,4 @@ wandb==0.17.4
 matplotlib==3.9.1
 torchmetrics==0.9.3
 multiprocess
+py3Dmol
