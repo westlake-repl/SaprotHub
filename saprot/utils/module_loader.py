@@ -160,4 +160,4 @@ def load_trainer(config):
     # Strategy is not used in Colab
     trainer_config.pop('strategy')
     
-    return pl.Trainer(**trainer_config, callbacks=[])
+    return pl.Trainer(**trainer_config, callbacks=[], use_distributed_sampler=False)
