@@ -14,7 +14,6 @@ if [ -d "/root/.cache/SaprotHub/SaprotHub" ];then
       git fetch --all &&  git reset --hard origin/main && git pull
       pip install -r local_server/requirements.txt
       pip uninstall saprot --yes
-      chmod +x bin/foldseek
   fi
 fi
 
