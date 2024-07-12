@@ -32,6 +32,7 @@ researchers, regardless of their machine learning expertise.
 - Jia Zheng, Westlake University
 - Stan Z. Li, Westlake University
 - Xing Chang, Westlake University
+- Huaizong Shen, Westlake University
 
 ## FAQs
 ### Q1: It seems like OPMC and SaprotHub are intertwined but not exactly the same.
