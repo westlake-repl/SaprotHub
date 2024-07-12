@@ -27,7 +27,7 @@ researchers, regardless of their machine learning expertise.
 - Martin Steinegger, Seoul National University
 - Kevin Yang, Microsoft
 - Michael Heinzinger, Technical University of Munich
-- Pascal Notin, Harvard University
+- Pascal Notin, Harvard Medical School
 - Pranam Chatterjee, Duke University
 - Jia Zheng, Westlake University
 - Stan Z. Li, Westlake University
