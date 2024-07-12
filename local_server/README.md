@@ -14,7 +14,7 @@ bash run.sh
 
 ### Connect to local server on the colab platform
 Open the [SaprotHub.ipynb](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) and click
-``Connect to a local runtime``, then input the address of the local server: ``http://localhost:12315/?token=SaprotHub``.
+``Connect to a local runtime``, then input the address of the local server:  ``http://localhost:12315/?token=SaprotHub``.
 
 ![img.png](../Figure/connect_to_a_local_runtime.png)
 
