@@ -29,6 +29,7 @@ researchers, regardless of their machine learning expertise.
 - Michael Heinzinger, Technische Universität München
 - Pascal Notin, Harvard University
 - Pranam Chatterjee, Duke University
+- Noelia Ferruz, The Centre for Genomic Regulation (CRG)
 - Jia Zheng, Westlake University
 - Stan Z. Li, Westlake University
 - Xing Chang, Westlake University
