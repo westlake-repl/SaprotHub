@@ -20,9 +20,9 @@ individually trained models, and to advance protein modeling through collective 
 that supports a wide range of protein function predictions, striving to make advanced protein modeling accessible to
 researchers, regardless of their machine learning expertise.
 
-### OPMC senior members/authors
-- Sergey Ovchinnikov, MIT
-- Martin Steinegger, Seoul National University
+### OPMC senior authors
+- Sergey Ovchinnikov, MIT 
+- Martin Steinegger, Seoul National University 
 - Kevin Yang, Microsoft
 - Michael Heinzinger, Technische Universität München
 - Pascal Notin, Harvard University
