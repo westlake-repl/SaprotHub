@@ -9,8 +9,6 @@ The repository is an official implementation of [SaprotHub: Making Protein Model
 
 OPMC are under the construction...! But [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) and [SaprotHub](https://huggingface.co/SaProtHub) are ready now. Try it and raise a question if you have.
 
-Join us as an OPMC member [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg)
-
 
 ## Deploy ColabSaprot on local server (for linux os)
 For users who want to deploy ColabSaprot on their local server, please refer to [here](https://github.com/westlake-repl/SaprotHub/blob/main/local_server).
@@ -35,6 +33,8 @@ researchers, regardless of their machine learning expertise.
 - Huaizong Shen, Westlake University
 - Noelia Ferruz, The Centre for Genomic Regulation (CRG)
 - Rohit Singh, Duke University
+
+Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg)
 
 ## FAQs
 ### Q1: It seems like OPMC and SaprotHub are intertwined but not exactly the same.
