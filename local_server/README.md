@@ -1,5 +1,7 @@
-## Deploy ColabSaprot on local server (for linux os)
+## Deploy ColabSaprot on local server
 For users who want to deploy ColabSaprot on their local server, please follow the instructions below:
+
+## For Linux OS
 
 ### Install the environment
 ```
@@ -12,7 +14,26 @@ bash install.sh
 bash run.sh
 ```
 
-### Connect to local server on the colab platform
+## For Windows
+
+### Preparation
+1. [Download](https://huggingface.co/datasets/SaProtHub/WindowsDeploy/tree/main) **SaprotHubImage.tar** and **WindowsDeploy.bat** in one folder.
+2. Make sure you have installed [Docker Desktop](https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe) and it **is started**
+![img_2.png](../Figure/docker_page.png)
+
+### Installation
+Click the WindowsDeploy.bat until the Ubuntu bash shell is shown like the figure below
+
+![img_3.png](../Figure/bash_shell.jpg)
+
+### Start jupyter notebook
+Entering the commands below into the bash shell
+```
+cd ~/SaprotHub/local_server
+bash run.sh
+```
+
+## Connect to local server on the colab platform
 Open the [SaprotHub.ipynb](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) and click
 ``Connect to a local runtime``, then input the address of the local server: ``http://localhost:12315/?token=SaprotHub``.
 

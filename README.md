@@ -10,7 +10,7 @@ The repository is an official implementation of [SaprotHub: Making Protein Model
 OPMC are under the construction...! But [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) and [SaprotHub](https://huggingface.co/SaProtHub) are ready now. Try it and raise a question if you have.
 
 
-## Deploy ColabSaprot on local server (for linux os)
+## Deploy ColabSaprot on local server (for linux os and Windows)
 For users who want to deploy ColabSaprot on their local server, please refer to [here](https://github.com/westlake-repl/SaprotHub/blob/main/local_server).
 
 ## Open Protein Modeling Consortium (OPMC)
