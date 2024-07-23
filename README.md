@@ -33,7 +33,8 @@ researchers, regardless of their machine learning expertise.
 - Huaizong Shen, Westlake University
 - Noelia Ferruz, The Centre for Genomic Regulation (CRG)
 - Rohit Singh, Duke University
-- Debora Marks, Harvard University 
+- Debora Marks, Harvard University
+- Anping Zeng, Westlake University 
 
 Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg)
 
