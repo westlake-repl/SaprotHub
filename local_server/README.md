@@ -22,6 +22,9 @@ See [here](#connect-to-local-server-on-the-colab-platform).
 ### Step1: Preparation
 1. [Download](https://huggingface.co/datasets/lxzcpro/SaprotHubWindowsDeploy/tree/main) **SaprotHubImage.tar** and **WindowsDeploy.bat** in one folder.
 2. Make sure you have installed [Docker Desktop](https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe) and it **is started**
+![img_3.png](../Figure/InstallPage1.png)
+![img_4.png](../Figure/InstallPage2.png)
+![img_5.png](../Figure/InstallPage3.png)
 ![img_2.png](../Figure/docker_page.png)
 
 ### Step2: Installation
