@@ -31,7 +31,8 @@ The Open Protein Modeling Consortium (OPMC) is a collaborative initiative design
 - Rohit Singh, Duke University
 - Debora Marks, Harvard University
 - Anping Zeng, Westlake University
-- Jijie Chai, Westlake University 
+- Jijie Chai, Westlake University
+- Anthony Gitter, University of Wisconsin-Madison
 
 Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg)
 
