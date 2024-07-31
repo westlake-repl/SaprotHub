@@ -1,4 +1,4 @@
-﻿Sequence,type,chain,label,stage
+﻿sequence,type,chain,label,stage
 1qsf.pdb,PDB,A,1,valid
 1szh.pdb,PDB,A,0,train
 2br2.pdb,PDB,A,1,test
