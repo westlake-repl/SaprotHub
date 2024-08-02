@@ -53,6 +53,6 @@ Open the [SaprotHub.ipynb](https://colab.research.google.com/github/westlake-rep
 ### (Optional) SSH port forwarding
 If the GPU is deployed on your remote server, you can use SSH port forwarding to connect to the local server. 
 ```
-ssh -L 12315:localhost:12315 user@remote_server
+ssh -NL 12315:localhost:12315 user@remote_server
 ```
 After that, you can connect to the local server on the colab platform.
