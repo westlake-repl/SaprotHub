@@ -1,0 +1,11 @@
+﻿sequence_1,sequence_2,type_1,type_2,chain_1,chain_2
+1qsf.pdb,P04439.pdb,PDB,AF2,A,A
+1szh.pdb,O95905.pdb,PDB,AF2,A,A
+2br2.pdb,5u91.pdb,PDB,PDB,A,B
+2xdc.pdb,4muu.pdb,PDB,PDB,A,A
+4etj.pdb,4iic.pdb,PDB,PDB,A,A
+4iic.pdb,4etj.pdb,PDB,PDB,A,A
+4muu.pdb,2xdc.pdb,PDB,PDB,A,A
+5u91.pdb,2br2.pdb,PDB,PDB,B,A
+O95905.pdb,1szh.pdb,AF2,PDB,A,A
+P04439.pdb,1qsf.pdb,AF2,PDB,A,A

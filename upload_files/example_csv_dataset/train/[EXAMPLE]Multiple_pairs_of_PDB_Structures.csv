@@ -1,4 +1,4 @@
-﻿seq_1,seq_2,type_1,type_2,chain_1,chain_2,label,stage
+﻿sequence_1,sequence_2,type_1,type_2,chain_1,chain_2,label,stage
 1qsf.pdb,P04439.pdb,PDB,AF2,A,A,0,valid
 1szh.pdb,O95905.pdb,PDB,AF2,A,A,1,train
 2br2.pdb,5u91.pdb,PDB,PDB,A,B,1,test
