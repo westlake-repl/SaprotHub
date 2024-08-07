@@ -107,9 +107,9 @@ class SaprotBaseModel(AbstractModel):
                     "target_modules": ["query", "key", "value", "intermediate.dense", "output.dense"],
                     "modules_to_save": ["classifier"],
                     "inference_mode": False,
-                    "r": 8,
-                    "lora_dropout": 0.,
-                    "lora_alpha": 16,
+                    "r": self.lora_kwargs.r,
+                    "lora_dropout": self.lora_kwargs.lora_dropout,
+                    "lora_alpha": self.lora_kwargs.lora_alpha,
                 }
                 
                 lora_config = LoraConfig(**lora_config)
