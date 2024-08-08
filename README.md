@@ -34,7 +34,8 @@ The Open Protein Modeling Consortium (OPMC) is a collaborative initiative design
 - Jijie Chai, Westlake University
 - Anthony Gitter, University of Wisconsin-Madison
 
-Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg)
+Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg) 
+visit OPMC  [here](https://theopmc.github.io/)
 
 ## FAQs
 ### Q1: It seems like OPMC and SaprotHub are intertwined but not exactly the same.
@@ -160,4 +161,4 @@ Yes. If you have made significant valuable contributions to OPMC, it is possible
 Yes, you can. But you need to agree to join OPMC, and all papers that use your ColabPLM for research are encouraged to cite the SaprotHub paper, which is the source literature of OPMC.
 
 ### Q13: Would the paper be submitted to a journal.
-Yes, we plan to submit it to Nature Methods in the form of brief communication. The editor-in-chief of NBT said that the author list of OPMC could be confirmed in the final version. So you have several months time to contribute and join us.
+Yes, we plan to submit it to Nature Methods in the form of brief communication.
