@@ -44,7 +44,7 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
 
     if task_type in ["pair_regression", "pair_classification"]:
         # Go through each row of the CSV file
-        for i, row in tqdm(df.iterrows()):
+        for i, row in tqdm(df.iterrows(), total=len(df)):
             # seq, label, stage = row
             name_1 = row["name_1"]
             name_2 = row["name_2"]
@@ -71,7 +71,7 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
         
     else:
         # Go through each row of the CSV file
-        for i, row in tqdm(df.iterrows()):
+        for i, row in tqdm(df.iterrows(), total=len(df)):
             # seq, label, stage = row
             seq = row["sequence"][:2048]
             label = row["label"]
