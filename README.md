@@ -33,6 +33,7 @@ The Open Protein Modeling Consortium (OPMC) is a collaborative initiative design
 - Anping Zeng, Westlake University
 - Jijie Chai, Westlake University
 - Anthony Gitter, University of Wisconsin-Madison
+- Anum Glasgow, Columbia University
 
 Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg) 
 visit OPMC  [here](https://theopmc.github.io/)
