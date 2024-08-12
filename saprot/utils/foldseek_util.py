@@ -43,15 +43,20 @@ def get_struc_seq(foldseek,
             
             # Mask low plddt
             if plddt_mask:
-                plddts = extract_plddt(path)
-                assert len(plddts) == len(struc_seq), f"Length mismatch: {len(plddts)} != {len(struc_seq)}"
+                try:
+                    plddts = extract_plddt(path)
+                    assert len(plddts) == len(struc_seq), f"Length mismatch: {len(plddts)} != {len(struc_seq)}"
+                    
+                    # Mask regions with plddt < threshold
+                    indices = np.where(plddts < plddt_threshold)[0]
+                    np_seq = np.array(list(struc_seq))
+                    np_seq[indices] = "#"
+                    struc_seq = "".join(np_seq)
                 
-                # Mask regions with plddt < threshold
-                indices = np.where(plddts < plddt_threshold)[0]
-                np_seq = np.array(list(struc_seq))
-                np_seq[indices] = "#"
-                struc_seq = "".join(np_seq)
-            
+                except Exception as e:
+                    print(f"Error: {e}")
+                    print(f"Failed to mask plddt for {name}")
+                        
             name_chain = desc.split(" ")[0]
             chain = name_chain.replace(name, "").split("_")[-1]
 
