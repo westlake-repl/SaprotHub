@@ -58,7 +58,7 @@ class LMDBDataset(pl.LightningDataModule):
     def _cursor(self):
         return self.operator.cursor()
 
-    def _get(self, key: str or int):
+    def _get(self, key: str or int): # type: ignore
         value = self.operator.get(str(key).encode())
         
         if value is not None:

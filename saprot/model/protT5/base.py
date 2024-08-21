@@ -11,6 +11,11 @@ from transformers import (
     AutoModelForTokenClassification,
     EsmForMaskedLM,
     EsmForSequenceClassification,
+    T5EncoderModel,
+    T5Tokenizer,
+    T5Config,
+    T5ForSequenceClassification,
+    T5ForTokenClassification
 )
 from easydict import EasyDict
 from ..abstract_model import AbstractModel
@@ -21,7 +26,7 @@ import matplotlib.pyplot as plt
 
 class ProtT5BaseModel(AbstractModel):
     """
-    ESM base model. It cannot be used directly but provides model initialization for downstream tasks.
+    T5 base model. It cannot be used directly but provides model initialization for downstream tasks.
     """
     def __init__(self,
                  task: str,
@@ -174,10 +179,10 @@ class ProtT5BaseModel(AbstractModel):
         
     def initialize_model(self):
         # Initialize tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(self.config_path)
+        self.tokenizer = T5Tokenizer.from_pretrained(self.config_path)
         
         # Initialize different models according to task
-        config = AutoConfig.from_pretrained(self.config_path)
+        config = T5Config.from_pretrained(self.config_path)
         if self.extra_config:
             for k, v in self.extra_config.items():
                 setattr(config, k, v)
@@ -188,31 +193,31 @@ class ProtT5BaseModel(AbstractModel):
         if self.task == 'classification':
             # Note that self.num_labels should be set in child classes
             if self.load_pretrained:
-                self.model = AutoModelForSequenceClassification.from_pretrained(
+                self.model = T5ForSequenceClassification.from_pretrained(
                     self.config_path, num_labels=self.num_labels, **self.extra_config)
 
             else:
                 config.num_labels = self.num_labels
-                self.model = AutoModelForSequenceClassification.from_config(config)
+                self.model = T5ForSequenceClassification.from_config(config)
         
         if self.task == 'token_classification':
             # Note that self.num_labels should be set in child classes
             if self.load_pretrained:
-                self.model = AutoModelForTokenClassification.from_pretrained(
+                self.model = T5ForTokenClassification.from_pretrained(
                     self.config_path, num_labels=self.num_labels, **self.extra_config)
 
             else:
                 config.num_labels = self.num_labels
-                self.model = AutoModelForTokenClassification.from_config(config)
+                self.model = T5ForTokenClassification.from_config(config)
 
         elif self.task == 'regression':
             if self.load_pretrained:
-                self.model = AutoModelForSequenceClassification.from_pretrained(
+                self.model = T5ForSequenceClassification.from_pretrained(
                     self.config_path, num_labels=1, **self.extra_config)
 
             else:
                 config.num_labels = 1
-                self.model = AutoModelForSequenceClassification.from_config(config)
+                self.model = T5ForSequenceClassification.from_config(config)
         
         # elif self.task == 'lm':
         #     if self.load_pretrained:
@@ -268,7 +273,7 @@ class ProtT5BaseModel(AbstractModel):
                             the hidden dimension.
         """
         inputs["output_hidden_states"] = True
-        outputs = self.model.esm(**inputs)
+        outputs = self.model(**inputs)
 
         # Get the index of the first <eos> token
         input_ids = inputs["input_ids"]
