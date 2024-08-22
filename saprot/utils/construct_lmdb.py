@@ -24,8 +24,11 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
     df = pd.read_csv(csv_file)
     df.columns = df.columns.str.lower()
     if task_type == "token_classification":
-        for index, value in df["label"].items():
-            df.loc[index, "label"] = [int(item.strip()) for item in value.split(",")][:1024]
+        for index, row in df.iterrows():
+            if row["stage"] == "train":
+                df.at[index, "label"] = [int(item.strip()) for item in row["label"].split(",")][:1024]
+            else:
+                df.at[index, "label"] = [int(item.strip()) for item in row["label"].split(",")]
         
     # Construct data dictionary
     data_dicts = {
@@ -46,14 +49,19 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
         # Go through each row of the CSV file
         for i, row in tqdm(df.iterrows(), total=len(df)):
             # seq, label, stage = row
+            label = row["label"]
+            stage = row["stage"]
             name_1 = row["name_1"]
             name_2 = row["name_2"]
             chain_1 = row["chain_1"]
             chain_2 = row["chain_2"]
-            seq_1 = row["sequence_1"][:2048]
-            seq_2 = row["sequence_2"][:2048]
-            label = row["label"]
-            stage = row["stage"]
+
+            if stage == "train":
+                seq_1 = row["sequence_1"][:2048]
+                seq_2 = row["sequence_2"][:2048]
+            else:
+                seq_1 = row["sequence_1"]
+                seq_2 = row["sequence_2"]
 
             tmp_dict = data_dicts[stage]
 
@@ -73,9 +81,13 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
         # Go through each row of the CSV file
         for i, row in tqdm(df.iterrows(), total=len(df)):
             # seq, label, stage = row
-            seq = row["sequence"][:2048]
             label = row["label"]
             stage = row["stage"]
+
+            if stage == "train":
+                seq = row["sequence"][:2048]
+            else:
+                seq = row["sequence"]
 
             tmp_dict = data_dicts[stage]
 

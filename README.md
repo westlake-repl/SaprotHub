@@ -5,7 +5,7 @@
 <a href="https://cbirt.net/no-coding-required-saprothub-brings-protein-modeling-to-every-biologist/" alt="blog"><img src="https://img.shields.io/badge/Blog-Medium-purple" /></a> 
 <a href="https://x.com/sokrypton/status/1795525127653986415"><img src="https://img.shields.io/badge/Twitter-blue?logo=twitter" style="max-width: 100%;"></a>
 
-The repository is an official implementation of [SaprotHub: Making Protein Modeling Accessible to All Biologists](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v1).
+The repository is an official implementation of [SaprotHub: Making Protein Modeling Accessible to All Biologists](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v3).
 
 OPMC are under the construction...! But [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) and [SaprotHub](https://huggingface.co/SaProtHub) are ready now. Try it and raise a question if you have.
 
@@ -34,7 +34,11 @@ The Open Protein Modeling Consortium (OPMC) is a collaborative initiative design
 - Jijie Chai, Westlake University
 - Anthony Gitter, University of Wisconsin-Madison
 - Anum Glasgow, Columbia University
-- Milot Mirdita, Seoul National University 
+- Milot Mirdita, Seoul National University
+- Philip M. Kim, University of Toronto     
+- Christopher Snow, Colorado State University   
+- Vasilis Ntranos, University of California 
+- Philip A. Romero,  Duke University 
 
 Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg) 
 visit OPMC  [here](https://theopmc.github.io/)
