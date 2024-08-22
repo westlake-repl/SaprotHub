@@ -47,6 +47,7 @@ class ProtT5ClassificationDataset(LMDBDataset):
     def __getitem__(self, index):
         entry = json.loads(self._get(index))
         seq = entry['seq']
+        seq = seq[::2]
         seq = [" ".join(list(re.sub(r"[UZOB]", "X", sequence))) for sequence in seq]
         # seq = " ".join(seq)
 

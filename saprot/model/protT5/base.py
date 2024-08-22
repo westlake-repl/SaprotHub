@@ -108,14 +108,16 @@ class ProtT5BaseModel(AbstractModel):
             # Initialize LoRA model for training
             else:
                 lora_config = {
-                    "task_type": "SEQ_CLS",
-                    "target_modules": ["query", "key", "value", "intermediate.dense", "output.dense"],
-                    "modules_to_save": ["classifier"],
-                    "inference_mode": False,
-                    "r": getattr(self.lora_kwargs, "r", 8),
-                    "lora_dropout": getattr(self.lora_kwargs, "lora_dropout", 0.0),
-                    "lora_alpha": getattr(self.lora_kwargs, "lora_alpha", 16),
+                    "task_type": "SEQ_CLS",  # 任务类型，序列分类
+                    "target_modules": ["SelfAttention.q", "SelfAttention.k", "SelfAttention.v", "SelfAttention.o", 
+                                    "EncDecAttention.q", "EncDecAttention.k", "EncDecAttention.v", "EncDecAttention.o"],  # 模块与层名
+                    "modules_to_save": ["classifier"],  # 保存的模块（如果有分类器或其他模块）
+                    "inference_mode": False,  # 是否为推理模式，设置为False表示进行训练
+                    "r": getattr(self.lora_kwargs, "r", 8),  # LoRA秩，默认为8
+                    "lora_dropout": getattr(self.lora_kwargs, "lora_dropout", 0.0),  # LoRA dropout率
+                    "lora_alpha": getattr(self.lora_kwargs, "lora_alpha", 16),  # LoRA缩放因子
                 }
+
                 
                 lora_config = LoraConfig(**lora_config)
                 
