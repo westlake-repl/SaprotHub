@@ -4,11 +4,11 @@ import torch.distributed as dist
 
 from torch.nn.functional import cross_entropy
 from ..model_interface import register_model
-from .base import SaprotBaseModel
+from .base import ProtT5BaseModel
 
 
 @register_model
-class ProtT5ClassificationModel(SaprotBaseModel):
+class ProtT5ClassificationModel(ProtT5BaseModel):
     def __init__(self, num_labels: int, **kwargs):
         """
         Args:

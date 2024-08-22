@@ -5,6 +5,7 @@ import random
 from ..data_interface import register_dataset
 from transformers import T5Tokenizer
 from ..lmdb_dataset import *
+import re
 
 # 1. 函数名
 # 2. Tokenizer
@@ -46,36 +47,39 @@ class ProtT5ClassificationDataset(LMDBDataset):
     def __getitem__(self, index):
         entry = json.loads(self._get(index))
         seq = entry['seq']
+        seq = seq[::2]
+        seq = [" ".join(list(re.sub(r"[UZOB]", "X", sequence))) for sequence in seq]
+        # seq = " ".join(seq)
 
-        # Mask structure tokens
-        if self.mask_struc_ratio is not None:
-            tokens = self.tokenizer.tokenize(seq)
-            mask_candi = [i for i, t in enumerate(tokens) if t[-1] != "#"]
+        # # Mask structure tokens
+        # if self.mask_struc_ratio is not None:
+        #     tokens = self.tokenizer(seq, add_special_tokens=True, padding="longest")
+        #     mask_candi = [i for i, t in enumerate(tokens) if t[-1] != "#"]
             
-            # Randomly shuffle the mask candidates and set seed to ensure mask is consistent
-            random.seed(self.mask_seed)
-            random.shuffle(mask_candi)
+        #     # Randomly shuffle the mask candidates and set seed to ensure mask is consistent
+        #     random.seed(self.mask_seed)
+        #     random.shuffle(mask_candi)
             
-            # Mask first n structure tokens
-            mask_num = int(len(mask_candi) * self.mask_struc_ratio)
-            for i in range(mask_num):
-                idx = mask_candi[i]
-                tokens[idx] = tokens[idx][:-1] + "#"
+        #     # Mask first n structure tokens
+        #     mask_num = int(len(mask_candi) * self.mask_struc_ratio)
+        #     for i in range(mask_num):
+        #         idx = mask_candi[i]
+        #         tokens[idx] = tokens[idx][:-1] + "#"
             
-            seq = "".join(tokens)
+        #     seq = "".join(tokens)
 
-        # Mask structure tokens with pLDDT < threshold
-        if self.plddt_threshold is not None:
-            plddt = entry["plddt"]
-            tokens = self.tokenizer.tokenize(seq)
-            seq = ""
-            for token, score in zip(tokens, plddt):
-                if score < self.plddt_threshold:
-                    seq += token[:-1] + "#"
-                else:
-                    seq += token
+        # # Mask structure tokens with pLDDT < threshold
+        # if self.plddt_threshold is not None:
+        #     plddt = entry["plddt"]
+        #     tokens = self.tokenizer(seq, add_special_tokens=True, padding="longest")
+        #     seq = ""
+        #     for token, score in zip(tokens, plddt):
+        #         if score < self.plddt_threshold:
+        #             seq += token[:-1] + "#"
+        #         else:
+        #             seq += token
 
-        tokens = self.tokenizer.tokenize(seq)[:self.max_length]
+        tokens = self.tokenizer(seq, add_special_tokens=True, padding="longest")[:self.max_length]
         seq = " ".join(tokens)
         
         if self.use_bias_feature:
