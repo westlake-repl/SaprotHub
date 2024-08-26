@@ -38,7 +38,8 @@ The Open Protein Modeling Consortium (OPMC) is a collaborative initiative design
 - Philip M. Kim, University of Toronto     
 - Christopher Snow, Colorado State University   
 - Vasilis Ntranos, University of California 
-- Philip A. Romero,  Duke University 
+- Philip A. Romero,  Duke University
+- Jianyi Yang, Shandong University
 
 Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg) 
 visit OPMC  [here](https://theopmc.github.io/)
