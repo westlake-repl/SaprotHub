@@ -42,6 +42,7 @@ The Open Protein Modeling Consortium (OPMC) is a collaborative initiative design
 - Vasilis Ntranos, University of California 
 - Philip A. Romero,  Duke University
 - Jianyi Yang, Shandong University
+- Caixia Gao, Chinese Academy of Sciences
 
 Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg) 
 visit OPMC  [here](https://theopmc.github.io/)
