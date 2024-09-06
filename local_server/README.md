@@ -5,7 +5,7 @@ For users who want to deploy ColabSaprot on their local server, please follow th
 
 ### Step1: Install the environment
 ```
-cd local_server
+cd local_server # This is important because the system will find files using relative path!
 bash install.sh
 ```
 
