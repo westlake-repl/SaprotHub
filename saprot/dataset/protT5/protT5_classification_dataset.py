@@ -48,7 +48,6 @@ class ProtT5ClassificationDataset(LMDBDataset):
         entry = json.loads(self._get(index))
         seq = entry['seq']
         seq = seq[::2]
-        seq = [" ".join(list(re.sub(r"[UZOB]", "X", sequence))) for sequence in seq]
         # seq = " ".join(seq)
 
         # # Mask structure tokens
@@ -79,8 +78,8 @@ class ProtT5ClassificationDataset(LMDBDataset):
         #         else:
         #             seq += token
 
-        tokens = self.tokenizer(seq, add_special_tokens=True, padding="longest")[:self.max_length]
-        seq = " ".join(tokens)
+        # tokens = self.tokenizer(seq, add_special_tokens=True, padding="longest")[:self.max_length]
+        seq = " ".join(seq)
         
         if self.use_bias_feature:
             coords = {k: v[:self.max_length] for k, v in entry['coords'].items()}

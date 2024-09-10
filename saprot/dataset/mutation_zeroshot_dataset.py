@@ -4,6 +4,7 @@ import torch
 from .data_interface import register_dataset
 from .lmdb_dataset import LMDBDataset
 
+from transformers import T5For
 
 @register_dataset
 class MutationZeroShotDataset(LMDBDataset):
