@@ -100,7 +100,7 @@ class ProtT5ClassificationDataset(LMDBDataset):
         labels = {"labels": label_ids}
 
         # What is batch_encode_plus()? ALL tokenizers has this func? Different tokenizer takes differnt RAW data?
-        encoder_info = self.tokenizer.batch_encode_plus(seqs, return_tensors='pt', padding=True)
+        encoder_info = self.tokenizer.batch_encode_plus(seqs, return_tensors='pt', padding=True, max_length=self.max_length, truncation=True)
         inputs = {"inputs": encoder_info}
         if self.use_bias_feature:
             inputs["coords"] = coords

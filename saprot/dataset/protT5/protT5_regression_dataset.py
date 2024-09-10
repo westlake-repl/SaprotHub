@@ -102,7 +102,7 @@ class ProtT5RegressionDataset(LMDBDataset):
 		labels = torch.tensor(labels)
 		labels = {"labels": labels}
 		
-		encoder_info = self.tokenizer.batch_encode_plus(seqs, return_tensors='pt', padding=True)
+		encoder_info = self.tokenizer.batch_encode_plus(seqs, return_tensors='pt', padding=True, max_length=self.max_length, truncation=True)
 		inputs = {"inputs": encoder_info}
 		
 		return inputs, labels
