@@ -53,8 +53,8 @@ class ProtT5TokenClassificationModel(ProtT5BaseModel):
         
         else:
             outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
-            sequence_output = outputs.last_hidden_state  # 输出维度为 (batch_size, sequence_length, hidden_size)
-            logits = self.model.classifier(sequence_output)  # 输出 token 分类的 logits
+            sequence_output = outputs.last_hidden_state 
+            logits = self.model.classifier(sequence_output)
 
         return logits[:]
     
