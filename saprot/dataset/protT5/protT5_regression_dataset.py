@@ -50,36 +50,7 @@ class ProtT5RegressionDataset(LMDBDataset):
 	
 	def __getitem__(self, index):
 		entry = json.loads(self._get(index))
-		seq = entry['seq']
-		seq = seq[::2]
-		# # Mask structure tokens
-		# if self.mask_struc_ratio is not None:
-		# 	tokens = self.tokenizer.tokenize(seq)
-		# 	mask_candi = [i for i, t in enumerate(tokens) if t[-1] != "#"]
-
-		# 	# Randomly shuffle the mask candidates and set seed to ensure mask is consistent
-		# 	setup_seed(20000812)
-		# 	random.shuffle(mask_candi)
-
-		# 	# Mask first n structure tokens
-		# 	mask_num = int(len(mask_candi) * self.mask_struc_ratio)
-		# 	for i in range(mask_num):
-		# 		idx = mask_candi[i]
-		# 		tokens[idx] = tokens[idx][:-1] + "#"
-
-		# 	seq = "".join(tokens)
-		
-		# # Mask structure tokens with pLDDT < threshold
-		# if self.plddt_threshold is not None:
-		# 	plddt = entry["plddt"]
-		# 	tokens = self.tokenizer.tokenize(seq)
-		# 	seq = ""
-		# 	for token, score in zip(tokens, plddt):
-		# 		if score < self.plddt_threshold:
-		# 			seq += token[:-1] + "#"
-		# 		else:
-		# 			seq += token
-
+		seq = entry['seq'][::2]
 		seq = " ".join(seq)
 	
 		if self.min_clip is not None:
@@ -92,6 +63,7 @@ class ProtT5RegressionDataset(LMDBDataset):
 			entry['fitness'] = (entry['fitness'] - min_norm) / (max_norm - min_norm)
 				
 		label = entry['fitness']
+
 		return seq, label
 	
 	def __len__(self):

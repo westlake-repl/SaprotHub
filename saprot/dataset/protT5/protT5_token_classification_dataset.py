@@ -30,9 +30,8 @@ class ProtT5TokenClassificationDataset(LMDBDataset):
         seq = entry['seq'][::2]
         seq = " ".join(seq)
 
-        # Add -1 to the start and end of the label to ignore the cls token
+        # Add -1 to the end of the label to ignore the cls token
         label = entry["label"][:self.max_length] + [-1]
-        label = torch.tensor(label, dtype=torch.long)
         
         return seq, label
 
@@ -40,17 +39,11 @@ class ProtT5TokenClassificationDataset(LMDBDataset):
         return int(self._get("length"))
 
     def collate_fn(self, batch):
-        seqs, label_ids = tuple(zip(*batch))
-        # seqs = batch[0][0]
-        # label_ids = batch[0][1]
-        # seqs, label_ids = [(seq[0], seq[1]) for seq in batch]
-
-        seqs = tuple(" ".join(seq) for seq in seqs)
-
-        label_ids = pad_sequences(label_ids, constant_value=0)
-        labels = {"labels": label_ids}
-
-        encoder_info = self.tokenizer.batch_encode_plus(seqs, padding=True, tuncation=True, return_tensors='pt', max_length=self.max_length)
+        seqs, labels = tuple(zip(*batch))
+        labels = torch.tensor(labels)
+        labels = {"labels": labels}
+        
+        encoder_info = self.tokenizer.batch_encode_plus(seqs, return_tensors='pt', padding=True, max_length=self.max_length, truncation=True)
         inputs = {"inputs": encoder_info}
- 
+        
         return inputs, labels
