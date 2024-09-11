@@ -7,7 +7,9 @@
 
 The repository is an official implementation of [SaprotHub: Making Protein Modeling Accessible to All Biologists](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v3).
 
-OPMC are under the construction...! But [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) and [SaprotHub](https://huggingface.co/SaProtHub) are ready now. Try it and raise a question if you have.
+OPMC are under the construction! But [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) and [SaprotHub](https://huggingface.co/SaProtHub) are ready. Try it out.
+
+You might also be interested in its sibling [ColabProTrek](https://colab.research.google.com/drive/1On2xQU0d7351bIBgZpz2T0VUp2gZium0?usp=sharing).
 
 
 ## Deploy ColabSaprot on local server (for linux os and Windows)
@@ -16,7 +18,7 @@ For users who want to deploy ColabSaprot on their local server, please refer to 
 ## Open Protein Modeling Consortium (OPMC)
 The Open Protein Modeling Consortium (OPMC) is a collaborative initiative designed to unify the efforts of the protein research community. Its mission is to facilitate the sharing and co-construction of resources, with a particular focus on individually trained decentralized models, thereby advancing protein modeling through collective contributions. OPMC offers a platform that supports a wide range of protein function predictions, aiming to make advanced protein modeling accessible to researchers irrespective of their machine learning expertise.
 
-### OPMC senior authors
+### OPMC members (senior)
 - Sergey Ovchinnikov, MIT 
 - Martin Steinegger, Seoul National University 
 - Kevin Yang, Microsoft
@@ -38,7 +40,9 @@ The Open Protein Modeling Consortium (OPMC) is a collaborative initiative design
 - Philip M. Kim, University of Toronto     
 - Christopher Snow, Colorado State University   
 - Vasilis Ntranos, University of California 
-- Philip A. Romero,  Duke University 
+- Philip A. Romero,  Duke University
+- Jianyi Yang, Shandong University
+- Caixia Gao, Chinese Academy of Sciences
 
 Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg) 
 visit OPMC  [here](https://theopmc.github.io/)
