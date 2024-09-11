@@ -46,64 +46,22 @@ class ProtT5ClassificationDataset(LMDBDataset):
 
     def __getitem__(self, index):
         entry = json.loads(self._get(index))
-        seq = entry['seq']
-        seq = seq[::2]
-        seq = [" ".join(list(re.sub(r"[UZOB]", "X", sequence))) for sequence in seq]
-        # seq = " ".join(seq)
-
-        # # Mask structure tokens
-        # if self.mask_struc_ratio is not None:
-        #     tokens = self.tokenizer(seq, add_special_tokens=True, padding="longest")
-        #     mask_candi = [i for i, t in enumerate(tokens) if t[-1] != "#"]
-            
-        #     # Randomly shuffle the mask candidates and set seed to ensure mask is consistent
-        #     random.seed(self.mask_seed)
-        #     random.shuffle(mask_candi)
-            
-        #     # Mask first n structure tokens
-        #     mask_num = int(len(mask_candi) * self.mask_struc_ratio)
-        #     for i in range(mask_num):
-        #         idx = mask_candi[i]
-        #         tokens[idx] = tokens[idx][:-1] + "#"
-            
-        #     seq = "".join(tokens)
-
-        # # Mask structure tokens with pLDDT < threshold
-        # if self.plddt_threshold is not None:
-        #     plddt = entry["plddt"]
-        #     tokens = self.tokenizer(seq, add_special_tokens=True, padding="longest")
-        #     seq = ""
-        #     for token, score in zip(tokens, plddt):
-        #         if score < self.plddt_threshold:
-        #             seq += token[:-1] + "#"
-        #         else:
-        #             seq += token
-
-        tokens = self.tokenizer(seq, add_special_tokens=True, padding="longest")[:self.max_length]
-        seq = " ".join(tokens)
+        seq = entry['seq'][::2]
+        seq = " ".join(seq)
         
-        if self.use_bias_feature:
-            coords = {k: v[:self.max_length] for k, v in entry['coords'].items()}
-        else:
-            coords = None
-
         label = entry["label"] if self.preset_label is None else self.preset_label
 
-        return seq, label, coords
-
+        return seq, label
+    
     def __len__(self):
         return int(self._get("length"))
 
     def collate_fn(self, batch):
-        seqs, label_ids, coords = tuple(zip(*batch))
-
-        label_ids = torch.tensor(label_ids, dtype=torch.long)
-        labels = {"labels": label_ids}
-
-        # What is batch_encode_plus()? ALL tokenizers has this func? Different tokenizer takes differnt RAW data?
-        encoder_info = self.tokenizer.batch_encode_plus(seqs, return_tensors='pt', padding=True)
+        seqs, labels = tuple(zip(*batch))
+        labels = torch.tensor(labels)
+        labels = {"labels": labels}
+        
+        encoder_info = self.tokenizer.batch_encode_plus(seqs, return_tensors='pt', padding=True, max_length=self.max_length, truncation=True)
         inputs = {"inputs": encoder_info}
-        if self.use_bias_feature:
-            inputs["coords"] = coords
-
+        
         return inputs, labels
