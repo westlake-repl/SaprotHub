@@ -40,12 +40,12 @@ class ProtT5ClassificationModel(ProtT5BaseModel):
             logits = self.model.classifier.out_proj(x)
 
         else:
-            logits = self.model(**inputs).logits
+            # logits = self.model(**inputs).logits
             # print(input_ids.shape, attention_mask.shape)
-            # outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
-            # sequence_output = outputs.last_hidden_state
-            # pooled_output = sequence_output[:, 0, :]
-            # logits = self.model.classifier(pooled_output)
+            outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+            sequence_output = outputs.last_hidden_state
+            pooled_output = sequence_output[:, 0, :]
+            logits = self.model.classifier(pooled_output)
         
         return logits
 

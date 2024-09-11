@@ -16,6 +16,7 @@ class ProtT5RegressionModel(ProtT5BaseModel):
         """
         self.test_result_path = test_result_path
         super().__init__(task="regression", **kwargs)
+        self.model.classifier = torch.nn.Linear(self.model.config.hidden_size, 1)
     
     def initialize_metrics(self, stage):
         return {f"{stage}_loss": torchmetrics.MeanSquaredError(),
@@ -27,6 +28,9 @@ class ProtT5RegressionModel(ProtT5BaseModel):
         if structure_info:
             # To be implemented
             raise NotImplementedError
+        
+        input_ids = inputs["input_ids"]
+        attention_mask = inputs["attention_mask"]
 
         # If backbone is frozen, the embedding will be the average of all residues, else it will be the
         if self.freeze_backbone:
@@ -38,7 +42,11 @@ class ProtT5RegressionModel(ProtT5BaseModel):
             logits = self.model.classifier.out_proj(x).squeeze(dim=-1)
 
         else:
-            logits = self.model(**inputs).logits.squeeze(dim=-1)
+            outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+            sequence_output = outputs.last_hidden_state
+            pooled_output = sequence_output[:, 0, :]  # 使用 CLS token 的嵌入表示
+            logits = self.model.classifier(pooled_output)  # 输出连续值
+
 
         return logits
 

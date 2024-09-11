@@ -20,6 +20,7 @@ class ProtT5TokenClassificationModel(ProtT5BaseModel):
         self.preds = []
         self.targets = []
         super().__init__(task="token_classification", **kwargs)
+        self.model.classifier = torch.nn.Linear(self.model.config.hidden_size, num_labels)
     
     def compute_mcc(self, preds, target):
         tp = (preds * target).sum()
@@ -36,6 +37,10 @@ class ProtT5TokenClassificationModel(ProtT5BaseModel):
     def forward(self, inputs, coords=None):
         if coords is not None:
             inputs = self.add_bias_feature(inputs, coords)
+
+        # Get the input_ids and attention_mask
+        input_ids = inputs["input_ids"]
+        attention_mask = inputs["attention_mask"]
         
         # If backbone is frozen, the embedding will be the average of all residues
         if self.freeze_backbone:
@@ -47,7 +52,10 @@ class ProtT5TokenClassificationModel(ProtT5BaseModel):
             logits = self.model.classifier.out_proj(x)
         
         else:
-            logits = self.model(**inputs).logits
+            outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+            sequence_output = outputs.last_hidden_state  # 输出维度为 (batch_size, sequence_length, hidden_size)
+            logits = self.model.classifier(sequence_output)  # 输出 token 分类的 logits
+
         return logits[:]
     
     
