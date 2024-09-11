@@ -50,12 +50,7 @@ class ProtT5TokenClassificationDataset(LMDBDataset):
         label_ids = pad_sequences(label_ids, constant_value=0)
         labels = {"labels": label_ids}
 
-        encoder_info = self.tokenizer.batch_encode_plus(seqs, add_special_tokens=True, padding="longest", tuncation=True, return_tensors='pt', max_length=self.max_length)
-        inputs = {
-            "inputs":{
-                "input_ids": torch.tensor(encoder_info["input_ids"], dtype=torch.long),
-                "attention_mask": torch.tensor(encoder_info["attention_mask"], dtype=torch.long),
-                }
-        }
+        encoder_info = self.tokenizer.batch_encode_plus(seqs, padding=True, tuncation=True, return_tensors='pt', max_length=self.max_length)
+        inputs = {"inputs": encoder_info}
  
         return inputs, labels

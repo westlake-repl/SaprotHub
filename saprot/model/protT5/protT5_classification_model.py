@@ -17,7 +17,12 @@ class ProtT5ClassificationModel(ProtT5BaseModel):
         """
         self.num_labels = num_labels
         super().__init__(task="classification", **kwargs)
-        self.model.classifier = torch.nn.Linear(self.model.config.hidden_size, num_labels)
+        hidden_size = self.model.config.hidden_size
+        self.model.classifier = torch.nn.Sequential(
+                        torch.nn.Linear(hidden_size, hidden_size),
+                        torch.nn.ReLU(),
+                        torch.nn.Linear(hidden_size, self.num_labels)
+                    )
         
     def initialize_metrics(self, stage):
         return {f"{stage}_acc": torchmetrics.Accuracy()}
@@ -43,9 +48,8 @@ class ProtT5ClassificationModel(ProtT5BaseModel):
             # logits = self.model(**inputs).logits
             # print(input_ids.shape, attention_mask.shape)
             outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
-            sequence_output = outputs.last_hidden_state
-            pooled_output = sequence_output[:, 0, :]
-            logits = self.model.classifier(pooled_output)
+            repr = outputs.last_hidden_state[:, 1: -1].mean(dim=1)
+            logits = self.model.classifier(repr)
         
         return logits
 
