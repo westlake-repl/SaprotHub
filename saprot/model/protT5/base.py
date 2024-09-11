@@ -195,8 +195,8 @@ class ProtT5BaseModel(AbstractModel):
         if self.task == 'classification':
             # Note that self.num_labels should be set in child classes
             if self.load_pretrained:
-                self.model = T5ForSequenceClassification.from_pretrained(
-                    self.config_path, num_labels=self.num_labels, **self.extra_config)
+                self.model = T5EncoderModel.from_pretrained(
+                    self.config_path, **self.extra_config)
 
             else:
                 config.num_labels = self.num_labels
@@ -205,8 +205,8 @@ class ProtT5BaseModel(AbstractModel):
         if self.task == 'token_classification':
             # Note that self.num_labels should be set in child classes
             if self.load_pretrained:
-                self.model = T5ForTokenClassification.from_pretrained(
-                    self.config_path, num_labels=self.num_labels, **self.extra_config)
+                self.model = T5EncoderModel.from_pretrained(
+                    self.config_path, **self.extra_config)
 
             else:
                 config.num_labels = self.num_labels
@@ -214,8 +214,8 @@ class ProtT5BaseModel(AbstractModel):
 
         elif self.task == 'regression':
             if self.load_pretrained:
-                self.model = T5ForSequenceClassification.from_pretrained(
-                    self.config_path, num_labels=1, **self.extra_config)
+                self.model = T5EncoderModel.from_pretrained(
+                    self.config_path, **self.extra_config)
 
             else:
                 config.num_labels = 1

@@ -937,7 +937,7 @@ class PeftModelForSequenceClassification(PeftModel):
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                     inputs_embeds=inputs_embeds,
-                    labels=labels,
+                    # labels=labels,
                     output_attentions=output_attentions,
                     output_hidden_states=output_hidden_states,
                     return_dict=return_dict,

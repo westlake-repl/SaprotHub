@@ -47,6 +47,14 @@ def my_load_model(config):
     if model_type == "protT5/protT5_classification_model":
       from model.protT5.protT5_classification_model import ProtT5ClassificationModel
       return ProtT5ClassificationModel(**model_config)
+    
+    if model_type == "protT5/protT5_regression_model":
+      from model.protT5.protT5_regression_model import ProtT5RegressionModel
+      return ProtT5RegressionModel(**model_config)
+    
+    if model_type == "protT5/protT5_token_classification_model":
+      from model.protT5.protT5_token_classification_model import ProtT5TokenClassificationModel
+      return ProtT5TokenClassificationModel(**model_config)
 
 
 ################################################################################
@@ -82,6 +90,14 @@ def my_load_dataset(config):
     if dataset_type == "protT5/protT5_classification_dataset":
       from dataset.protT5.protT5_classification_dataset import ProtT5ClassificationDataset
       return ProtT5ClassificationDataset(**dataset_config)
+    
+    if dataset_type == "protT5/protT5_regression_dataset":
+      from dataset.protT5.protT5_regression_dataset import ProtT5RegressionDataset
+      return ProtT5RegressionDataset(**dataset_config)
+    
+    if dataset_type == "protT5/protT5_token_classification_dataset":
+      from dataset.protT5.protT5_token_classification_dataset import ProtT5TokenClassificationDataset
+      return ProtT5TokenClassificationDataset(**dataset_config)
 
 def load_wandb(config):
     # initialize wandb
