@@ -28,6 +28,7 @@ class ProtT5TokenClassificationDataset(LMDBDataset):
     def __getitem__(self, index):
         entry = json.loads(self._get(index))
         seq = entry['seq'][::2]
+        seq = " ".join(seq)
 
         # Add -1 to the start and end of the label to ignore the cls token
         label = entry["label"][:self.max_length] + [-1]
