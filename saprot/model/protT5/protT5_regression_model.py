@@ -46,6 +46,7 @@ class ProtT5RegressionModel(ProtT5BaseModel):
             sequence_output = outputs.last_hidden_state
             pooled_output = sequence_output[:, 0, :]  # 使用 CLS token 的嵌入表示
             logits = self.model.classifier(pooled_output)  # 输出连续值
+            logits = logits.squeeze(dim=-1)
 
 
         return logits
