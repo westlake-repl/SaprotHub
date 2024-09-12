@@ -151,8 +151,8 @@ Therefore, SaprotHub's Adapter store can be built on top of Hugging Face or deve
 
 All OPMC members will be listed as authors in the SaprotHub paper before its final revision, which is expected to take 4-12 months. Author's name will be included in the paper. Please note that eligibility to become an OPMC regular member is determined by the steering committee.
 
-If an author of the SaprotHub paper is credited  for their contribution in developing a different protein language model  (whether new or existing) unrelated to SaprotHub's functions, they are required to acknowledge this model as an automatic part of the OPMC framework.
-In case they publish a paper, please menton this somewhere in the paper. 
+If an OPMC author is primarily granted authorship recognition for developing other PLMHubs, they are required to acknowledge that this model automatically becomes part of the OPMC framework.
+In case they publish a paper, they should menton this somewhere in the paper. Researchers using this new PLMHub should also cite the original OPMC literature.
 
 ### Q10: How to be a member of OPMC or an author of SaprotHub.
 
