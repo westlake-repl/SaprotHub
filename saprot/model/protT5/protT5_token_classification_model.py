@@ -75,12 +75,14 @@ class ProtT5TokenClassificationModel(ProtT5BaseModel):
         # print('label:', label)
         # assert False
 
-        loss = cross_entropy(logits, label, ignore_index=0)
-        
         # Remove the ignored index
         mask = label != 0
         label = label[mask]
         logits = logits[mask]
+
+        loss = cross_entropy(logits, label, ignore_index=0)
+        
+        
         
         # Add the outputs to the list if not in training mode
         if stage != "train":

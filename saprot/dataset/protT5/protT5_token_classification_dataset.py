@@ -47,7 +47,7 @@ class ProtT5TokenClassificationDataset(LMDBDataset):
         labels = {"labels": label_ids}
         
         # Encode the sequences
-        encoder_info = self.tokenizer.batch_encode_plus(seqs, padding="longest", truncation=True, return_tensors='pt', max_length=self.max_length)
+        encoder_info = self.tokenizer.batch_encode_plus(seqs, padding=True, truncation=True, return_tensors='pt', max_length=self.max_length)
         inputs = {"inputs": encoder_info}
 
         return inputs, labels
