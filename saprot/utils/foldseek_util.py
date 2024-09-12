@@ -4,6 +4,7 @@ import json
 import numpy as np
 import re
 import sys
+from Bio.PDB import PDBParser, MMCIFParser
 sys.path.append(".")
 
 
@@ -79,30 +80,30 @@ def extract_plddt(pdb_path: str) -> np.ndarray:
     Returns:
         plddts: plddt scores.
     """
-    with open(pdb_path, "r") as r:
-        plddt_dict = {}
-        for line in r:
-            line = re.sub(' +', ' ', line).strip()
-            splits = line.split(" ")
-            
-            if splits[0] == "ATOM":
-                # If position < 1000
-                if len(splits[4]) == 1:
-                    pos = int(splits[5])
-
-                # If position >= 1000, the blank will be removed, e.g. "A 999" -> "A1000"
-                # So the length of splits[4] is not 1
-                else:
-                    pos = int(splits[4][1:])
-
-                plddt = float(splits[-2])
-                
-                if pos not in plddt_dict:
-                    plddt_dict[pos] = [plddt]
-                else:
-                    plddt_dict[pos].append(plddt)
     
-    plddts = np.array([np.mean(v) for v in plddt_dict.values()])
+    # Initialize parser
+    if pdb_path.endswith(".cif"):
+        parser = MMCIFParser()
+    elif pdb_path.endswith(".pdb"):
+        parser = PDBParser()
+    else:
+        raise ValueError("Invalid file format for plddt extraction. Must be '.cif' or '.pdb'.")
+    
+    structure = parser.get_structure('protein', pdb_path)
+    model = structure[0]
+    chain = model["A"]
+    
+    # Extract plddt scores
+    plddts = []
+    for residue in chain:
+        residue_plddts = []
+        for atom in residue:
+            plddt = atom.get_bfactor()
+            residue_plddts.append(plddt)
+        
+        plddts.append(np.mean(residue_plddts))
+    
+    plddts = np.array(plddts)
     return plddts
     
 
