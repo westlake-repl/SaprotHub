@@ -75,7 +75,7 @@ class ProtT5TokenClassificationModel(ProtT5BaseModel):
         # print('label:', label)
         # assert False
 
-        loss = cross_entropy(logits, label, ignore_index=-1)
+        loss = cross_entropy(logits, label, ignore_index=0)
         
         # Remove the ignored index
         mask = label != -1
