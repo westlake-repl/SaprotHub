@@ -40,11 +40,14 @@ class ProtT5TokenClassificationDataset(LMDBDataset):
 
     def collate_fn(self, batch):
         seqs, label_ids = tuple(zip(*batch))
+        # Add a space between each amino acid
         seqs = tuple(" ".join(seq) for seq in seqs)
+        # Pad the label_ids with 0
         label_ids = pad_sequences(label_ids, constant_value=0)
         labels = {"labels": label_ids}
-
-        encoder_info = self.tokenizer.batch_encode_plus(seqs, padding=True, tuncation=True, return_tensors='pt', max_length=self.max_length)
+        
+        # Encode the sequences
+        encoder_info = self.tokenizer.batch_encode_plus(seqs, padding=True, truncation=True, return_tensors='pt', max_length=self.max_length)
         inputs = {"inputs": encoder_info}
 
         return inputs, labels
