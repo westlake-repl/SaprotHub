@@ -43,11 +43,11 @@ class ProtT5TokenClassificationDataset(LMDBDataset):
         # Add a space between each amino acid
         seqs = tuple(" ".join(seq) for seq in seqs)
         # Pad the label_ids with 0
-        label_ids = pad_sequences(label_ids, constant_value=0)
+        label_ids = pad_sequences(label_ids, constant_value=0, max_length=self.max_length)
         labels = {"labels": label_ids}
         
         # Encode the sequences
-        encoder_info = self.tokenizer.batch_encode_plus(seqs, padding=True, truncation=True, return_tensors='pt', max_length=self.max_length)
+        encoder_info = self.tokenizer.batch_encode_plus(seqs, padding="longest", truncation=True, return_tensors='pt', max_length=self.max_length)
         inputs = {"inputs": encoder_info}
 
         return inputs, labels

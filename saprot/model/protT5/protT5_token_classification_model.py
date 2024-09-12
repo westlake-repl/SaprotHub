@@ -78,7 +78,7 @@ class ProtT5TokenClassificationModel(ProtT5BaseModel):
         loss = cross_entropy(logits, label, ignore_index=0)
         
         # Remove the ignored index
-        mask = label != -1
+        mask = label != 0
         label = label[mask]
         logits = logits[mask]
         
