@@ -43,7 +43,7 @@ class ProtT5TokenClassificationDataset(LMDBDataset):
         # Add a space between each amino acid
         seqs = tuple(" ".join(seq) for seq in seqs)
         # Pad the label_ids with 0
-        label_ids = pad_sequences(label_ids, constant_value=0, max_length=self.max_length)
+        label_ids = pad_sequences(label_ids, constant_value=0)
         labels = {"labels": label_ids}
         
         # Encode the sequences
