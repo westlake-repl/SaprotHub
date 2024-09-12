@@ -149,10 +149,10 @@ Therefore, SaprotHub's Adapter store can be built on top of Hugging Face or deve
 
 ### Q9: If I develop other protein language models (PLMs) and online platforms following SaprotHub and ColabSaprot, can I be an author on the SaprotHub paper?
 
-All OPMC members will be listed as authors in the SaprotHub paper before its final revision, which is expected to take 4-12 months. Author's name will be included in the paper. Please note that eligibility to become an OPMC member is determined by the steering committee.
+All OPMC members will be listed as authors in the SaprotHub paper before its final revision, which is expected to take 4-12 months. Author's name will be included in the paper. Please note that eligibility to become an OPMC regular member is determined by the steering committee.
 
-If an author of the SaprotHub paper is acknowledged for their contribution in developing a different protein language model (whether it's a new model or an existing one) that is not related to SaprotHub's functions, it is required that they acknowledge this new protein language model as automatically being part of the OPMC framework. 
-In case they publish a paper, just menton this somewhere in the paper. Additionally, any future scientific literature that utilizes this language model for their research should also cite the SaprotHub paper as a reference of OPMC.
+If an author of the SaprotHub paper is credited  for their contribution in developing a different protein language model  (whether new or existing) unrelated to SaprotHub's functions, they are required to acknowledge this model as an automatic part of the OPMC framework.
+In case they publish a paper, please menton this somewhere in the paper. 
 
 ### Q10: How to be a member of OPMC or an author of SaprotHub.
 
