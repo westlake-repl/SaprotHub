@@ -7,7 +7,9 @@
 
 The repository is an official implementation of [SaprotHub: Making Protein Modeling Accessible to All Biologists](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v3).
 
-OPMC are under the construction...! But [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) and [SaprotHub](https://huggingface.co/SaProtHub) are ready now. Try it and raise a question if you have.
+OPMC are under the construction! But [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) and [SaprotHub](https://huggingface.co/SaProtHub) are ready. Try it out.
+
+You might also be interested in its sibling [ColabProTrek](https://colab.research.google.com/drive/1On2xQU0d7351bIBgZpz2T0VUp2gZium0?usp=sharing).
 
 
 ## Deploy ColabSaprot on local server (for linux os and Windows)
@@ -16,7 +18,7 @@ For users who want to deploy ColabSaprot on their local server, please refer to 
 ## Open Protein Modeling Consortium (OPMC)
 The Open Protein Modeling Consortium (OPMC) is a collaborative initiative designed to unify the efforts of the protein research community. Its mission is to facilitate the sharing and co-construction of resources, with a particular focus on individually trained decentralized models, thereby advancing protein modeling through collective contributions. OPMC offers a platform that supports a wide range of protein function predictions, aiming to make advanced protein modeling accessible to researchers irrespective of their machine learning expertise.
 
-### OPMC senior authors
+### OPMC authors (senior)
 - Sergey Ovchinnikov, MIT 
 - Martin Steinegger, Seoul National University 
 - Kevin Yang, Microsoft
@@ -38,7 +40,9 @@ The Open Protein Modeling Consortium (OPMC) is a collaborative initiative design
 - Philip M. Kim, University of Toronto     
 - Christopher Snow, Colorado State University   
 - Vasilis Ntranos, University of California 
-- Philip A. Romero,  Duke University 
+- Philip A. Romero,  Duke University
+- Jianyi Yang, Shandong University
+- Caixia Gao, Chinese Academy of Sciences
 
 Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg) 
 visit OPMC  [here](https://theopmc.github.io/)
@@ -145,10 +149,10 @@ Therefore, SaprotHub's Adapter store can be built on top of Hugging Face or deve
 
 ### Q9: If I develop other protein language models (PLMs) and online platforms following SaprotHub and ColabSaprot, can I be an author on the SaprotHub paper?
 
-All OPMC members will be listed as authors in the SaprotHub paper before its final revision, which is expected to take 4-12 months. Author's name will be included in the paper. Please note that eligibility to become an OPMC member is determined by the steering committee.
+All OPMC members will be listed as authors in the SaprotHub paper before its final revision, which is expected to take 4-12 months. Author's name will be included in the paper. Please note that eligibility to become an OPMC regular member is determined by the steering committee.
 
-If an author of the SaprotHub paper is acknowledged for their contribution in developing a different protein language model (whether it's a new model or an existing one) that is not related to SaprotHub's functions, it is required that they acknowledge this new protein language model as automatically being part of the OPMC framework. 
-In case they publish a paper, just menton this somewhere in the paper. Additionally, any future scientific literature that utilizes this language model for their research should also cite the SaprotHub paper as a reference of OPMC.
+If an OPMC author is primarily granted authorship recognition for developing other PLMHubs, they are required to acknowledge that this model automatically becomes part of the OPMC framework.
+In case they publish a paper, they should menton this somewhere in the paper. Researchers using this new PLMHub should also cite the original OPMC literature.
 
 ### Q10: How to be a member of OPMC or an author of SaprotHub.
 
