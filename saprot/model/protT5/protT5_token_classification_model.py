@@ -71,10 +71,6 @@ class ProtT5TokenClassificationModel(ProtT5BaseModel):
         logits = logits.view(-1, self.num_labels)
         label = label.view(-1)
 
-        # print('logits:',logits.shape)
-        # print('label:', label)
-        # assert False
-
         # Remove the ignored index
         mask = label != 0
         label = label[mask]

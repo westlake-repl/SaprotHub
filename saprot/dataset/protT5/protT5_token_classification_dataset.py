@@ -29,8 +29,11 @@ class ProtT5TokenClassificationDataset(LMDBDataset):
         entry = json.loads(self._get(index))
         seq = entry['seq'][::2]
 
-        # Add -1 to the end of the label to ignore the cls token
-        label = entry["label"][:self.max_length]
+        # Add 0 to the end of the label to ignore the cls token
+        if len(entry["label"]) >= self.max_length:
+            label = entry["label"][:self.max_length - 1] + [0]
+        else:
+            label = entry["label"][:self.max_length] + [0]  
         label = torch.tensor(label, dtype=torch.long)
         
         return seq, label
