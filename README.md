@@ -11,6 +11,10 @@ We are pleased to announce that [ColabSaprot](https://colab.research.google.com/
 
 ## Open Protein Modeling Consortium (OPMC)
 The Open Protein Modeling Consortium (OPMC) is a collaborative initiative designed to unify the efforts of the protein research community. Its mission is to facilitate the sharing and co-construction of resources, with a particular focus on individually trained decentralized models, thereby advancing protein modeling through collective contributions. OPMC offers a platform that supports a wide range of protein function predictions, aiming to make advanced protein modeling accessible to researchers irrespective of their machine learning expertise.
+
+Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg) 
+visit our OPMC wetbsite  [here](https://theopmc.github.io/)
+
 ### ColabPLM of OPMC
 - [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb)
 - [ColabProTrek](https://colab.research.google.com/drive/1On2xQU0d7351bIBgZpz2T0VUp2gZium0?usp=sharing)
@@ -41,8 +45,7 @@ The Open Protein Modeling Consortium (OPMC) is a collaborative initiative design
 - Jianyi Yang, Shandong University
 - Caixia Gao, Chinese Academy of Sciences
 
-Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg) 
-visit OPMC  [here](https://theopmc.github.io/)
+
 
 
 ## Deploy ColabSaprot on local server (for linux os and Windows)
