@@ -9,15 +9,13 @@ The repository is an official implementation of [SaprotHub: Making Protein Model
 
 OPMC are under the construction! But [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) and [SaprotHub](https://huggingface.co/SaProtHub) are ready. Try it out.
 
-You might also be interested in its sibling [ColabProTrek](https://colab.research.google.com/drive/1On2xQU0d7351bIBgZpz2T0VUp2gZium0?usp=sharing).
-
-
-## Deploy ColabSaprot on local server (for linux os and Windows)
-For users who want to deploy ColabSaprot on their local server, please refer to [here](https://github.com/westlake-repl/SaprotHub/blob/main/local_server).
 
 ## Open Protein Modeling Consortium (OPMC)
 The Open Protein Modeling Consortium (OPMC) is a collaborative initiative designed to unify the efforts of the protein research community. Its mission is to facilitate the sharing and co-construction of resources, with a particular focus on individually trained decentralized models, thereby advancing protein modeling through collective contributions. OPMC offers a platform that supports a wide range of protein function predictions, aiming to make advanced protein modeling accessible to researchers irrespective of their machine learning expertise.
-
+### ColabpLM & pLMHub of OPMC
+[ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb)
+[ColabProTrek](https://colab.research.google.com/drive/1On2xQU0d7351bIBgZpz2T0VUp2gZium0?usp=sharing)
+[ColabProtT5](https://colab.research.google.com/drive/1agJCwW8EXyB0xmY5xjbR9iiNE5JAPMOo?usp=sharing)
 ### OPMC authors (senior)
 - Sergey Ovchinnikov, MIT 
 - Martin Steinegger, Seoul National University 
@@ -46,6 +44,10 @@ The Open Protein Modeling Consortium (OPMC) is a collaborative initiative design
 
 Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg) 
 visit OPMC  [here](https://theopmc.github.io/)
+
+
+## Deploy ColabSaprot on local server (for linux os and Windows)
+For users who want to deploy ColabSaprot on their local server, please refer to [here](https://github.com/westlake-repl/SaprotHub/blob/main/local_server).
 
 ## FAQs
 ### Q1: It seems like OPMC and SaprotHub are intertwined but not exactly the same.
