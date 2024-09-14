@@ -28,10 +28,13 @@ class ProtT5TokenClassificationDataset(LMDBDataset):
     def __getitem__(self, index):
         entry = json.loads(self._get(index))
         seq = entry['seq'][::2]
-        seq = " ".join(seq)
 
-        # Add -1 to the end of the label to ignore the cls token
-        label = entry["label"][:self.max_length] + [-1]
+        # Add 0 to the end of the label to ignore the cls token
+        if len(entry["label"]) >= self.max_length:
+            label = entry["label"][:self.max_length - 1] + [0]
+        else:
+            label = entry["label"][:self.max_length] + [0]  
+        label = torch.tensor(label, dtype=torch.long)
         
         return seq, label
 
@@ -39,11 +42,15 @@ class ProtT5TokenClassificationDataset(LMDBDataset):
         return int(self._get("length"))
 
     def collate_fn(self, batch):
-        seqs, labels = tuple(zip(*batch))
-        labels = torch.tensor(labels)
-        labels = {"labels": labels}
+        seqs, label_ids = tuple(zip(*batch))
+        # Add a space between each amino acid
+        seqs = tuple(" ".join(seq) for seq in seqs)
+        # Pad the label_ids with 0
+        label_ids = pad_sequences(label_ids, constant_value=0)
+        labels = {"labels": label_ids}
         
-        encoder_info = self.tokenizer.batch_encode_plus(seqs, return_tensors='pt', padding=True, max_length=self.max_length, truncation=True)
+        # Encode the sequences
+        encoder_info = self.tokenizer.batch_encode_plus(seqs, padding=True, truncation=True, return_tensors='pt', max_length=self.max_length)
         inputs = {"inputs": encoder_info}
-        
+
         return inputs, labels
