@@ -7,9 +7,7 @@
 
 The repository is an official implementation of [SaprotHub: Making Protein Modeling Accessible to All Biologists](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v4).
 
-OPMC are under the construction! 
-[ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) and [SaprotHub](https://huggingface.co/SaProtHub) are now ready.
-
+We are pleased to announce that [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) and [SaprotHub](https://huggingface.co/SaProtHub) are now ready for use.
 
 ## Open Protein Modeling Consortium (OPMC)
 The Open Protein Modeling Consortium (OPMC) is a collaborative initiative designed to unify the efforts of the protein research community. Its mission is to facilitate the sharing and co-construction of resources, with a particular focus on individually trained decentralized models, thereby advancing protein modeling through collective contributions. OPMC offers a platform that supports a wide range of protein function predictions, aiming to make advanced protein modeling accessible to researchers irrespective of their machine learning expertise.
