@@ -5,7 +5,7 @@
 <a href="https://cbirt.net/no-coding-required-saprothub-brings-protein-modeling-to-every-biologist/" alt="blog"><img src="https://img.shields.io/badge/Blog-Medium-purple" /></a> 
 <a href="https://x.com/sokrypton/status/1795525127653986415"><img src="https://img.shields.io/badge/Twitter-blue?logo=twitter" style="max-width: 100%;"></a>
 
-The repository is an official implementation of [SaprotHub: Making Protein Modeling Accessible to All Biologists](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v3).
+The repository is an official implementation of [SaprotHub: Making Protein Modeling Accessible to All Biologists](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v4).
 
 OPMC are under the construction! But [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) and [SaprotHub](https://huggingface.co/SaProtHub) are ready. Try it out.
 
@@ -166,9 +166,9 @@ All in all, if you can come up with some cool ideas or novel ways to enhance the
 
 Yes. If you have made significant valuable contributions to OPMC, it is possible to become an OPMC member alongside your PhD/postgraduate or internship supervisor. However, the acceptance of your contributions and membership status will be determined by the steering committee. Generally, in such cases, you would need to demonstrate more substantial contributions compared to regular OPMC members. You need to provide official documentation of your relationship with your supervisor, such as an official letter or document confirming their role and support.
 
-### Q12: Can I use copy the code of ColabSaprot for my own protein language model to build another ColabPLM?
+### Q12: Can I  copy the code of ColabSaprot for my own protein language model to build another ColabPLM?
 
-Yes, you can. But you need to agree to join OPMC, and all papers that use your ColabPLM for research are encouraged to cite the SaprotHub paper, which is the source literature of OPMC.
+Yes, you can. But you need to agree to join OPMC, and papers that use your ColabPLM for research are encouraged to mention the SaprotHub paper, which is the source literature of OPMC.
 
 ### Q13: Would the paper be submitted to a journal.
-Yes, we plan to submit it to Nature Methods in the form of brief communication.
+Yes, the paper is under review of Nature Methods and you can still participate OPMC during the revision stage.
