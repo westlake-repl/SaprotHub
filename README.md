@@ -44,6 +44,7 @@ visit our OPMC wetbsite  [here](https://theopmc.github.io/)
 - Philip A. Romero,  Duke University
 - Jianyi Yang, Shandong University
 - Caixia Gao, Chinese Academy of Sciences
+- Michael Bronstein, University of Oxford
 
 
 
