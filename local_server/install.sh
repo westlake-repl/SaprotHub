@@ -1,7 +1,4 @@
 #!/bin/bash
-conda create -n SaprotHub python=3.10 --yes
-source activate SaprotHub
-
 mkdir -p /root/.cache/SaprotHub
 
 # Install packages

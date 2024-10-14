@@ -6,6 +6,8 @@ For users who want to deploy ColabSaprot on their local server, please follow th
 ### Step1: Install the environment
 ```
 cd local_server # This is important because the system will find files using relative path!
+conda create -n SaprotHub python=3.10 --yes
+conda activate SaprotHub
 bash install.sh
 ```
 

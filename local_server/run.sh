@@ -1,7 +1,5 @@
 #!/bin/bash
 
-source activate SaprotHub
-
 # Checkout the version in the cache
 ori_dir=$(pwd)
 if [ -d "/root/.cache/SaprotHub/SaprotHub" ];then
