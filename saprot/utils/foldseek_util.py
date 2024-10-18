@@ -13,28 +13,44 @@ def get_struc_seq(foldseek,
                   path,
                   chains: list = None,
                   process_id: int = 0,
-                  plddt_mask: bool = False,
-                  plddt_threshold: float = 70.) -> dict:
+                  plddt_mask: bool = True,
+                  plddt_threshold: float = 70.,
+                  foldseek_verbose: bool = False) -> dict:
     """
-    
+
     Args:
         foldseek: Binary executable file of foldseek
+
         path: Path to pdb file
+
         chains: Chains to be extracted from pdb file. If None, all chains will be extracted.
+
         process_id: Process ID for temporary files. This is used for parallel processing.
+
         plddt_mask: If True, mask regions with plddt < plddt_threshold. plddt scores are from the pdb file.
+
         plddt_threshold: Threshold for plddt. If plddt is lower than this value, the structure will be masked.
+
+        foldseek_verbose: If True, foldseek will print verbose messages.
 
     Returns:
         seq_dict: A dict of structural seqs. The keys are chain IDs. The values are tuples of
         (seq, struc_seq, combined_seq).
     """
     assert os.path.exists(foldseek), f"Foldseek not found: {foldseek}"
-    assert os.path.exists(path), f"Pdb file not found: {path}"
+    assert os.path.exists(path), f"PDB file not found: {path}"
     
     tmp_save_path = f"get_struc_seq_{process_id}_{time.time()}.tsv"
-    cmd = f"{foldseek} structureto3didescriptor -v 0 --threads 1 --chain-name-mode 1 {path} {tmp_save_path}"
+    if foldseek_verbose:
+        cmd = f"{foldseek} structureto3didescriptor --threads 1 --chain-name-mode 1 {path} {tmp_save_path}"
+    else:
+        cmd = f"{foldseek} structureto3didescriptor -v 0 --threads 1 --chain-name-mode 1 {path} {tmp_save_path}"
     os.system(cmd)
+    
+    # Check whether the structure is predicted by AlphaFold2
+    with open(path, "r") as r:
+        if "alphafold" not in r.read().lower():
+            plddt_mask = False
     
     seq_dict = {}
     name = os.path.basename(path)
@@ -57,15 +73,15 @@ def get_struc_seq(foldseek,
                 except Exception as e:
                     print(f"Error: {e}")
                     print(f"Failed to mask plddt for {name}")
-                        
+            
             name_chain = desc.split(" ")[0]
             chain = name_chain.replace(name, "").split("_")[-1]
-
+            
             if chains is None or chain in chains:
                 if chain not in seq_dict:
                     combined_seq = "".join([a + b.lower() for a, b in zip(seq, struc_seq)])
                     seq_dict[chain] = (seq, struc_seq, combined_seq)
-        
+    
     os.remove(tmp_save_path)
     os.remove(tmp_save_path + ".dbtype")
     return seq_dict
