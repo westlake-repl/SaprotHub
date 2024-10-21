@@ -97,7 +97,7 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
                 label_keys[task_type]: label
             }
             tmp_dict[len(tmp_dict)] = json.dumps(sample)
-
+    
     for stage in ["train", "valid", "test"]:
         tmp_dict = data_dicts[stage]
         tmp_dict["length"] = len(tmp_dict)
