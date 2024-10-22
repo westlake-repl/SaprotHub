@@ -39,6 +39,7 @@ class SaprotClassificationDataset(LMDBDataset):
         self.plddt_threshold = plddt_threshold
 
     def __getitem__(self, index):
+        from huggingface_hub import notebook_login
         entry = json.loads(self._get(index))
         seq = entry['seq']
 
