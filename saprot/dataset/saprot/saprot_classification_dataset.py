@@ -48,7 +48,7 @@ class SaprotClassificationDataset(LMDBDataset):
             tokens = self.tokenizer.tokenize(seq)
             mask_candi = [i for i, t in enumerate(tokens) if t[-1] != "#"]
             
-            # Randomly shuffle the mask candidates and set seed to ensure mask is consistent    
+            # Randomly shuffle the mask candidates and set seed to ensure mask is consistent
             random.seed(self.mask_seed)
             random.shuffle(mask_candi)
             
