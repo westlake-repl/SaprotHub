@@ -16,8 +16,8 @@ Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob
 visit our OPMC wetbsite  [here](https://theopmc.github.io/)
 
 ### ColabPLM of OPMC
-- [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb)
-- [ColabProTrek](https://colab.research.google.com/drive/1On2xQU0d7351bIBgZpz2T0VUp2gZium0?usp=sharing)
+- [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) (AA+3Di)
+- [ColabProTrek](https://colab.research.google.com/drive/1On2xQU0d7351bIBgZpz2T0VUp2gZium0?usp=sharing) (AA/3Di align 3Di/AA)
 - [ColabProtT5](https://colab.research.google.com/drive/1agJCwW8EXyB0xmY5xjbR9iiNE5JAPMOo?usp=sharing)
 ### OPMC authors (senior)
 - Sergey Ovchinnikov, MIT 
