@@ -935,4 +935,4 @@ c.NotebookApp.notebook_dir = "/root/.cache/SaprotHub"
 c.NotebookApp.allow_root = True
 c.NotebookApp.allow_origin = "https://colab.research.google.com"
 c.NotebookApp.port_retries = 0
-c.NotebookApp.tornado_settings = {"websocket_max_message_size": 100 * 1024 * 1024}
+c.NotebookApp.tornado_settings = {"websocket_max_message_size": 100 * 1024 * 1024 * 1024}
