@@ -14,9 +14,10 @@ transformers==4.28.0
 peft==0.10.0
 lmdb==1.4.1
 biopython==1.83
-wandb==0.17.4
+wandb==0.17.4SystemExit
 matplotlib==3.9.1
 torchmetrics==0.9.3
 multiprocess
 py3Dmol
 markdown
+jupyter_ui_poll

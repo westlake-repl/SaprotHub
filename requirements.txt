@@ -22,3 +22,4 @@ loguru
 colorama
 py3Dmol
 markdown
+jupyter_ui_poll
