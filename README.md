@@ -43,6 +43,7 @@ visit our OPMC wetbsite  [here](https://theopmc.github.io/)
 - Vasilis Ntranos, University of California 
 - Philip A. Romero,  Duke University
 - Jianyi Yang, Shandong University
+- Tong Si, Chinese Academy of Sciences
 - Caixia Gao, Chinese Academy of Sciences
 - Michael Bronstein, University of Oxford
 
