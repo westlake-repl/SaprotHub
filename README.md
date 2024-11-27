@@ -19,6 +19,8 @@ visit our OPMC wetbsite  [here](https://theopmc.github.io/)
 - [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) (AA+3Di)
 - [ColabProTrek](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabProTrek.ipynb) (AA/3Di align 3Di/AA)
 - [ColabProtT5](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabProtT5.ipynb) (AA)
+- [ColabMETL](https://github.com/gitter-lab/metl?tab=readme-ov-file#mutational-effect-transfer-learning) 
+
 ### OPMC authors (senior)
 - Sergey Ovchinnikov, MIT 
 - Martin Steinegger, Seoul National University 
