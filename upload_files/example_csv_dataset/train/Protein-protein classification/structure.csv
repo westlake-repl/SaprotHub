@@ -1,0 +1,11 @@
+protein_1,chain_1,protein_2,chain_2,label,stage
+1qsf.pdb,A,P04439.pdb,A,1,valid
+1szh.pdb,A,1qsf.pdb,A,0,train
+2br2.pdb,A,1szh.pdb,A,1,test
+2xdc.pdb,A,2br2.pdb,A,1,test
+4etj.pdb,A,2xdc.pdb,A,0,test
+4iic.pdb,A,4etj.pdb,A,0,train
+4muu.pdb,A,4iic.pdb,A,0,valid
+5u91.pdb,B,4muu.pdb,B,1,train
+O95905.pdb,A,5u91.pdb,A,1,train
+P04439.pdb,A,O95905.pdb,A,0,train
