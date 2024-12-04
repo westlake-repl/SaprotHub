@@ -7,7 +7,7 @@
 
 The repository is an official implementation of [SaprotHub: Making Protein Modeling Accessible to All Biologists](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v4).
 
-We are pleased to announce that [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) and [SaprotHub](https://huggingface.co/SaProtHub) are now ready for use.
+We are pleased to announce that ColabSaprot [v1](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb)  [v2](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/dev/colab/SaprotHub_v2_beta.ipynb?hl=en) and [SaprotHub](https://huggingface.co/SaProtHub) are now ready for use.
 
 ## Open Protein Modeling Consortium (OPMC)
 The Open Protein Modeling Consortium (OPMC) is a collaborative initiative designed to unify the efforts of the protein research community. Its mission is to facilitate the sharing and co-construction of resources, with a particular focus on individually trained decentralized models, thereby advancing protein modeling through collective contributions. OPMC offers a platform that supports a wide range of protein  predictions, aiming to make advanced protein modeling accessible to researchers irrespective of their machine learning expertise.
@@ -16,7 +16,7 @@ Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob
 visit our OPMC wetbsite  [here](https://theopmc.github.io/)
 
 ### ColabPLM of OPMC
-- [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) (AA+3Di)
+- [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/dev/colab/SaprotHub_v2_beta.ipynb?hl=en) (AA+3Di)
 - [ColabProTrek](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabProTrek.ipynb) (AA/3Di align 3Di/AA)
 - [ColabProtT5](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabProtT5.ipynb) (AA)
 - [ColabMETL](https://github.com/gitter-lab/metl?tab=readme-ov-file#mutational-effect-transfer-learning) 
