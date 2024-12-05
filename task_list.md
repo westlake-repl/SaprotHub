@@ -1,4 +1,4 @@
-# Tasks that Saprot can support
+# Tasks that Saprot potentially supports
 
 ---
 ## Overview
