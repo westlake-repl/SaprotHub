@@ -1,0 +1,11 @@
+﻿sequence,label,stage
+O95905,1,train
+P04439,0,train
+P08246,0,train
+P42694,1,train
+Q6ZWK4,0,train
+Q6FHJ7,1,valid
+P15529,0,valid
+Q08648,1,test
+Q9Y2H6,0,test
+P63244,1,test

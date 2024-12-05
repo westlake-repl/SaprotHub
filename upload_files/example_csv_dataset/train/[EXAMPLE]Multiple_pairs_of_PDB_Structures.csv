@@ -1,0 +1,11 @@
+﻿sequence_1,sequence_2,type_1,type_2,chain_1,chain_2,label,stage
+1qsf.pdb,P04439.pdb,PDB,AF2,A,A,0,valid
+1szh.pdb,O95905.pdb,PDB,AF2,A,A,1,train
+2br2.pdb,5u91.pdb,PDB,PDB,A,B,1,test
+2xdc.pdb,4muu.pdb,PDB,PDB,A,A,1,test
+4etj.pdb,4iic.pdb,PDB,PDB,A,A,0,test
+4iic.pdb,4etj.pdb,PDB,PDB,A,A,0,train
+4muu.pdb,2xdc.pdb,PDB,PDB,A,A,0,valid
+5u91.pdb,2br2.pdb,PDB,PDB,B,A,1,train
+O95905.pdb,1szh.pdb,AF2,PDB,A,A,1,train
+P04439.pdb,1qsf.pdb,AF2,PDB,A,A,0,train

@@ -1,0 +1,11 @@
+﻿sequence,type,chain,label,stage
+1qsf.pdb,PDB,A,1,valid
+1szh.pdb,PDB,A,0,train
+2br2.pdb,PDB,A,1,test
+2xdc.pdb,PDB,A,1,test
+4etj.pdb,PDB,A,0,test
+4iic.pdb,PDB,A,0,train
+4muu.pdb,PDB,A,0,valid
+5u91.pdb,PDB,B,1,train
+O95905.pdb,AF2,A,1,train
+P04439.pdb,AF2,A,0,train
