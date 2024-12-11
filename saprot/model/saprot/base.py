@@ -355,13 +355,46 @@ class SaprotBaseModel(AbstractModel):
                 pass
             
             self.model.save_pretrained(save_path)
+    
+    def output_test_metrics(self, log_dict):
+        # Remove valid_loss from log_dict when the task is classification
+        if "test_acc" in log_dict:
+            log_dict.pop("test_loss")
         
+        METRIC_MAP = {
+            "test_acc": "Classification accuracy (Acc)",
+            "test_loss": "Root mean squared error (RMSE)",  # Only for regression task
+            "test_mcc": "Matthews correlation coefficient (MCC)",
+            "test_r2": "Coefficient of determination (R^2)",
+            "test_spearman": "Spearman correlation",
+            "test_pearson": "Pearson correlation",
+        }
+        
+        print('=' * 100)
+        print('Evaluation results on the test set:')
+        for key, value in log_dict.items():
+            print(f"{METRIC_MAP[key.lower()]}: {value.item()}")
+        print('=' * 100)
+    
     def plot_valid_metrics_curve(self, log_dict):
         if not hasattr(self, 'grid'):
             from google.colab import widgets
             width = 400 * len(log_dict)
             height = 400
             self.grid = widgets.Grid(1, 1, header_row=False, header_column=False, style=f'width:{width}px; height:{height}px')
+        
+        # Remove valid_loss from log_dict when the task is classification
+        if "valid_acc" in log_dict:
+            log_dict.pop("valid_loss")
+        
+        METRIC_MAP = {
+            "valid_acc": "Classification accuracy (Acc)",
+            "valid_loss": "Root mean squared error (RMSE)",  # Only for regression task
+            "valid_mcc": "Matthews correlation coefficient (MCC)",
+            "valid_r2": "Coefficient of determination (R$^2$)",
+            "valid_spearman": "Spearman correlation",
+            "valid_pearson": "Pearson correlation",
+        }
         
         with self.grid.output_to(0, 0):
             self.grid.clear_cell()
@@ -374,12 +407,13 @@ class SaprotBaseModel(AbstractModel):
                     self.valid_metrics_list[metric].append(log_dict[metric].detach().cpu().item())
                 else:
                     self.valid_metrics_list[metric] = [log_dict[metric].detach().cpu().item()]
-    
+                    
                 ax.append(fig.add_subplot(1, len(log_dict), idx + 1))
-                ax[idx].set_title(metric.upper())
+                ax[idx].set_title(METRIC_MAP[metric.lower()])
                 ax[idx].set_xlabel('step')
-                ax[idx].set_ylabel(metric)
+                ax[idx].set_ylabel(METRIC_MAP[metric.lower()])
                 ax[idx].plot(self.valid_metrics_list['step'], self.valid_metrics_list[metric], marker='o')
-                
+            
+            print("Evaluation results on the validation set:")
             plt.tight_layout()
             plt.show()

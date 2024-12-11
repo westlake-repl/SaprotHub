@@ -71,11 +71,7 @@ class SaprotPairRegressionModel(SaprotBaseModel):
 
         # if dist.get_rank() == 0:
         #     print(log_dict)
-        print('='*100)
-        print('Test Result:')
-        for key, value in log_dict.items():
-            print(f"{key}: {value.item()}")
-        print('='*100)
+        self.output_test_metrics(log_dict)
         self.log_info(log_dict)
         self.reset_metrics("test")
 
