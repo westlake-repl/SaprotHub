@@ -414,6 +414,16 @@ class SaprotBaseModel(AbstractModel):
                 ax[idx].set_ylabel(METRIC_MAP[metric.lower()])
                 ax[idx].plot(self.valid_metrics_list['step'], self.valid_metrics_list[metric], marker='o')
             
-            print("Evaluation results on the validation set:")
+            import ipywidgets
+            import markdown
+            from IPython.display import display
+            
+            hint = ipywidgets.HTML(
+                markdown.markdown(
+                    "### Evaluation results on the validation set are shown below.\n\n"
+                    "### You can check <a href='https://github.com/westlake-repl/SaprotHub/wiki/SaprotHub-v2-(latest)#3-how-do-i-know-how-well-my-model-is-performing-during-training-can-i-know-if-my-model-is-overfitting' target='blank'>here</a> to see how to judge the overfitting of your model."
+                )
+            )
+            display(hint)
             plt.tight_layout()
             plt.show()
