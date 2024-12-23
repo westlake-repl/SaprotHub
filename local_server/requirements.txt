@@ -3,6 +3,7 @@ pillow==10.4.0
 httplib2==0.22.0
 ipywidgets==7.7.1
 numpy==1.26.4
+pandas==2.2.2
 torch==2.0.1
 torchvision==0.15.2
 torchaudio==2.0.2
@@ -19,3 +20,4 @@ matplotlib==3.9.1
 torchmetrics==0.9.3
 multiprocess
 py3Dmol
+Markdown==3.7
