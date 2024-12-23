@@ -41,6 +41,7 @@ def my_load_model(config):
       return SaprotPairClassificationModel(**model_config)
     
     if model_type == "saprot/saprot_pair_regression_model":
+      if 'num_labels' in model_config: del model_config['num_labels']
       from model.saprot.saprot_pair_regression_model import SaprotPairRegressionModel
       return SaprotPairRegressionModel(**model_config)
     
