@@ -361,6 +361,10 @@ class SaprotBaseModel(AbstractModel):
         if "test_acc" in log_dict:
             log_dict.pop("test_loss")
         
+        # Remove mcc metric if the number of classes is greater than 2
+        if self.task == "token_classification" and self.num_labels > 2:
+            log_dict.pop("test_mcc")
+        
         METRIC_MAP = {
             "test_acc": "Classification accuracy (Acc)",
             "test_loss": "Root mean squared error (RMSE)",  # Only for regression task
@@ -386,6 +390,10 @@ class SaprotBaseModel(AbstractModel):
         # Remove valid_loss from log_dict when the task is classification
         if "valid_acc" in log_dict:
             log_dict.pop("valid_loss")
+        
+        # Remove mcc metric if the number of classes is greater than 2
+        if self.task == "token_classification" and self.num_labels > 2:
+            log_dict.pop("valid_mcc")
         
         METRIC_MAP = {
             "valid_acc": "Classification accuracy (Acc)",
