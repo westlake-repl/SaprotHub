@@ -18,11 +18,11 @@ from ..abstract_model import AbstractModel
 import matplotlib.pyplot as plt
 
 
-
 class SaprotBaseModel(AbstractModel):
     """
     ESM base model. It cannot be used directly but provides model initialization for downstream tasks.
     """
+    
     def __init__(self,
                  task: str,
                  config_path: str,
@@ -37,17 +37,17 @@ class SaprotBaseModel(AbstractModel):
             task: Task name。
 
             config_path: Path to the config file of huggingface esm model
-            
+
             extra_config: Extra config for the model
-            
+
             load_pretrained: Whether to load pretrained weights of base model
 
             freeze_backbone: Whether to freeze the backbone of the model
 
             gradient_checkpointing: Whether to enable gradient checkpointing
-            
+
             lora_kwargs: LoRA configuration
-            
+
             **kwargs: Other arguments for AbstractModel
         """
         assert task in ['classification', 'token_classification', 'regression', 'lm', 'base']
@@ -67,10 +67,10 @@ class SaprotBaseModel(AbstractModel):
             
             self.lora_kwargs = EasyDict(lora_kwargs)
             self._init_lora()
-
+        
         self.valid_metrics_list = {}
         self.valid_metrics_list['step'] = []
-
+    
     def _init_lora(self):
         from peft import (
             LoraConfig,
@@ -87,7 +87,7 @@ class SaprotBaseModel(AbstractModel):
                                                                "equal to the number of weight files.")
         for i in range(self.lora_kwargs.num_lora):
             adapter_name = f"adapter_{i}" if self.lora_kwargs.num_lora > 1 else "default"
-
+            
             # Load pre-trained LoRA weights
             if i < len(config_list):
                 lora_config_path = config_list[i].lora_config_path
@@ -120,7 +120,7 @@ class SaprotBaseModel(AbstractModel):
                 
                 else:
                     self.model.add_adapter(adapter_name, lora_config)
-
+        
         if self.lora_kwargs.num_lora > 1:
             # Multiple LoRA models only support inference mode
             print("Multiple LoRA models are used. This only supports inference mode. If you want to train the model,"
@@ -144,7 +144,7 @@ class SaprotBaseModel(AbstractModel):
                             ori_shape = logits.shape
                     
                     logits = torch.stack(logits_list, dim=0)
-
+                    
                     # For classification task, final labels are voted by all LoRA models
                     if len(ori_shape) == 2:
                         logits = logits.permute(1, 0, 2)
@@ -171,7 +171,7 @@ class SaprotBaseModel(AbstractModel):
         
         # After LoRA model is initialized, add trainable parameters to optimizer)
         self.init_optimizers()
-        
+    
     def initialize_model(self):
         # Initialize tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(self.config_path)
@@ -184,13 +184,13 @@ class SaprotBaseModel(AbstractModel):
         
         else:
             self.extra_config = {}
-                
+        
         if self.task == 'classification':
             # Note that self.num_labels should be set in child classes
             if self.load_pretrained:
                 self.model = AutoModelForSequenceClassification.from_pretrained(
                     self.config_path, num_labels=self.num_labels, **self.extra_config)
-
+            
             else:
                 config.num_labels = self.num_labels
                 self.model = AutoModelForSequenceClassification.from_config(config)
@@ -200,16 +200,16 @@ class SaprotBaseModel(AbstractModel):
             if self.load_pretrained:
                 self.model = AutoModelForTokenClassification.from_pretrained(
                     self.config_path, num_labels=self.num_labels, **self.extra_config)
-
+            
             else:
                 config.num_labels = self.num_labels
                 self.model = AutoModelForTokenClassification.from_config(config)
-
+        
         elif self.task == 'regression':
             if self.load_pretrained:
                 self.model = AutoModelForSequenceClassification.from_pretrained(
                     self.config_path, num_labels=1, **self.extra_config)
-
+            
             else:
                 config.num_labels = 1
                 self.model = AutoModelForSequenceClassification.from_config(config)
@@ -217,31 +217,31 @@ class SaprotBaseModel(AbstractModel):
         elif self.task == 'lm':
             if self.load_pretrained:
                 self.model = AutoModelForMaskedLM.from_pretrained(self.config_path, **self.extra_config)
-                
+            
             else:
                 self.model = AutoModelForMaskedLM.from_config(config)
-
+        
         elif self.task == 'base':
             if self.load_pretrained:
                 self.model = AutoModelForMaskedLM.from_pretrained(self.config_path, **self.extra_config)
-
+            
             else:
                 self.model = AutoModelForMaskedLM.from_config(config)
-
+            
             if isinstance(self.model, EsmForMaskedLM) or isinstance(self.model, EsmForSequenceClassification):
                 self.model.lm_head = None
-
+        
         if isinstance(self.model, EsmForMaskedLM) or isinstance(self.model, EsmForSequenceClassification):
             # Remove contact head
             self.model.esm.contact_head = None
-
+            
             # Remove position embedding if the embedding type is ``rotary``
             if config.position_embedding_type == "rotary":
                 self.model.esm.embeddings.position_embeddings = None
-
+            
             # Set gradient checkpointing
             self.model.esm.encoder.gradient_checkpointing = self.gradient_checkpointing
-
+        
         # Freeze the backbone of the model
         if self.freeze_backbone:
             for param in self.model.esm.parameters():
@@ -250,7 +250,7 @@ class SaprotBaseModel(AbstractModel):
         # # Disable the pooling layer
         # backbone = getattr(self.model, "esm", self.model.bert)
         # backbone.pooler = None
-
+    
     def initialize_metrics(self, stage: str) -> dict:
         return {}
     
@@ -269,13 +269,13 @@ class SaprotBaseModel(AbstractModel):
         """
         inputs["output_hidden_states"] = True
         outputs = self.model.esm(**inputs)
-
+        
         # Get the index of the first <eos> token
         input_ids = inputs["input_ids"]
         eos_id = self.tokenizer.eos_token_id
         ends = (input_ids == eos_id).int()
         indices = ends.argmax(dim=-1)
-
+        
         repr_list = []
         hidden_states = outputs["hidden_states"][-1]
         for i, idx in enumerate(indices):
@@ -283,9 +283,9 @@ class SaprotBaseModel(AbstractModel):
                 repr = hidden_states[i][1:idx].mean(dim=0)
             else:
                 repr = hidden_states[i][1:idx]
-
+            
             repr_list.append(repr)
-
+        
         return repr_list
     
     def get_hidden_states_from_seqs(self, seqs: list, reduction: str = None) -> list:
@@ -328,11 +328,11 @@ class SaprotBaseModel(AbstractModel):
         """
         Add structure information as biases to attention map. This function is used to add structure information
         to the model as Evoformer does.
-        
+
         Args:
             inputs: A dictionary of inputs. It should contain keys ["input_ids", "attention_mask", "token_type_ids"].
             coords: Coordinates of backbone atoms. Each element is a dictionary with keys ["N", "CA", "C", "O"].
-        
+
         Returns
             pair_feature: A tensor of shape [B, L, L, 407]. Here 407 is the RBF of distance(400) + angle(7).
         """
@@ -343,7 +343,7 @@ class SaprotBaseModel(AbstractModel):
         """
         Rewrite this function to save LoRA parameters
         """
-
+        
         if not self.lora_kwargs:
             return super().save_checkpoint(save_path, save_info, save_weights_only)
         
@@ -377,7 +377,8 @@ class SaprotBaseModel(AbstractModel):
         print('=' * 100)
         print('Evaluation results on the test set:')
         for key, value in log_dict.items():
-            print(f"{METRIC_MAP[key.lower()]}: {value.item()}")
+            print_value = value.item() if value is not None else torch.nan
+            print(f"{METRIC_MAP[key.lower()]}: {print_value}")
         print('=' * 100)
     
     def plot_valid_metrics_curve(self, log_dict):
@@ -385,7 +386,8 @@ class SaprotBaseModel(AbstractModel):
             from google.colab import widgets
             width = 400 * len(log_dict)
             height = 400
-            self.grid = widgets.Grid(1, 1, header_row=False, header_column=False, style=f'width:{width}px; height:{height}px')
+            self.grid = widgets.Grid(1, 1, header_row=False, header_column=False,
+                                     style=f'width:{width}px; height:{height}px')
         
         # Remove valid_loss from log_dict when the task is classification
         if "valid_acc" in log_dict:
@@ -406,16 +408,18 @@ class SaprotBaseModel(AbstractModel):
         
         with self.grid.output_to(0, 0):
             self.grid.clear_cell()
-
+            
             fig = plt.figure(figsize=(6 * len(log_dict), 6))
             ax = []
             self.valid_metrics_list['step'].append(int(self.step))
             for idx, metric in enumerate(log_dict.keys()):
+                value = torch.nan if log_dict[metric] is None else log_dict[metric].detach().cpu().item()
+                
                 if metric in self.valid_metrics_list:
-                    self.valid_metrics_list[metric].append(log_dict[metric].detach().cpu().item())
+                    self.valid_metrics_list[metric].append(value)
                 else:
-                    self.valid_metrics_list[metric] = [log_dict[metric].detach().cpu().item()]
-                    
+                    self.valid_metrics_list[metric] = [value]
+                
                 ax.append(fig.add_subplot(1, len(log_dict), idx + 1))
                 ax[idx].set_title(METRIC_MAP[metric.lower()])
                 ax[idx].set_xlabel('step')

@@ -360,7 +360,7 @@ class AbstractModel(pl.LightningModule):
             try:
                 log_dict[name] = metric.compute()
             except Exception as e:
-                pass
+                log_dict[name] = None
             
         return log_dict
     
