@@ -355,7 +355,14 @@ class AbstractModel(pl.LightningModule):
             A dictionary of metrics for the stage. Keys are metric names and values are metric values
 
         """
-        return {name: metric.compute() for name, metric in self.metrics[stage].items()}
+        log_dict = {}
+        for name, metric in self.metrics[stage].items():
+            try:
+                log_dict[name] = metric.compute()
+            except Exception as e:
+                pass
+            
+        return log_dict
     
     def log_info(self, info: dict) -> None:
         """
