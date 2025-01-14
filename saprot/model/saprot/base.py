@@ -379,6 +379,9 @@ class SaprotBaseModel(AbstractModel):
         for key, value in log_dict.items():
             print_value = value.item() if value is not None else torch.nan
             print(f"{METRIC_MAP[key.lower()]}: {print_value}")
+        
+        print("\nNote: For some metrics (R^2, Spearman correlation, Pearson correlation), "
+              "at least two examples are needed.")
         print('=' * 100)
     
     def plot_valid_metrics_curve(self, log_dict):
