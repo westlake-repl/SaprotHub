@@ -376,13 +376,19 @@ class SaprotBaseModel(AbstractModel):
         
         print('=' * 100)
         print('Evaluation results on the test set:')
+        flag = False
         for key, value in log_dict.items():
-            print_value = value.item() if value is not None else torch.nan
+            if value is not None:
+                print_value = value.item()
+            else:
+                print_value = torch.nan
+                flag = True
+            
             print(f"{METRIC_MAP[key.lower()]}: {print_value}")
         
-        if "classification" not in self.task:
-            print("\nNote: For some metrics (R^2, Spearman correlation, Pearson correlation), "
-                  "at least two examples are needed.")
+        if "classification" not in self.task and flag:
+            print("\033[31m\nWarning: To calculate some metrics (R^2, Spearman correlation, Pearson correlation), "
+                  "a minimum of two examples from the validation/test set is required.\033[0m")
         print('=' * 100)
     
     def plot_valid_metrics_curve(self, log_dict):
