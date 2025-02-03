@@ -103,7 +103,12 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
         # Go through each row of the CSV file
         for i, row in tqdm(df.iterrows(), total=len(df)):
             label = row["label"]
-            assert type(label) == int, "Labels for classification task must be integer."
+            if type(label) == list:
+                for item in label:
+                    assert type(item) == int, "Labels for classification task must be integer."
+
+            else:
+                assert type(label) == int, "Labels for classification task must be integer."
 
     for stage in ["train", "valid", "test"]:
         tmp_dict = data_dicts[stage]
