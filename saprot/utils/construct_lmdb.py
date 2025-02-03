@@ -98,6 +98,13 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
             }
             tmp_dict[len(tmp_dict)] = json.dumps(sample)
 
+    # If the task is a classification task, check the validity of the labels
+    if "classification" in task_type:
+        # Go through each row of the CSV file
+        for i, row in tqdm(df.iterrows(), total=len(df)):
+            label = row["label"]
+            assert type(label) == int, "Labels for classification task must be integer."
+
     for stage in ["train", "valid", "test"]:
         tmp_dict = data_dicts[stage]
         tmp_dict["length"] = len(tmp_dict)
