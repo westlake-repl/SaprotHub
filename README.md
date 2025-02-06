@@ -184,3 +184,8 @@ Yes, you can. But you need to agree to join OPMC, and papers that use your Colab
 
 ### Q13: Would the paper be submitted to a journal.
 Yes, the paper is under review of Nature Methods and you can still participate OPMC during the revision stage.
+
+## Other resources
+- [Evolla](https://www.biorxiv.org/content/10.1101/2025.01.05.630192v1) and its [online server](http://www.chat-protein.com/)
+- [ProTrek](https://www.biorxiv.org/content/10.1101/2024.05.30.596740v2) and its [online server](http://search-protrek.com/)
+- [Pinal](https://www.biorxiv.org/content/10.1101/2024.08.01.606258v2) and its [online server](http://www.denovo-pinal.com/)
