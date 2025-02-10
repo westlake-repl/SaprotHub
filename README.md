@@ -7,9 +7,9 @@
 
 The repository is an official implementation of [SaprotHub: Making Protein Modeling Accessible to All Biologists](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v5).
 
-We are pleased to announce that ColabSaprot [v1](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb)  [v2](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (New!!) and [SaprotHub](https://huggingface.co/SaProtHub) are now ready for use.
+We are pleased to announce that ColabSaprot [v1](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb)  [v2](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (New!!) and [SaprotHub](https://huggingface.co/SaProtHub) are now ready for use. Check out the video tutorial [here](https://www.youtube.com/watch?v=nmLtjlCI_7M&t=5s).
 
-You can scan the QR code to join our chat group:
+You can scan the QR code to join our wechat group:
 
 <img src="https://github.com/user-attachments/assets/b2395bd9-78ea-4330-a944-8dcba0866814" width="50%">
 
