@@ -16,12 +16,19 @@ class ProtT5RegressionModel(ProtT5BaseModel):
         """
         self.test_result_path = test_result_path
         super().__init__(task="regression", **kwargs)
+
+    def initialize_model(self):
+        super().initialize_model()
+
         hidden_size = self.model.config.hidden_size
-        self.model.classifier = torch.nn.Sequential(
-                        torch.nn.Linear(hidden_size, hidden_size),
-                        torch.nn.ReLU(),
-                        torch.nn.Linear(hidden_size, 1)
-                    )
+        classifier = torch.nn.Sequential(
+            torch.nn.Linear(hidden_size, hidden_size),
+            torch.nn.ReLU(),
+            torch.nn.Linear(hidden_size, 1)
+        )
+
+        setattr(self.model, "classifier", classifier)
+
     
     def initialize_metrics(self, stage):
         return {f"{stage}_loss": torchmetrics.MeanSquaredError(),
@@ -105,6 +112,7 @@ class ProtT5RegressionModel(ProtT5BaseModel):
 
         self.log_info(log_dict)
         self.reset_metrics("test")
+
 
     def on_validation_epoch_end(self):
         log_dict = self.get_log_dict("valid")
