@@ -111,7 +111,7 @@ class ProtT5BaseModel(AbstractModel):
                     "task_type": "SEQ_CLS",  # 任务类型，序列分类
                     "target_modules": ["SelfAttention.q", "SelfAttention.k", "SelfAttention.v", "SelfAttention.o", 
                                     "EncDecAttention.q", "EncDecAttention.k", "EncDecAttention.v", "EncDecAttention.o"],  # 模块与层名
-                    "modules_to_save": ["model.classifier"],  # 保存的模块（如果有分类器或其他模块）
+                    "modules_to_save": ["classifier"],  # 保存的模块（如果有分类器或其他模块）
                     "inference_mode": False,  # 是否为推理模式，设置为False表示进行训练
                     "r": getattr(self.lora_kwargs, "r", 8),  # LoRA秩，默认为8
                     "lora_dropout": getattr(self.lora_kwargs, "lora_dropout", 0.0),  # LoRA dropout率
