@@ -25,7 +25,7 @@ class ProtT5ClassificationModel(ProtT5BaseModel):
         classifier = torch.nn.Sequential(
             torch.nn.Linear(hidden_size, hidden_size),
             torch.nn.ReLU(),
-            torch.nn.Linear(hidden_size, 1)
+            torch.nn.Linear(hidden_size, self.num_labels)
         )
 
         setattr(self.model, "classifier", classifier)
