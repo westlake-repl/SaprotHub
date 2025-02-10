@@ -20,12 +20,18 @@ class ProtT5TokenClassificationModel(ProtT5BaseModel):
         self.preds = []
         self.targets = []
         super().__init__(task="token_classification", **kwargs)
+
+    def initialize_model(self):
+        super().initialize_model()
+
         hidden_size = self.model.config.hidden_size
-        self.model.classifier = torch.nn.Sequential(
-                        torch.nn.Linear(hidden_size, hidden_size),
-                        torch.nn.ReLU(),
-                        torch.nn.Linear(hidden_size, self.num_labels)
-                    )
+        classifier = torch.nn.Sequential(
+            torch.nn.Linear(hidden_size, hidden_size),
+            torch.nn.ReLU(),
+            torch.nn.Linear(hidden_size, 1)
+        )
+
+        setattr(self.model, "classifier", classifier)
     
     def compute_mcc(self, preds, target):
         tp = (preds * target).sum()

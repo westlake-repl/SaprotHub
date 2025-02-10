@@ -17,12 +17,18 @@ class ProtT5ClassificationModel(ProtT5BaseModel):
         """
         self.num_labels = num_labels
         super().__init__(task="classification", **kwargs)
+
+    def initialize_model(self):
+        super().initialize_model()
+
         hidden_size = self.model.config.hidden_size
-        self.model.classifier = torch.nn.Sequential(
-                        torch.nn.Linear(hidden_size, hidden_size),
-                        torch.nn.ReLU(),
-                        torch.nn.Linear(hidden_size, self.num_labels)
-                    )
+        classifier = torch.nn.Sequential(
+            torch.nn.Linear(hidden_size, hidden_size),
+            torch.nn.ReLU(),
+            torch.nn.Linear(hidden_size, 1)
+        )
+
+        setattr(self.model, "classifier", classifier)
         
     def initialize_metrics(self, stage):
         return {f"{stage}_acc": torchmetrics.Accuracy()}
