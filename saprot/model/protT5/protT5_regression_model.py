@@ -106,6 +106,13 @@ class ProtT5RegressionModel(ProtT5BaseModel):
         self.log_info(log_dict)
         self.reset_metrics("test")
 
+        global model_name
+
+        classifier_filename = f"{model_name}_classifier.pt"
+        torch.save(self.model.classifier.state_dict(), classifier_filename)
+        print(f"Classifier saved to {classifier_filename}")
+
+
     def on_validation_epoch_end(self):
         log_dict = self.get_log_dict("valid")
 
