@@ -13,7 +13,7 @@ Check out the video tutorial [here](https://www.youtube.com/watch?v=nmLtjlCI_7M&
 
 You can scan the QR code to join our wechat group:
 
-<img src="https://github.com/user-attachments/assets/b2395bd9-78ea-4330-a944-8dcba0866814" width="50%">
+<img src="https://github.com/user-attachments/assets/5ac0cf9f-1caa-42d5-af1b-37c0fa797ad9" width="50%">
 
 ## Open Protein Modeling Consortium (OPMC)
 The Open Protein Modeling Consortium (OPMC) is a collaborative initiative designed to unify the efforts of the protein research community. Its mission is to facilitate the sharing and co-construction of resources, with a particular focus on individually trained decentralized models, thereby advancing protein modeling through collective contributions. OPMC offers a platform that supports a wide range of protein  predictions, aiming to make advanced protein modeling accessible to researchers irrespective of their machine learning expertise.
