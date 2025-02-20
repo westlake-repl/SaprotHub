@@ -21,11 +21,14 @@ The Open Protein Modeling Consortium (OPMC) is a collaborative initiative design
 Join us as an OPMC author [here](https://github.com/westlake-repl/SaprotHub/blob/main/Figure/OPMC.jpg) 
 visit our OPMC wetbsite  [here](https://theopmc.github.io/)
 
-### ColabPLMs of OPMC
+### PLM members of OPMC
 - [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (AA+3Di)
 - [ColabProTrek](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabProTrek.ipynb) (AA/3Di align 3Di/AA)
 - [ColabProtT5](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabProtT5.ipynb) (AA)
-- [ColabMETL](https://github.com/gitter-lab/metl?tab=readme-ov-file#mutational-effect-transfer-learning) 
+- [ColabMETL](https://github.com/gitter-lab/metl?tab=readme-ov-file#mutational-effect-transfer-learning)
+- [Evolla] (http://www.chat-protein.com/) (80B protein ChatGPT)
+- [Pinal] (http://www.denovo-pinal.com/) (16B natual language-based protein design)
+- [SaProt-T] (http://113.45.254.183:9527/) (edit protein based on partial sequence/structure and text)
 
 ### OPMC authors (senior)
 - Sergey Ovchinnikov, MIT 
