@@ -31,33 +31,6 @@ visit our OPMC wetbsite  [here](https://theopmc.github.io/)
 - [ProTrek](http://www.search-protrek.com/) (billion-scale protein search tool)
 - [SaProt-T](http://113.45.254.183:9527/) (edit protein based on partial sequence/structure and text)
 
-### OPMC authors (senior)
-- Sergey Ovchinnikov, MIT 
-- Martin Steinegger, Seoul National University 
-- Kevin Yang, Microsoft
-- Michael Heinzinger, Technische Universität München
-- Pascal Notin, Harvard University
-- Pranam Chatterjee, Duke University
-- Jia Zheng, Westlake University
-- Stan Z. Li, Westlake University
-- Xing Chang, Westlake University
-- Huaizong Shen, Westlake University
-- Noelia Ferruz, The Centre for Genomic Regulation (CRG)
-- Rohit Singh, Duke University
-- Debora Marks, Harvard University
-- Anping Zeng, Westlake University
-- Jijie Chai, Westlake University
-- Anthony Gitter, University of Wisconsin-Madison
-- Anum Glasgow, Columbia University
-- Milot Mirdita, Seoul National University
-- Philip M. Kim, University of Toronto     
-- Christopher Snow, Colorado State University   
-- Vasilis Ntranos, University of California 
-- Philip A. Romero,  Duke University
-- Jianyi Yang, Shandong University
-- Tong Si, Chinese Academy of Sciences
-- Caixia Gao, Chinese Academy of Sciences
-- Michael Bronstein, University of Oxford
 
 
 
