@@ -15,6 +15,8 @@ You can scan the QR code to join our wechat group:
 
 <img src="https://github.com/user-attachments/assets/5cfb949f-06fd-49f9-a969-0af12228edd6" width="50%">
 
+> We have 2 PhD positions for international students at Westlake University, China! see [here](https://x.com/duguyuan/status/1897101692665258245).  
+
 ## Open Protein Modeling Consortium (OPMC)
 The Open Protein Modeling Consortium (OPMC) is a collaborative initiative designed to unify the efforts of the protein research community. Its mission is to facilitate the sharing and co-construction of resources, with a particular focus on individually trained decentralized models, thereby advancing protein modeling through collective contributions. OPMC offers a platform that supports a wide range of protein  predictions, aiming to make advanced protein modeling accessible to researchers irrespective of their machine learning expertise.
 
