@@ -11,7 +11,7 @@ We are pleased to announce that ColabSaprot [v1](https://colab.research.google.c
 
 Check out the video tutorial [here](https://www.youtube.com/watch?v=nmLtjlCI_7M&t=5s).
 
-You can scan the QR code to join our wechat group:
+You can scan the QR code to join our wechat groups （We currently host two active groups with a total membership of over 400 researchers and practitioners）:
 
 <img src="https://github.com/user-attachments/assets/5cfb949f-06fd-49f9-a969-0af12228edd6" width="50%">
 
