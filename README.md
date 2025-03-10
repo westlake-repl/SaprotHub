@@ -11,6 +11,10 @@ We are pleased to announce that ColabSaprot [v1](https://colab.research.google.c
 
 Check out the video tutorial [here](https://www.youtube.com/watch?v=nmLtjlCI_7M&t=5s).
 
+
+## Deploy ColabSaprot on local server (for linux os and Windows)
+For users who want to deploy ColabSaprot on their local server, please refer to [here](https://github.com/westlake-repl/SaprotHub/blob/main/local_server).
+
 You can scan the QR code to join our wechat groups （We currently host two active groups with a total membership of over 400 researchers and practitioners）:
 
 <img src="https://github.com/user-attachments/assets/d6145676-6d04-4b42-aec9-ddb599eab56f" width="50%">
@@ -36,8 +40,6 @@ visit our OPMC wetbsite  [here](https://theopmc.github.io/)
 
 
 
-## Deploy ColabSaprot on local server (for linux os and Windows)
-For users who want to deploy ColabSaprot on their local server, please refer to [here](https://github.com/westlake-repl/SaprotHub/blob/main/local_server).
 
 ## FAQs
 ### Q1: It seems like OPMC and SaprotHub are intertwined but not exactly the same.
