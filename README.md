@@ -7,7 +7,7 @@
 
 The repository is an official implementation of [SaprotHub: Making Protein Modeling Accessible to All Biologists](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v5) (biorxiv paper name).
 
-We are pleased to announce that ColabSaprot [v2](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (**New!!**) and [SaprotHub](https://huggingface.co/SaProtHub) are now ready for use. [Note ColabSaprot [v1](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) will not be updated.]
+We are pleased to announce that ColabSaprot [v2](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (**New!!**) and [SaprotHub](https://huggingface.co/SaProtHub) are now ready for use. [Note ColabSaprot [v1](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) will no longer be updated.]
 
 Check out the video tutorial [here](https://www.youtube.com/watch?v=nmLtjlCI_7M&t=5s).
 
