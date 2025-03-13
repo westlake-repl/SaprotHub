@@ -21,4 +21,4 @@ torchmetrics==0.9.3
 multiprocess
 py3Dmol
 Markdown==3.7
-huggingface_hub==0.27.0
+huggingface_hub==0.23.2
