@@ -1,3 +1,4 @@
+numpy==1.26.4
 torch==2.0.1
 torchvision==0.15.2
 torchaudio==2.0.2
@@ -17,8 +18,7 @@ scipy==1.15.1
 pandas==2.2.2
 fair-esm==2.0.0
 matplotlib==3.9.1
-multiprocess
+multiprocess==0.70.17
 loguru==0.7.2
 colorama==0.4.6
 py3Dmol==2.4.2
-
