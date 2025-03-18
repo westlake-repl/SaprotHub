@@ -14,7 +14,7 @@ Check out the video tutorial [here](https://www.youtube.com/watch?v=nmLtjlCI_7M&
 
 You can scan the QR code to join our wechat groups （We currently host two active groups with a total membership of over 400 researchers and practitioners）:
 
-<img src="https://github.com/user-attachments/assets/d6145676-6d04-4b42-aec9-ddb599eab56f" width="50%">
+<img src="https://github.com/user-attachments/assets/cb219c45-d87f-4009-8720-1b8a56598f37" width="50%">
 
 > We have 2 PhD positions for international students at Westlake University, China! see [here](https://x.com/duguyuan/status/1897101692665258245).
 
@@ -22,7 +22,7 @@ You can scan the QR code to join our wechat groups （We currently host two acti
 For users who want to deploy ColabSaprot on their local server, please refer to [here](https://github.com/westlake-repl/SaprotHub/blob/main/local_server).
 
 ## Open Protein Modeling Consortium (OPMC)
-The Open Protein Modeling Consortium (OPMC) is a collaborative initiative designed to unify the efforts of the protein research community. Its mission is to facilitate the sharing and co-construction of resources, with a particular focus on individually trained decentralized models, thereby advancing protein modeling through collective contributions. OPMC offers a platform that supports a wide range of protein  predictions, aiming to make advanced protein modeling accessible to researchers irrespective of their machine learning expertise.
+The Open Protein Modeling Consortium (OPMC) is a collaborative initiative aimed at bringing together the efforts of the protein research community. Its mission is to foster the sharing and co-development of resources, with an emphasis on individually trained decentralized models, helping to advance protein modeling through collective contributions. OPMC provides platforms/tools that support diverse protein prediction tasks, striving to make advanced protein modeling more accessible to researchers, regardless of their level of expertise in machine learning.
 
 visit our OPMC wetbsite  [here](https://theopmc.github.io/)
 
@@ -160,12 +160,10 @@ All in all, if you can come up with some cool ideas or novel ways to enhance the
 
 Yes. If you have made significant valuable contributions to OPMC, it is possible to become an OPMC member alongside your PhD/postgraduate or internship supervisor. However, the acceptance of your contributions and membership status will be determined by the steering committee. Generally, in such cases, you would need to demonstrate more substantial contributions compared to regular OPMC members. You need to provide official documentation of your relationship with your supervisor, such as an official letter or document confirming their role and support.
 
-### Q12: Can I  copy the code of ColabSaprot for my own protein language model to build another ColabPLM?
+<!-- ### Q12: Can I  copy the code of ColabSaprot for my own protein language model to build another ColabPLM?
 
-Yes, you can. But you need to agree to join OPMC, and papers that use your ColabPLM for research are encouraged to mention the SaprotHub paper, which is the source literature of OPMC.
+Yes, you can. But you need to agree to join OPMC, and papers that use your ColabPLM for research are encouraged to mention the SaprotHub paper, which is the source literature of OPMC.-->
 
-### Q13: Would the paper be submitted to a journal.
-Yes, the paper is under review of Nature Methods and you can still participate OPMC during the revision stage.
 
 ## Other resources
 - [Evolla](https://www.biorxiv.org/content/10.1101/2025.01.05.630192v1) and its [online server](http://www.chat-protein.com/)
