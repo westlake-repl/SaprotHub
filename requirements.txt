@@ -13,12 +13,12 @@ lmdb==1.4.1
 peft==0.10.0
 bio==1.6.2
 wandb==0.17.4
-scipy
-pandas
-fair-esm
-matplotlib
+scipy==1.15.1
+pandas==2.2.2
+fair-esm==2.0.0
+matplotlib==3.9.1
 multiprocess
-loguru
-colorama
-py3Dmol
+loguru==0.7.2
+colorama==0.4.6
+py3Dmol==2.4.2
 
