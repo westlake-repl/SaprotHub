@@ -20,3 +20,5 @@ multiprocess==0.70.17
 py3Dmol==2.4.2
 Markdown==3.7
 huggingface_hub==0.23.2
+numpy==1.26.4
+pandas==2.2.2
