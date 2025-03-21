@@ -11,7 +11,12 @@ We are pleased to announce that ColabSaprot [v2](https://colab.research.google.c
 
 Check out the video tutorial [here](https://www.youtube.com/watch?v=nmLtjlCI_7M&t=5s).
 
+## Discussion Groups
+### Slack
 
+You can click this [link](https://westlakeai.slack.com/archives/C08JNBN40P7) to join our slack group!
+
+### WeChat
 You can scan the QR code to join our wechat groups （We currently host two active groups with a total membership of over 400 researchers and practitioners）:
 
 <img src="https://github.com/user-attachments/assets/cb219c45-d87f-4009-8720-1b8a56598f37" width="50%">
