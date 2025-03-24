@@ -448,5 +448,5 @@ class SaprotBaseModel(AbstractModel):
                 )
             )
             display(hint)
-            plt.tight_layout()
+            # plt.tight_layout()
             plt.show()
