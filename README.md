@@ -14,14 +14,14 @@ Check out the video tutorial [here](https://www.youtube.com/watch?v=nmLtjlCI_7M&
 ## Discussion Groups
 ### Slack
 
-You can click this [link](https://westlakeai.slack.com/archives/C08JNBN40P7) to join our slack group!
+2025/03/21: We’ve just set up a slack group for discussing ColabSaprot or asking any questions, you can join [here](https://westlakeai.slack.com/archives/C08JNBN40P7)!
 
 ### WeChat
-You can scan the QR code to join our wechat groups （We currently host two active groups with a total membership of over 400 researchers and practitioners）:
+2024/12/01: You can scan the QR code to join our wechat groups （We currently host two active weichat groups with a total membership of over 400 researchers and practitioners）:
 
-<img src="https://github.com/user-attachments/assets/cb219c45-d87f-4009-8720-1b8a56598f37" width="50%">
+<img src="https://github.com/user-attachments/assets/75452b53-b2d3-4fdb-b989-4a8ddab77b48" width="50%">
 
-> We have 2 PhD positions for international students at Westlake University, China! see [here](https://x.com/duguyuan/status/1897101692665258245).
+> We have 2 PhD positions for international students at Westlake University! see [here](https://x.com/duguyuan/status/1897101692665258245).
 
 ## Deploy ColabSaprot on local server (for linux os and Windows)
 For users who want to deploy ColabSaprot on their local server, please refer to [here](https://github.com/westlake-repl/SaprotHub/blob/main/local_server).
