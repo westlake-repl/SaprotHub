@@ -26,7 +26,7 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
     if task_type == "token_classification":
         for index, row in df.iterrows():
             if row["stage"] == "train":
-                df.at[index, "label"] = [int(item.strip()) for item in row["label"].split(",")][:1024]
+                df.at[index, "label"] = [int(item.strip()) for item in row["label"].split(",")][:1022]
             else:
                 df.at[index, "label"] = [int(item.strip()) for item in row["label"].split(",")]
         
@@ -57,8 +57,8 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
             chain_2 = row["chain_2"]
 
             if stage == "train":
-                seq_1 = row["sequence_1"][:2048]
-                seq_2 = row["sequence_2"][:2048]
+                seq_1 = row["sequence_1"][:2044]
+                seq_2 = row["sequence_2"][:2044]
             else:
                 seq_1 = row["sequence_1"]
                 seq_2 = row["sequence_2"]
