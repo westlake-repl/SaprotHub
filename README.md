@@ -39,7 +39,7 @@ visit our OPMC wetbsite  [here](https://theopmc.github.io/)
 - [Evolla](http://www.chat-protein.com/) (80B protein ChatGPT)
 - [Pinal](http://www.denovo-pinal.com/) (16B natual language-based protein design)
 - [ProTrek](http://www.search-protrek.com/) (billion-scale protein search tool)
-- [SaProt-T](http://113.45.254.183:9527/) (edit protein based on partial sequence/structure and text)
+- [SaProt-T/O](http://113.45.254.183:9527/) (edit protein based on partial sequence/structure and text)
 
 
 
