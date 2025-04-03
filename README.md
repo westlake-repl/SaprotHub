@@ -17,7 +17,7 @@ Check out the video tutorial [here](https://www.youtube.com/watch?v=nmLtjlCI_7M&
 2025/03/21: We’ve just set up a slack group for discussing ColabSaprot or asking any questions, you can join [here](https://westlakeai.slack.com/archives/C08JNBN40P7)!
 
 ### WeChat
-2024/12/01: You can scan the QR code to join our wechat groups （We currently host two active weichat groups with a total membership of over 400 researchers and practitioners）:
+2024/12/01: You can scan the QR code to join our wechat groups （We currently host two active weichat groups with a total membership of nearly 500 researchers and practitioners）:
 
 <img src="https://github.com/user-attachments/assets/5cf651d4-416c-414d-a66e-df3b4c3bdcd5" width="50%">
 
