@@ -19,7 +19,7 @@ Check out the video tutorial [here](https://www.youtube.com/watch?v=nmLtjlCI_7M&
 ### WeChat
 2024/12/01: You can scan the QR code to join our wechat groups （We currently host two active weichat groups with a total membership of nearly 500 researchers and practitioners）:
 
-<img src="https://github.com/user-attachments/assets/074e1882-caba-444a-8093-6f68e1a69842" width="50%">
+<img src="https://github.com/user-attachments/assets/bf095e8c-face-4e4b-ba2b-33b9245d5d42" width="50%">
 
 > We have 2 PhD positions for international students at Westlake University! see [here](https://x.com/duguyuan/status/1897101692665258245).
 
