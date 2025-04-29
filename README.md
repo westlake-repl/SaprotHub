@@ -52,6 +52,8 @@ Yes, OPMC is a grand goal, and in this paper, it is primarily presented as a con
 OPMC and implements SaprotHub as a pioneering example to drive the initial realization of OPMC. 
 Achieving a broader implementation of OPMC requires continuous efforts from the entire community.
 
+Our OPMC members are now building other ColabPLMs, including ColabESM1b, ColabESM2, ColabProtBert, ColabT5, ColabProTrek, etc. 
+
 ### Q2:  I'm very interested in the OPMC side of this project? Would I be able to support OMPC independently?
 Yes, you can. OPMC is not tied exclusively to SaprotHub. SaprotHub serves as an initial implementation case within the
 broader OPMC concept. We also welcome the inclusion of new protein models in OPMC. There are generally two ways to
