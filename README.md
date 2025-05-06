@@ -7,11 +7,9 @@
 
 The repository is an official implementation of [SaprotHub: Making Protein Modeling Accessible to All Biologists](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v5) (biorxiv paper name).
 
-**Announcement**： We are delighted  to announce that ColabSaprot [v2](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (**New!!**) and [SaprotHub](https://huggingface.co/SaProtHub) are now ready for use. [Note ColabSaprot [v1](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) will no longer be updated.]
+**Announcement**： We are delighted  to announce that ColabSaprot [v2](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (**New!!**) and [SaprotHub](https://huggingface.co/SaProtHub) are now ready for use. [Note ColabSaprot [v1](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) will no longer be updated.] Check out the video tutorial [here](https://www.youtube.com/watch?v=nmLtjlCI_7M&t=5s).
 
-Check out the video tutorial [here](https://www.youtube.com/watch?v=nmLtjlCI_7M&t=5s).
-
-**Announcement（2025/05/06）**：We are delighted  to announce that ColabSeprot (https://colab.research.google.com/drive/197u1v-hDaqrWbuEobmEGRgOoSDAOUbX4?usp=sharing)  and [SeprotHub](https://huggingface.co/SeprotHub) are now ready for use. ColabSeprot offers access to several state-of-the-art sequence-only Protein Language Models (PLMs), including ESM1b, ESM2, ProTrek, and ProtBert, enabling streamlined fine-tuning and prediction for protein sequence analysis.
+**Announcement（2025/05/06）**：We are delighted  to announce that ColabSeprot(https://colab.research.google.com/drive/197u1v-hDaqrWbuEobmEGRgOoSDAOUbX4?usp=sharing)  and [SeprotHub](https://huggingface.co/SeprotHub) are now ready for use. ColabSeprot offers access to several state-of-the-art sequence-only Protein Language Models (PLMs), including ESM1b, ESM2, ProTrek, and ProtBert, enabling streamlined fine-tuning and prediction for protein sequence analysis.
 
 ## Discussion Groups
 ### Slack
