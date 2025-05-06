@@ -10,7 +10,8 @@ The repository is an official implementation of [SaprotHub: Making Protein Model
 News： We are delighted  to announce that ColabSaprot [v2](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (**New!!**) and [SaprotHub](https://huggingface.co/SaProtHub) are now ready for use. [Note ColabSaprot [v1](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) will no longer be updated.]
 
 Check out the video tutorial [here](https://www.youtube.com/watch?v=nmLtjlCI_7M&t=5s).
-News：We are delighted  to announce that ColabSeprot [v2](https://colab.research.google.com/drive/197u1v-hDaqrWbuEobmEGRgOoSDAOUbX4?usp=sharing)  and [SeprotHub](https://huggingface.co/SeprotHub) are now ready for use. ColabSeprot offers access to several state-of-the-art sequence-only Protein Language Models (PLMs), including ESM1b, ESM2, ProTrek, and ProtBert, enabling streamlined fine-tuning and prediction for protein sequence analysis.
+
+News：We are delighted  to announce that ColabSeprot (https://colab.research.google.com/drive/197u1v-hDaqrWbuEobmEGRgOoSDAOUbX4?usp=sharing)  and [SeprotHub](https://huggingface.co/SeprotHub) are now ready for use. ColabSeprot offers access to several state-of-the-art sequence-only Protein Language Models (PLMs), including ESM1b, ESM2, ProTrek, and ProtBert, enabling streamlined fine-tuning and prediction for protein sequence analysis.
 
 ## Discussion Groups
 ### Slack
@@ -34,6 +35,7 @@ visit our OPMC wetbsite  [here](https://theopmc.github.io/)
 
 ### PLM members of OPMC
 - [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (AA+3Di)
+- [ColabSeprot](https://colab.research.google.com/drive/197u1v-hDaqrWbuEobmEGRgOoSDAOUbX4?usp=sharing) (AA)
 - [ColabProTrek](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabProTrek.ipynb) (AA/3Di align 3Di/AA)
 - [ColabProtT5](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabProtT5.ipynb) (AA)
 - [ColabMETL](https://github.com/gitter-lab/metl?tab=readme-ov-file#mutational-effect-transfer-learning)
