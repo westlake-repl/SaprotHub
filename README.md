@@ -5,7 +5,7 @@
 <a href="https://cbirt.net/no-coding-required-saprothub-brings-protein-modeling-to-every-biologist/" alt="blog"><img src="https://img.shields.io/badge/Blog-Medium-purple" /></a> 
 <a href="https://x.com/sokrypton/status/1795525127653986415"><img src="https://img.shields.io/badge/Twitter-blue?logo=twitter" style="max-width: 100%;"></a>
 
-The repository is an official implementation of [SaprotHub: Making Protein Modeling Accessible to All Biologists](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v5) (biorxiv paper name). Make fine-tuning protein language models accessible to all - no coding or advanced machine learning expertise required!
+The repository is an official implementation of [SaprotHub: Making Protein Modeling Accessible to All Biologists](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v5) (biorxiv paper name). Making protein language models fine-tuning and sharing accessible to all - no coding or advanced machine learning expertise required!
 
 ## News
 - **2024/05/06:** We are delighted  to announce that [ColabSeprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabSeprot.ipynb?hl=en)  and [SeprotHub](https://huggingface.co/SeprotHub) are now ready for use. ColabSeprot offers access to several state-of-the-art sequence-only Protein Language Models (PLMs), including ESM1b, ESM2, ProTrek, and ProtBert, enabling streamlined fine-tuning and prediction for protein sequence analysis.
