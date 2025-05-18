@@ -23,7 +23,7 @@ Access via  [ColabSaprot](https://colab.research.google.com/github/westlake-repl
 ### WeChat
 2024/12/01: You can scan the QR code to join our wechat groups （We currently host two active weichat groups with a total membership of over 500 researchers and practitioners）:
 
-<img src="https://github.com/user-attachments/assets/a0dac0a8-83a0-4ba2-a83a-a9dbacc50292" width="50%">
+<img src="https://github.com/user-attachments/assets/78d2946a-ed80-461b-a9a0-13f1614afd18" width="50%">
 
 > We have 2 PhD positions for international students at Westlake University! see [here](https://x.com/duguyuan/status/1897101692665258245).
 
