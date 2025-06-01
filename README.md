@@ -23,7 +23,7 @@ The repository is an official implementation of [SaprotHub: Making Protein Model
 ### WeChat
 2024/12/01: You can scan the QR code to join our wechat groups （We currently host two active weichat groups with a total membership of over 500 researchers and practitioners）:
 
-<img src="https://github.com/user-attachments/assets/f1fc9ada-c113-46c1-802e-9f4c33f7286d" width="50%">
+<img src="https://github.com/user-attachments/assets/2854d559-40a6-4fa1-b2e4-0a0fe9c7c7c1" width="50%">
 
 > We have 2 PhD positions for international students at Westlake University! see [here](https://x.com/duguyuan/status/1897101692665258245).
 
