@@ -85,7 +85,7 @@ def construct_lmdb(csv_file: str, root_dir: str, dataset_name: str, task_type: s
             stage = row["stage"]
 
             if stage == "train":
-                seq = row["sequence"][:2048]
+                seq = row["sequence"][:2044]
             else:
                 seq = row["sequence"]
 
