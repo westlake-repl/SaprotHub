@@ -1,4 +1,4 @@
-# SaprotHub: Democratizing Protein Language Model Training, Sharing and Collaboration for the Biology Community
+# Democratizing Protein Language Model Training, Sharing and Collaboration
 <a href="https://doi.org/10.1101/2024.05.24.595648"><img src="https://img.shields.io/badge/Paper-bioRxiv-green" style="max-width: 100%;"></a>
 <a href="https://huggingface.co/SaProtHub"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-red?label=SaprotHub" style="max-width: 100%;"></a>
 <a href="https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb"><img src="Figure/colab-badge.svg" style="max-width: 100%;"></a>
