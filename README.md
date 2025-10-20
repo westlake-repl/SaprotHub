@@ -5,7 +5,7 @@
 <a href="https://cbirt.net/no-coding-required-saprothub-brings-protein-modeling-to-every-biologist/" alt="blog"><img src="https://img.shields.io/badge/Blog-Medium-purple" /></a> 
 <a href="https://x.com/sokrypton/status/1795525127653986415"><img src="https://img.shields.io/badge/Twitter-blue?logo=twitter" style="max-width: 100%;"></a>
 
-The repository is an official implementation of [SaprotHub: Making Protein Modeling Accessible to All Biologists](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v5) (biorxiv paper name). Making protein language models fine-tuning and sharing accessible to all - no coding or advanced machine learning expertise required!
+The repository is an official implementation of [Democratizing Protein Language Model Training, Sharing and Collaboration](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v7) (biorxiv paper name). Making protein language models fine-tuning and sharing accessible to all - no coding or advanced machine learning expertise required!
 
 **Access via  [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (35M,650M) and  [ColabSeprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabSeprot.ipynb?hl=en) (including ColabESM1b (650M), ColabESM2 (35M, 150M, 650M), ColabProTrek (35M, 650M), ColabProtBERT (420M))！**
 
