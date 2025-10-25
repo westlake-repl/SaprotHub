@@ -1,4 +1,4 @@
-# Democratizing Protein Language Model Training, Sharing and Collaboration
+# Democratizing Protein Language Model Training, Sharing and Collaboration (Nature Biotechnology)
 <a href="https://doi.org/10.1101/2024.05.24.595648"><img src="https://img.shields.io/badge/Paper-bioRxiv-green" style="max-width: 100%;"></a>
 <a href="https://huggingface.co/SaProtHub"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-red?label=SaprotHub" style="max-width: 100%;"></a>
 <a href="https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb"><img src="Figure/colab-badge.svg" style="max-width: 100%;"></a>
@@ -10,6 +10,7 @@ The repository is an official implementation of [Democratizing Protein Language 
 **Access via  [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (35M,650M) and  [ColabSeprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabSeprot.ipynb?hl=en) (including ColabESM1b (650M), ColabESM2 (35M, 150M, 650M), ColabProTrek (35M, 650M), ColabProtBERT (420M))！**
 
 ## News
+- **2025/10/24:**: ColabSaprot and SaprotHub are published in Nature Biotechnology, see [here](https://www.nature.com/articles/s41587-025-02859-7).
 - **2024/05/06:** We are delighted  to announce that [ColabSeprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabSeprot.ipynb?hl=en)  and [SeprotHub](https://huggingface.co/SeprotHub) are now ready for use. ColabSeprot offers access to several state-of-the-art sequence-only Protein Language Models (PLMs), including ESM1b, ESM2, ProTrek, and ProtBert, enabling streamlined fine-tuning and prediction for protein sequence analysis.
   
 - **2025/01/01:**  We are delighted  to announce that  [ColabSaprot v2](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (**New!!**) and [SaprotHub](https://huggingface.co/SaProtHub) are now ready for use. [Note ColabSaprot [v1](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) will no longer be updated.] Check out the [video tutorial](https://www.youtube.com/watch?v=nmLtjlCI_7M&t=5s) and [document](https://github.com/westlake-repl/SaprotHub/wiki/SaprotHub-v2-(latest)#a-simple-way-to-handle-unexpected-issues).
