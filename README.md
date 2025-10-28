@@ -1,11 +1,11 @@
-# Democratizing Protein Language Model Training, Sharing and Collaboration (Nature Biotechnology)
+# Democratizing Protein Language Model Training, Sharing and Collaboration 
 <a href="https://doi.org/10.1101/2024.05.24.595648"><img src="https://img.shields.io/badge/Paper-bioRxiv-green" style="max-width: 100%;"></a>
 <a href="https://huggingface.co/SaProtHub"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-red?label=SaprotHub" style="max-width: 100%;"></a>
 <a href="https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb"><img src="Figure/colab-badge.svg" style="max-width: 100%;"></a>
 <a href="https://cbirt.net/no-coding-required-saprothub-brings-protein-modeling-to-every-biologist/" alt="blog"><img src="https://img.shields.io/badge/Blog-Medium-purple" /></a> 
 <a href="https://x.com/sokrypton/status/1795525127653986415"><img src="https://img.shields.io/badge/Twitter-blue?logo=twitter" style="max-width: 100%;"></a>
 
-The repository is an official implementation of [Democratizing Protein Language Model Training, Sharing and Collaboration](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v7). Making protein language models fine-tuning and sharing accessible to all - no coding or advanced machine learning expertise required!
+The repository is an official implementation of [Democratizing Protein Language Model Training, Sharing and Collaboration (Nature Biotechnology)](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v7). Making protein language models fine-tuning and sharing accessible to all - no coding or advanced machine learning expertise required!
 
 **Access via  [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (35M,650M) and  [ColabSeprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabSeprot.ipynb?hl=en) (including ColabESM1b (650M), ColabESM2 (35M, 150M, 650M), ColabProTrek (35M, 650M), ColabProtBERT (420M))！**
 
