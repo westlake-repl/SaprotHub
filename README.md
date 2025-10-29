@@ -28,7 +28,7 @@ Go to [the OPMC website](https://theopmc.github.io/).
 ### WeChat
 2024/12/01: You can scan the QR code to join our wechat groups （We currently host two active weichat groups with a total membership of over 500 researchers and practitioners）:
 
-<img src="https://github.com/user-attachments/assets/9f13d01d-8720-4bb7-9960-94dc1738f533" width="50%">
+<img src="https://github.com/user-attachments/assets/46d31f20-4616-43eb-850f-295eba99ac06" width="50%">
 
 > We have 2 PhD positions for international students at Westlake University! see [here](https://x.com/duguyuan/status/1897101692665258245).
 
