@@ -9,6 +9,8 @@ The repository is an official implementation of [Democratizing Protein Language 
 
 **Access via  [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (35M,650M) and  [ColabSeprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabSeprot.ipynb?hl=en) (including ColabESM1b (650M), ColabESM2 (35M, 150M, 650M), ColabProTrek (35M, 650M), ColabProtBERT (420M))！**
 
+Watch [the ColabSaprot video tutorial](https://www.youtube.com/watch?v=nmLtjlCI_7M&t=716s)
+
 ## News
 - **2025/10/24:**: ColabSaprot and SaprotHub are published in Nature Biotechnology, see [here](https://www.nature.com/articles/s41587-025-02859-7).
 - **2024/05/06:** We are delighted  to announce that [ColabSeprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabSeprot.ipynb?hl=en)  and [SeprotHub](https://huggingface.co/SeprotHub) are now ready for use. ColabSeprot offers access to several state-of-the-art sequence-only Protein Language Models (PLMs), including ESM1b, ESM2, ProTrek, and ProtBert, enabling streamlined fine-tuning and prediction for protein sequence analysis.
