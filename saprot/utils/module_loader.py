@@ -136,6 +136,10 @@ def my_load_dataset(config):
         model_name = "esmc_300m" if "esmc-300m" in tok else ("esmc_600m" if "esmc-600m" in tok else "esmc_300m")
         cfg.pop("tokenizer", None)
         cfg["model_name"] = model_name
+        # drop saprot-specific keys not accepted by LMDBDataset/__init__ chain
+        for k in ["plddt_threshold", "mask_struc_ratio"]:
+            if k in cfg:
+                cfg.pop(k, None)
 
         mapping = {
             "saprot/saprot_classification_dataset": "esmc/esmc_classification_dataset",
