@@ -35,18 +35,24 @@ class ESMCPairRegressionModel(ESMCBaseModel):
         proteins_1 = inputs_1.get('proteins')
         proteins_2 = inputs_2.get('proteins')
 
-        out1 = self.model.encode(proteins_1)
-        out2 = self.model.encode(proteins_2)
+        def pool(outputs):
+            if hasattr(outputs, 'sequence_representation') and outputs.sequence_representation is not None:
+                return outputs.sequence_representation
+            hs = getattr(outputs, 'hidden_states', None)
+            if hs is None:
+                hs = getattr(outputs, 'last_hidden_state', None)
+            if isinstance(hs, list):
+                return hs[0].mean(dim=0)
+            return hs.mean(dim=0)
 
-        if hasattr(out1, 'sequence_representation'):
-            h1 = out1.sequence_representation
-            h2 = out2.sequence_representation
-        elif hasattr(out1, 'hidden_states'):
-            h1 = out1.hidden_states.mean(dim=1)
-            h2 = out2.hidden_states.mean(dim=1)
+        if isinstance(proteins_1, list):
+            h1 = torch.stack([pool(self.model.encode(p)) for p in proteins_1], dim=0)
         else:
-            h1 = out1.last_hidden_state.mean(dim=1)
-            h2 = out2.last_hidden_state.mean(dim=1)
+            h1 = pool(self.model.encode(proteins_1)).unsqueeze(0)
+        if isinstance(proteins_2, list):
+            h2 = torch.stack([pool(self.model.encode(p)) for p in proteins_2], dim=0)
+        else:
+            h2 = pool(self.model.encode(proteins_2)).unsqueeze(0)
 
         hidden_concat = torch.cat([h1, h2], dim=-1)
         return self.model.reg_head(hidden_concat).squeeze(-1)

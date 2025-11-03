@@ -28,14 +28,26 @@ class ESMCRegressionModel(ESMCBaseModel):
         else:
             raise ValueError("ESMCRegressionModel.forward expects inputs['proteins'] (list of ESMProtein)")
 
-        outputs = self.model.encode(proteins)
-
-        if hasattr(outputs, 'sequence_representation'):
-            repr_tensor = outputs.sequence_representation
-        elif hasattr(outputs, 'hidden_states'):
-            repr_tensor = outputs.hidden_states.mean(dim=1)
+        # Encode per-protein when list is provided
+        if isinstance(proteins, list):
+            outputs_list = [self.model.encode(p) for p in proteins]
         else:
-            repr_tensor = outputs.last_hidden_state.mean(dim=1)
+            outputs_list = [self.model.encode(proteins)]
+
+        pooled = []
+        for out in outputs_list:
+            if hasattr(out, 'sequence_representation') and out.sequence_representation is not None:
+                pooled.append(out.sequence_representation)
+                continue
+            hs = getattr(out, 'hidden_states', None)
+            if hs is None:
+                hs = getattr(out, 'last_hidden_state', None)
+            if isinstance(hs, list):
+                pooled.append(hs[0].mean(dim=0))
+            else:
+                pooled.append(hs.mean(dim=0))
+
+        repr_tensor = torch.stack(pooled, dim=0)
 
         x = self.model.classifier[0](repr_tensor)
         x = self.model.classifier[1](x)

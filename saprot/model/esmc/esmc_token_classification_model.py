@@ -27,30 +27,36 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
             raise ValueError("ESMCTokenClassificationModel.forward expects inputs['proteins'] (list of ESMProtein)")
 
         # get token-level representations
-        outputs = self.model.encode(proteins)
-
-        # token reps may come as list of [L, D] or tensor [B, L, D]
-        if hasattr(outputs, 'token_representations') and outputs.token_representations is not None:
-            rep_list = outputs.token_representations
-        elif hasattr(outputs, 'hidden_states') and outputs.hidden_states is not None:
-            rep_list = outputs.hidden_states
+        if isinstance(proteins, list):
+            outputs_list = [self.model.encode(p) for p in proteins]
         else:
-            rep_list = getattr(outputs, 'last_hidden_state', None)
+            outputs_list = [self.model.encode(proteins)]
 
-        if isinstance(rep_list, list):
-            max_len = max(t.shape[0] for t in rep_list)
-            hidden_size = rep_list[0].shape[-1]
-            device = rep_list[0].device
-            batch_repr = torch.zeros(len(rep_list), max_len, hidden_size, device=device)
-            attn = torch.zeros(len(rep_list), max_len, dtype=torch.bool, device=device)
-            for i, t in enumerate(rep_list):
-                L = t.shape[0]
-                batch_repr[i, :L] = t
-                attn[i, :L] = True
-        else:
-            # Tensor [B, L, D]
-            batch_repr = rep_list
-            attn = torch.ones(batch_repr.shape[:2], dtype=torch.bool, device=batch_repr.device)
+        # collect per-seq token representations
+        per_seq = []
+        for out in outputs_list:
+            rep = None
+            if hasattr(out, 'token_representations') and out.token_representations is not None:
+                rep = out.token_representations
+            elif hasattr(out, 'hidden_states') and out.hidden_states is not None:
+                rep = out.hidden_states
+            else:
+                rep = getattr(out, 'last_hidden_state', None)
+            # ensure [L, D] tensor
+            if isinstance(rep, list):
+                per_seq.append(rep[0])
+            else:
+                per_seq.append(rep)
+
+        max_len = max(t.shape[0] for t in per_seq)
+        hidden_size = per_seq[0].shape[-1]
+        device = per_seq[0].device
+        batch_repr = torch.zeros(len(per_seq), max_len, hidden_size, device=device)
+        attn = torch.zeros(len(per_seq), max_len, dtype=torch.bool, device=device)
+        for i, t in enumerate(per_seq):
+            L = t.shape[0]
+            batch_repr[i, :L] = t
+            attn[i, :L] = True
 
         # position-wise classification
         x = self.model.classifier[0](batch_repr)
