@@ -23,6 +23,32 @@ def my_load_model(config):
     
     model_config.update(kwargs)
 
+    # --- ESMC auto-redirect for saprot selections ---
+    def _maybe_redirect_saprot_to_esmc(model_type_local: str, cfg: dict):
+        cfg = copy.deepcopy(cfg)
+        config_path = cfg.get("config_path", "")
+        esmc_flag = isinstance(config_path, str) and ("esmc-" in config_path or "EvolutionaryScale/esmc-" in config_path)
+        if not esmc_flag:
+            return model_type_local, cfg
+
+        # map config_path -> model_name
+        model_name = "esmc_300m" if "esmc-300m" in config_path else ("esmc_600m" if "esmc-600m" in config_path else "esmc_300m")
+        cfg.pop("config_path", None)
+        cfg["model_name"] = model_name
+
+        # map saprot task to esmc task
+        mapping = {
+            "saprot/saprot_classification_model": "esmc/esmc_classification_model",
+            "saprot/saprot_regression_model": "esmc/esmc_regression_model",
+            "saprot/saprot_token_classification_model": "esmc/esmc_token_classification_model",
+            "saprot/saprot_pair_classification_model": "esmc/esmc_pair_classification_model",
+            "saprot/saprot_pair_regression_model": "esmc/esmc_pair_regression_model",
+        }
+
+        return mapping.get(model_type_local, model_type_local), cfg
+
+    model_type, model_config = _maybe_redirect_saprot_to_esmc(model_type, model_config)
+
     if model_type == "saprot/saprot_classification_model":
       from model.saprot.saprot_classification_model import SaprotClassificationModel
       return SaprotClassificationModel(**model_config)
@@ -95,6 +121,31 @@ def my_load_dataset(config):
     dataset_type = dataset_config.pop("dataset_py_path")
     kwargs = dataset_config.pop('kwargs')
     dataset_config.update(kwargs)
+
+    # --- ESMC auto-redirect for saprot datasets ---
+    def _maybe_redirect_dataset_to_esmc(dtype_local: str, cfg: dict):
+        cfg = copy.deepcopy(cfg)
+        tok = cfg.get("tokenizer", "")
+        esmc_flag = isinstance(tok, str) and ("esmc-" in tok or "EvolutionaryScale/esmc-" in tok)
+        if not esmc_flag:
+            return dtype_local, cfg
+
+        model_name = "esmc_300m" if "esmc-300m" in tok else ("esmc_600m" if "esmc-600m" in tok else "esmc_300m")
+        cfg.pop("tokenizer", None)
+        cfg["model_name"] = model_name
+
+        mapping = {
+            "saprot/saprot_classification_dataset": "esmc/esmc_classification_dataset",
+            "saprot/saprot_token_classification_dataset": "esmc/esmc_token_classification_dataset",
+            "saprot/saprot_regression_dataset": "esmc/esmc_classification_dataset",
+            "saprot/saprot_pair_classification_dataset": "esmc/esmc_pair_classification_dataset",
+            "saprot/saprot_pair_regression_dataset": "esmc/esmc_pair_regression_dataset",
+            "saprot/saprot_annotation_dataset": "esmc/esmc_annotation_dataset",
+        }
+
+        return mapping.get(dtype_local, dtype_local), cfg
+
+    dataset_type, dataset_config = _maybe_redirect_dataset_to_esmc(dataset_type, dataset_config)
 
     if dataset_type == "saprot/saprot_classification_dataset":
       from dataset.saprot.saprot_classification_dataset import SaprotClassificationDataset
