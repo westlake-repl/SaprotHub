@@ -39,15 +39,36 @@ class ESMCPairClassificationModel(ESMCBaseModel):
         proteins_1 = inputs_1.get('proteins')
         proteins_2 = inputs_2.get('proteins')
 
-        def pool(outputs):
-            if hasattr(outputs, 'sequence_representation') and outputs.sequence_representation is not None:
-                return outputs.sequence_representation
-            hs = getattr(outputs, 'hidden_states', None)
+        def pool(out):
+            if isinstance(out, torch.Tensor):
+                if out.dim() == 3:
+                    return out.mean(dim=1).squeeze(0)
+                if out.dim() == 2:
+                    return out.mean(dim=0)
+                if out.dim() == 1:
+                    return out
+                raise ValueError("Unsupported tensor shape from ESMC encode: {}".format(tuple(out.shape)))
+            if hasattr(out, 'sequence_representation') and out.sequence_representation is not None:
+                rep = out.sequence_representation
+                return rep if rep.dim() == 1 else rep.squeeze(0)
+            hs = None
+            for attr_name in ['token_representations', 'residue_representations', 'hidden_states', 'last_hidden_state']:
+                if hasattr(out, attr_name) and getattr(out, attr_name) is not None:
+                    hs = getattr(out, attr_name)
+                    break
             if hs is None:
-                hs = getattr(outputs, 'last_hidden_state', None)
+                raise ValueError("ESMC encode outputs lack representations compatible with pooling")
             if isinstance(hs, list):
                 return hs[0].mean(dim=0)
-            return hs.mean(dim=0)
+            if isinstance(hs, torch.Tensor):
+                if hs.dim() == 3:
+                    return hs.mean(dim=1).squeeze(0)
+                if hs.dim() == 2:
+                    return hs.mean(dim=0)
+                if hs.dim() == 1:
+                    return hs
+                raise ValueError("Unsupported representation tensor shape: {}".format(tuple(hs.shape)))
+            raise ValueError("Unsupported representation type: {}".format(type(hs)))
 
         if isinstance(proteins_1, list):
             h1 = torch.stack([pool(self.model.encode(p)) for p in proteins_1], dim=0)

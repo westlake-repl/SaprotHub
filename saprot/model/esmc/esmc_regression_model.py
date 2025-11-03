@@ -36,16 +36,42 @@ class ESMCRegressionModel(ESMCBaseModel):
 
         pooled = []
         for out in outputs_list:
-            if hasattr(out, 'sequence_representation') and out.sequence_representation is not None:
-                pooled.append(out.sequence_representation)
+            if isinstance(out, torch.Tensor):
+                if out.dim() == 3:
+                    pooled.append(out.mean(dim=1).squeeze(0))
+                elif out.dim() == 2:
+                    pooled.append(out.mean(dim=0))
+                elif out.dim() == 1:
+                    pooled.append(out)
+                else:
+                    raise ValueError("Unsupported tensor shape from ESMC encode: {}".format(tuple(out.shape)))
                 continue
-            hs = getattr(out, 'hidden_states', None)
+
+            if hasattr(out, 'sequence_representation') and out.sequence_representation is not None:
+                rep = out.sequence_representation
+                pooled.append(rep if rep.dim() == 1 else rep.squeeze(0))
+                continue
+
+            hs = None
+            for attr_name in ['token_representations', 'residue_representations', 'hidden_states', 'last_hidden_state']:
+                if hasattr(out, attr_name) and getattr(out, attr_name) is not None:
+                    hs = getattr(out, attr_name)
+                    break
             if hs is None:
-                hs = getattr(out, 'last_hidden_state', None)
+                raise ValueError("ESMC encode outputs lack representations compatible with pooling")
             if isinstance(hs, list):
                 pooled.append(hs[0].mean(dim=0))
+            elif isinstance(hs, torch.Tensor):
+                if hs.dim() == 3:
+                    pooled.append(hs.mean(dim=1).squeeze(0))
+                elif hs.dim() == 2:
+                    pooled.append(hs.mean(dim=0))
+                elif hs.dim() == 1:
+                    pooled.append(hs)
+                else:
+                    raise ValueError("Unsupported representation tensor shape: {}".format(tuple(hs.shape)))
             else:
-                pooled.append(hs.mean(dim=0))
+                raise ValueError("Unsupported representation type: {}".format(type(hs)))
 
         repr_tensor = torch.stack(pooled, dim=0)
 
