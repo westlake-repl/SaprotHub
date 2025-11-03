@@ -27,27 +27,30 @@ class ESMCClassificationModel(ESMCBaseModel):
         else:
             raise ValueError("ESMCClassificationModel.forward expects inputs['proteins'] (list of ESMProtein)")
 
-        # Get per-sequence representations using ESMC's embed method
+        # Get per-sequence representations - try different ESMC API methods
         with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            if isinstance(proteins, list):
-                repr_list = [self.model.embed(p) for p in proteins]
-            else:
-                repr_list = [self.model.embed(proteins)]
-        
-        # Embed returns tensor directly: each element is [L, D] or [D]
-        pooled = []
-        for repr in repr_list:
-            if isinstance(repr, torch.Tensor):
-                if repr.dim() == 2:      # [L, D]
-                    pooled.append(repr.mean(dim=0))
-                elif repr.dim() == 1:    # [D]
-                    pooled.append(repr)
+            # Method 1: Try forward(proteins) which should return representations
+            try:
+                if isinstance(proteins, list):
+                    outputs = self.model.forward(proteins)
                 else:
-                    raise ValueError("Unexpected embed output shape: {}".format(tuple(repr.shape)))
-            else:
-                raise ValueError("ESMC embed returned non-tensor: {}".format(type(repr)))
-        
-        repr_tensor = torch.stack(pooled, dim=0)
+                    outputs = self.model.forward([proteins])
+                
+                # Extract representations from outputs
+                if isinstance(outputs, torch.Tensor):
+                    # Direct tensor [B, L, D] or [B, D]
+                    if outputs.dim() == 3:  # [B, L, D]
+                        repr_tensor = outputs.mean(dim=1)
+                    elif outputs.dim() == 2:  # [B, D]
+                        repr_tensor = outputs
+                    else:
+                        raise ValueError("Unexpected forward output shape: {}".format(tuple(outputs.shape)))
+                else:
+                    # Try to extract from structured output
+                    raise NotImplementedError("Need to handle structured forward output")
+            except Exception as e:
+                print(f"[ESMC][DEBUG] forward failed: {e}")
+                raise
         
         # Classification head
         x = self.model.classifier[0](repr_tensor)
