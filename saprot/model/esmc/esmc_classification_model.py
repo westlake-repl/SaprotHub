@@ -64,19 +64,25 @@ class ESMCClassificationModel(ESMCBaseModel):
                     break
 
             if hs is None:
-                # ESMProteinTensor: recursively detect all attributes
-                print(f"[ESMC][DEBUG] Detecting attributes for {type(out)}...")
-                for attr in ['structure', 'representation', 'embeddings', 'hidden']:
-                    if hasattr(out, attr):
+                # ESMProteinTensor: inspect all available attributes at once
+                print(f"[ESMC][DEBUG] Inspecting all attributes for {type(out)}...")
+                attrs = [x for x in dir(out) if not x.startswith('_')]
+                print(f"[ESMC][DEBUG] Available attrs: {attrs}")
+                
+                for attr in attrs:
+                    try:
                         val = getattr(out, attr)
-                        print(f"[ESMC][DEBUG] {attr}: type={type(val)}, val={val}")
                         if val is not None and isinstance(val, torch.Tensor):
                             rep = val
                             pooled.append(rep if rep.dim() == 1 else rep.squeeze(0) if rep.dim() > 1 else rep)
-                            print(f"[ESMC][DEBUG] Using {attr} with shape {tuple(rep.shape)}")
+                            print(f"[ESMC][DEBUG] ✓ SUCCESS: Using {attr} with shape {tuple(rep.shape)}")
                             break
+                        elif val is not None:
+                            print(f"[ESMC][DEBUG] {attr}: type={type(val)}, not a tensor")
+                    except Exception as e:
+                        print(f"[ESMC][DEBUG] {attr}: exception={e}")
                 else:
-                    raise ValueError("ESMC encode outputs lack representations compatible with pooling. Type: {}, available attrs: {}".format(type(out), [x for x in dir(out) if not x.startswith('_')]))
+                    raise ValueError("ESMC encode outputs lack representations compatible with pooling. Type: {}, available attrs: {}".format(type(out), attrs))
                 continue
 
             if isinstance(hs, list):
