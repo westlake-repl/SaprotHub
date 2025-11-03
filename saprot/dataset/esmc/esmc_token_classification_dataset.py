@@ -49,7 +49,7 @@ class ESMCTokenClassificationDataset(LMDBDataset):
         label_ids = pad_sequences(label_ids, constant_value=-1)
         labels = {"labels": label_ids}
 
-        proteins = [ESMProtein(seq=s) for s in seqs]
+        proteins = [ESMProtein(sequence=s) for s in seqs]
         inputs = {"inputs": {"proteins": proteins}}
 
         return inputs, labels

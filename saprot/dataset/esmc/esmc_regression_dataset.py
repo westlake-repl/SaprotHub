@@ -44,7 +44,7 @@ class ESMCRegressionDataset(LMDBDataset):
 
         labels = {"labels": torch.tensor(fitness, dtype=torch.float32)}
 
-        proteins = [ESMProtein(seq=s) for s in seqs]
+        proteins = [ESMProtein(sequence=s) for s in seqs]
         inputs = {"inputs": {"proteins": proteins}}
 
         return inputs, labels

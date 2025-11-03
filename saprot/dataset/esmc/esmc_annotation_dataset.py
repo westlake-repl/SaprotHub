@@ -61,7 +61,7 @@ class ESMCAnnotationDataset(LMDBDataset):
     def collate_fn(self, batch):
         seqs, labels, coords = zip(*batch)
 
-        proteins = [ESMProtein(seq=s) for s in seqs]
+        proteins = [ESMProtein(sequence=s) for s in seqs]
         inputs = {"inputs": {"proteins": proteins}}
         if self.bias_feature and coords[0] is not None:
             inputs['structure_info'] = (coords,)

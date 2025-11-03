@@ -48,8 +48,8 @@ class ESMCPairClassificationDataset(LMDBDataset):
         label_ids = torch.tensor(label_ids, dtype=torch.long)
         labels = {"labels": label_ids}
 
-        proteins_1 = [ESMProtein(seq=s) for s in seqs_1]
-        proteins_2 = [ESMProtein(seq=s) for s in seqs_2]
+        proteins_1 = [ESMProtein(sequence=s) for s in seqs_1]
+        proteins_2 = [ESMProtein(sequence=s) for s in seqs_2]
 
         inputs = {
             "inputs_1": {"proteins": proteins_1},

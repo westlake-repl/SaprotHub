@@ -45,7 +45,7 @@ class ESMCSequenceDesignDataset(LMDBDataset):
 
         try:
             from esm.sdk.api import ESMProtein
-            proteins = [ESMProtein(seq=s) for s in seqs]
+            proteins = [ESMProtein(sequence=s) for s in seqs]
         except Exception:
             proteins = seqs
 

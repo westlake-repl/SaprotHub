@@ -57,7 +57,7 @@ class ESMCClassificationDataset(LMDBDataset):
         labels = {"labels": label_ids}
 
         # Build ESMProtein objects expected by ESMC
-        proteins = [ESMProtein(seq=seq) for seq in seqs]
+        proteins = [ESMProtein(sequence=seq) for seq in seqs]
 
         # Note: training_step calls self(**inputs), so we wrap under key 'inputs'
         model_inputs = {"proteins": proteins}
