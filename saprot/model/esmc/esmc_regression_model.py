@@ -28,51 +28,24 @@ class ESMCRegressionModel(ESMCBaseModel):
         else:
             raise ValueError("ESMCRegressionModel.forward expects inputs['proteins'] (list of ESMProtein)")
 
-        # Encode per-protein when list is provided
+        # Use embed method to get representations
         if isinstance(proteins, list):
-            outputs_list = [self.model.encode(p) for p in proteins]
+            repr_list = [self.model.embed(p) for p in proteins]
         else:
-            outputs_list = [self.model.encode(proteins)]
-
+            repr_list = [self.model.embed(proteins)]
+        
         pooled = []
-        for out in outputs_list:
-            if isinstance(out, torch.Tensor):
-                if out.dim() == 3:
-                    pooled.append(out.mean(dim=1).squeeze(0))
-                elif out.dim() == 2:
-                    pooled.append(out.mean(dim=0))
-                elif out.dim() == 1:
-                    pooled.append(out)
+        for repr in repr_list:
+            if isinstance(repr, torch.Tensor):
+                if repr.dim() == 2:      # [L, D]
+                    pooled.append(repr.mean(dim=0))
+                elif repr.dim() == 1:    # [D]
+                    pooled.append(repr)
                 else:
-                    raise ValueError("Unsupported tensor shape from ESMC encode: {}".format(tuple(out.shape)))
-                continue
-
-            if hasattr(out, 'sequence_representation') and out.sequence_representation is not None:
-                rep = out.sequence_representation
-                pooled.append(rep if rep.dim() == 1 else rep.squeeze(0))
-                continue
-
-            hs = None
-            for attr_name in ['token_representations', 'residue_representations', 'hidden_states', 'last_hidden_state']:
-                if hasattr(out, attr_name) and getattr(out, attr_name) is not None:
-                    hs = getattr(out, attr_name)
-                    break
-            if hs is None:
-                raise ValueError("ESMC encode outputs lack representations compatible with pooling")
-            if isinstance(hs, list):
-                pooled.append(hs[0].mean(dim=0))
-            elif isinstance(hs, torch.Tensor):
-                if hs.dim() == 3:
-                    pooled.append(hs.mean(dim=1).squeeze(0))
-                elif hs.dim() == 2:
-                    pooled.append(hs.mean(dim=0))
-                elif hs.dim() == 1:
-                    pooled.append(hs)
-                else:
-                    raise ValueError("Unsupported representation tensor shape: {}".format(tuple(hs.shape)))
+                    raise ValueError("Unexpected embed output shape: {}".format(tuple(repr.shape)))
             else:
-                raise ValueError("Unsupported representation type: {}".format(type(hs)))
-
+                raise ValueError("ESMC embed returned non-tensor: {}".format(type(repr)))
+        
         repr_tensor = torch.stack(pooled, dim=0)
 
         x = self.model.classifier[0](repr_tensor)

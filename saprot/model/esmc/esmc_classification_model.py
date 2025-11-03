@@ -27,80 +27,28 @@ class ESMCClassificationModel(ESMCBaseModel):
         else:
             raise ValueError("ESMCClassificationModel.forward expects inputs['proteins'] (list of ESMProtein)")
 
-        # Get per-sequence representations (robust to SDK differences)
+        # Get per-sequence representations using ESMC's embed method
         with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
             if isinstance(proteins, list):
-                outputs_list = [self.model.encode(p) for p in proteins]
+                repr_list = [self.model.embed(p) for p in proteins]
             else:
-                outputs_list = [self.model.encode(proteins)]
-
-        # Build pooled representations (robust to tensor/object returns)
+                repr_list = [self.model.embed(proteins)]
+        
+        # Embed returns tensor directly: each element is [L, D] or [D]
         pooled = []
-        for idx, out in enumerate(outputs_list):
-            # Tensor returns
-            if isinstance(out, torch.Tensor):
-                if out.dim() == 3:           # [B, L, D] (assume B==1 per single encode)
-                    pooled.append(out.mean(dim=1).squeeze(0))
-                elif out.dim() == 2:         # [L, D]
-                    pooled.append(out.mean(dim=0))
-                elif out.dim() == 1:         # [D]
-                    pooled.append(out)
+        for repr in repr_list:
+            if isinstance(repr, torch.Tensor):
+                if repr.dim() == 2:      # [L, D]
+                    pooled.append(repr.mean(dim=0))
+                elif repr.dim() == 1:    # [D]
+                    pooled.append(repr)
                 else:
-                    raise ValueError("Unsupported tensor shape from ESMC encode: {}".format(tuple(out.shape)))
-                continue
-
-            # Object returns with common fields
-            if hasattr(out, 'sequence_representation') and out.sequence_representation is not None:
-                rep = out.sequence_representation
-                pooled.append(rep if rep.dim() == 1 else rep.squeeze(0))
-                continue
-
-            hs = None
-            for attr_name in [
-                'token_representations', 'residue_representations', 'hidden_states', 'last_hidden_state'
-            ]:
-                if hasattr(out, attr_name) and getattr(out, attr_name) is not None:
-                    hs = getattr(out, attr_name)
-                    break
-
-            if hs is None:
-                # ESMProteinTensor: inspect all available attributes at once
-                print(f"[ESMC][DEBUG] Inspecting all attributes for {type(out)}...")
-                attrs = [x for x in dir(out) if not x.startswith('_')]
-                print(f"[ESMC][DEBUG] Available attrs: {attrs}")
-                
-                for attr in attrs:
-                    try:
-                        val = getattr(out, attr)
-                        if val is not None and isinstance(val, torch.Tensor):
-                            rep = val
-                            pooled.append(rep if rep.dim() == 1 else rep.squeeze(0) if rep.dim() > 1 else rep)
-                            print(f"[ESMC][DEBUG] ✓ SUCCESS: Using {attr} with shape {tuple(rep.shape)}")
-                            break
-                        elif val is not None:
-                            print(f"[ESMC][DEBUG] {attr}: type={type(val)}, not a tensor")
-                    except Exception as e:
-                        print(f"[ESMC][DEBUG] {attr}: exception={e}")
-                else:
-                    raise ValueError("ESMC encode outputs lack representations compatible with pooling. Type: {}, available attrs: {}".format(type(out), attrs))
-                continue
-
-            if isinstance(hs, list):
-                pooled.append(hs[0].mean(dim=0))
-            elif isinstance(hs, torch.Tensor):
-                if hs.dim() == 3:            # [B, L, D]
-                    pooled.append(hs.mean(dim=1).squeeze(0))
-                elif hs.dim() == 2:          # [L, D]
-                    pooled.append(hs.mean(dim=0))
-                elif hs.dim() == 1:          # [D]
-                    pooled.append(hs)
-                else:
-                    raise ValueError("Unsupported representation tensor shape: {}".format(tuple(hs.shape)))
+                    raise ValueError("Unexpected embed output shape: {}".format(tuple(repr.shape)))
             else:
-                raise ValueError("Unsupported representation type: {}".format(type(hs)))
-
+                raise ValueError("ESMC embed returned non-tensor: {}".format(type(repr)))
+        
         repr_tensor = torch.stack(pooled, dim=0)
-
+        
         # Classification head
         x = self.model.classifier[0](repr_tensor)
         x = self.model.classifier[1](x)
@@ -108,7 +56,7 @@ class ESMCClassificationModel(ESMCBaseModel):
         logits = self.model.classifier[3](x)
 
         return logits
-
+    
     def loss_func(self, stage, logits, labels):
         label = labels['labels']
         loss = cross_entropy(logits, label)
@@ -123,5 +71,6 @@ class ESMCClassificationModel(ESMCBaseModel):
             self.reset_metrics("train")
 
         return loss
+
 
 

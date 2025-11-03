@@ -26,43 +26,24 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
         else:
             raise ValueError("ESMCTokenClassificationModel.forward expects inputs['proteins'] (list of ESMProtein)")
 
-        # get token-level representations
+        # get token-level representations using embed method
         if isinstance(proteins, list):
-            outputs_list = [self.model.encode(p) for p in proteins]
+            repr_list = [self.model.embed(p) for p in proteins]
         else:
-            outputs_list = [self.model.encode(proteins)]
-
+            repr_list = [self.model.embed(proteins)]
+        
         # collect per-seq token representations (ensure [L, D])
         per_seq = []
-        for out in outputs_list:
-            if isinstance(out, torch.Tensor):
-                if out.dim() == 3:         # [B, L, D], assume B==1
-                    per_seq.append(out.squeeze(0))
-                    continue
-                elif out.dim() == 2:       # [L, D]
-                    per_seq.append(out)
-                    continue
+        for repr in repr_list:
+            if isinstance(repr, torch.Tensor):
+                if repr.dim() == 3:         # [B, L, D], assume B==1
+                    per_seq.append(repr.squeeze(0))
+                elif repr.dim() == 2:       # [L, D]
+                    per_seq.append(repr)
                 else:
-                    raise ValueError("Unsupported tensor shape from ESMC encode: {}".format(tuple(out.shape)))
-
-            rep = None
-            for attr_name in ['token_representations', 'residue_representations', 'hidden_states', 'last_hidden_state']:
-                if hasattr(out, attr_name) and getattr(out, attr_name) is not None:
-                    rep = getattr(out, attr_name)
-                    break
-            if rep is None:
-                raise ValueError("ESMC encode outputs lack token-level representations")
-            if isinstance(rep, list):
-                per_seq.append(rep[0])
-            elif isinstance(rep, torch.Tensor):
-                if rep.dim() == 3:
-                    per_seq.append(rep.squeeze(0))
-                elif rep.dim() == 2:
-                    per_seq.append(rep)
-                else:
-                    raise ValueError("Unsupported token representation tensor shape: {}".format(tuple(rep.shape)))
+                    raise ValueError("Unexpected embed output shape: {}".format(tuple(repr.shape)))
             else:
-                raise ValueError("Unsupported token representation type: {}".format(type(rep)))
+                raise ValueError("ESMC embed returned non-tensor: {}".format(type(repr)))
 
         max_len = max(t.shape[0] for t in per_seq)
         hidden_size = per_seq[0].shape[-1]

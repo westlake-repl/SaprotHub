@@ -35,45 +35,25 @@ class ESMCPairRegressionModel(ESMCBaseModel):
         proteins_1 = inputs_1.get('proteins')
         proteins_2 = inputs_2.get('proteins')
 
-        def pool(out):
-            if isinstance(out, torch.Tensor):
-                if out.dim() == 3:
-                    return out.mean(dim=1).squeeze(0)
-                if out.dim() == 2:
-                    return out.mean(dim=0)
-                if out.dim() == 1:
-                    return out
-                raise ValueError("Unsupported tensor shape from ESMC encode: {}".format(tuple(out.shape)))
-            if hasattr(out, 'sequence_representation') and out.sequence_representation is not None:
-                rep = out.sequence_representation
-                return rep if rep.dim() == 1 else rep.squeeze(0)
-            hs = None
-            for attr_name in ['token_representations', 'residue_representations', 'hidden_states', 'last_hidden_state']:
-                if hasattr(out, attr_name) and getattr(out, attr_name) is not None:
-                    hs = getattr(out, attr_name)
-                    break
-            if hs is None:
-                raise ValueError("ESMC encode outputs lack representations compatible with pooling")
-            if isinstance(hs, list):
-                return hs[0].mean(dim=0)
-            if isinstance(hs, torch.Tensor):
-                if hs.dim() == 3:
-                    return hs.mean(dim=1).squeeze(0)
-                if hs.dim() == 2:
-                    return hs.mean(dim=0)
-                if hs.dim() == 1:
-                    return hs
-                raise ValueError("Unsupported representation tensor shape: {}".format(tuple(hs.shape)))
-            raise ValueError("Unsupported representation type: {}".format(type(hs)))
+        def pool(repr):
+            if isinstance(repr, torch.Tensor):
+                if repr.dim() == 2:      # [L, D]
+                    return repr.mean(dim=0)
+                elif repr.dim() == 1:    # [D]
+                    return repr
+                else:
+                    raise ValueError("Unexpected embed output shape: {}".format(tuple(repr.shape)))
+            else:
+                raise ValueError("ESMC embed returned non-tensor: {}".format(type(repr)))
 
         if isinstance(proteins_1, list):
-            h1 = torch.stack([pool(self.model.encode(p)) for p in proteins_1], dim=0)
+            h1 = torch.stack([pool(self.model.embed(p)) for p in proteins_1], dim=0)
         else:
-            h1 = pool(self.model.encode(proteins_1)).unsqueeze(0)
+            h1 = pool(self.model.embed(proteins_1)).unsqueeze(0)
         if isinstance(proteins_2, list):
-            h2 = torch.stack([pool(self.model.encode(p)) for p in proteins_2], dim=0)
+            h2 = torch.stack([pool(self.model.embed(p)) for p in proteins_2], dim=0)
         else:
-            h2 = pool(self.model.encode(proteins_2)).unsqueeze(0)
+            h2 = pool(self.model.embed(proteins_2)).unsqueeze(0)
 
         hidden_concat = torch.cat([h1, h2], dim=-1)
         return self.model.reg_head(hidden_concat).squeeze(-1)
