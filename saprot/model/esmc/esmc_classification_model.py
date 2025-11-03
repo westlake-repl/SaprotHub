@@ -65,10 +65,13 @@ class ESMCClassificationModel(ESMCBaseModel):
 
             if hs is None:
                 # Try .structure attribute for ESMProteinTensor (some ESMC versions)
-                if hasattr(out, 'structure') and out.structure is not None:
-                    rep = out.structure
-                    pooled.append(rep if rep.dim() == 1 else rep.squeeze(0) if rep.dim() > 1 else rep)
-                    continue
+                if hasattr(out, 'structure'):
+                    st = out.structure
+                    print(f"[ESMC][DEBUG] structure type: {type(st)}, value: {st}")
+                    if st is not None and isinstance(st, torch.Tensor):
+                        rep = st
+                        pooled.append(rep if rep.dim() == 1 else rep.squeeze(0) if rep.dim() > 1 else rep)
+                        continue
                 # Try .representation directly
                 if hasattr(out, 'representation') and out.representation is not None:
                     rep = out.representation
