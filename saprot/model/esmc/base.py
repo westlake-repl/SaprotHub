@@ -37,6 +37,20 @@ class ESMCBaseModel(AbstractModel):
         self.valid_metrics_list['step'] = []
 
     def initialize_model(self) -> None:
+        # Workaround: ESMC's EsmSequenceTokenizer defines special tokens as read-only
+        # properties that clash with transformers setters in some versions.
+        # Remove those class-level properties before tokenizer construction.
+        try:
+            from esm.tokenization.sequence_tokenizer import EsmSequenceTokenizer
+            for _prop in ["cls_token", "pad_token", "mask_token", "eos_token"]:
+                if hasattr(EsmSequenceTokenizer, _prop):
+                    try:
+                        delattr(EsmSequenceTokenizer, _prop)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
         # Load ESMC backbone and tokenizer
         self.model = ESMC.from_pretrained(self.model_name).to(self.device_str)
         self.tokenizer = self.model.tokenizer
