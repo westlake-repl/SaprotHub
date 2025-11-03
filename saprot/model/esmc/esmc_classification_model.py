@@ -27,18 +27,28 @@ class ESMCClassificationModel(ESMCBaseModel):
         else:
             raise ValueError("ESMCClassificationModel.forward expects inputs['proteins'] (list of ESMProtein)")
 
-        # Get per-sequence representations
-        with torch.no_grad() if self.freeze_backbone else torch.enable_grad():
-            outputs = self.model.encode(proteins, return_hidden_states=False)
+        # Get per-sequence representations (robust to SDK differences)
+        with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
+            outputs = self.model.encode(proteins, return_hidden_states=True)
 
-        # Prefer sequence_representation if provided by SDK; otherwise mean over hidden states
-        if hasattr(outputs, 'sequence_representation'):
-            repr_tensor = outputs.sequence_representation  # [B, D]
-        elif hasattr(outputs, 'hidden_states'):
-            repr_tensor = outputs.hidden_states.mean(dim=1)  # [B, L, D] -> [B, D]
+        # outputs.hidden_states could be a list of [L, D] or a padded tensor [B, L, D]
+        hs = outputs.hidden_states
+        if isinstance(hs, list):
+            max_len = max(t.shape[0] for t in hs)
+            hidden_size = hs[0].shape[-1]
+            device = hs[0].device
+            batch = torch.zeros(len(hs), max_len, hidden_size, device=device)
+            mask = torch.zeros(len(hs), max_len, dtype=torch.bool, device=device)
+            for i, t in enumerate(hs):
+                L = t.shape[0]
+                batch[i, :L] = t
+                mask[i, :L] = True
+            # mean over valid positions
+            denom = mask.sum(dim=1).clamp(min=1).unsqueeze(-1)
+            repr_tensor = (batch.sum(dim=1) / denom)
         else:
-            # Fallback: try attribute commonly used
-            repr_tensor = outputs.last_hidden_state.mean(dim=1)
+            # Tensor [B, L, D]
+            repr_tensor = hs.mean(dim=1)
 
         # Classification head
         x = self.model.classifier[0](repr_tensor)

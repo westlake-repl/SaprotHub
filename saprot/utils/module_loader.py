@@ -144,7 +144,7 @@ def my_load_dataset(config):
         mapping = {
             "saprot/saprot_classification_dataset": "esmc/esmc_classification_dataset",
             "saprot/saprot_token_classification_dataset": "esmc/esmc_token_classification_dataset",
-            "saprot/saprot_regression_dataset": "esmc/esmc_classification_dataset",
+            "saprot/saprot_regression_dataset": "esmc/esmc_regression_dataset",
             "saprot/saprot_pair_classification_dataset": "esmc/esmc_pair_classification_dataset",
             "saprot/saprot_pair_regression_dataset": "esmc/esmc_pair_regression_dataset",
             "saprot/saprot_annotation_dataset": "esmc/esmc_annotation_dataset",
@@ -207,6 +207,10 @@ def my_load_dataset(config):
     if dataset_type == "esmc/esmc_pair_regression_dataset":
       from dataset.esmc.esmc_pair_regression_dataset import ESMCPairRegressionDataset
       return ESMCPairRegressionDataset(**dataset_config)
+
+    if dataset_type == "esmc/esmc_regression_dataset":
+      from dataset.esmc.esmc_regression_dataset import ESMCRegressionDataset
+      return ESMCRegressionDataset(**dataset_config)
 
 def load_wandb(config):
     # initialize wandb
