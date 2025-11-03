@@ -64,16 +64,17 @@ class ESMCClassificationModel(ESMCBaseModel):
                     break
 
             if hs is None:
-                # Debug print to understand the structure
-                print(f"[ESMC][DEBUG] Sample output #{idx} type: {type(out)}, dir: {dir(out)}")
-                if hasattr(out, '__dict__'):
-                    print(f"[ESMC][DEBUG] Sample output #{idx} __dict__: {list(out.__dict__.keys())}")
-                # Try to access .representation directly (some ESMC versions use this)
+                # Try .structure attribute for ESMProteinTensor (some ESMC versions)
+                if hasattr(out, 'structure') and out.structure is not None:
+                    rep = out.structure
+                    pooled.append(rep if rep.dim() == 1 else rep.squeeze(0) if rep.dim() > 1 else rep)
+                    continue
+                # Try .representation directly
                 if hasattr(out, 'representation') and out.representation is not None:
                     rep = out.representation
                     pooled.append(rep if rep.dim() == 1 else rep.squeeze(0) if rep.dim() > 1 else rep)
                     continue
-                raise ValueError("ESMC encode outputs lack representations compatible with pooling")
+                raise ValueError("ESMC encode outputs lack representations compatible with pooling. Type: {}, available attrs: {}".format(type(out), [x for x in dir(out) if not x.startswith('_')]))
 
             if isinstance(hs, list):
                 pooled.append(hs[0].mean(dim=0))
