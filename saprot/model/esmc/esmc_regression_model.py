@@ -1,6 +1,7 @@
 import torchmetrics
 import torch
 
+from torch.nn.utils.rnn import pad_sequence
 from ..model_interface import register_model
 from .base import ESMCBaseModel
 
@@ -28,25 +29,22 @@ class ESMCRegressionModel(ESMCBaseModel):
         else:
             raise ValueError("ESMCRegressionModel.forward expects inputs['proteins'] (list of ESMProtein)")
 
-        # Use embed method to get representations
-        if isinstance(proteins, list):
-            repr_list = [self.model.embed(p) for p in proteins]
-        else:
-            repr_list = [self.model.embed(proteins)]
-        
-        pooled = []
-        for repr in repr_list:
-            if isinstance(repr, torch.Tensor):
-                if repr.dim() == 2:      # [L, D]
-                    pooled.append(repr.mean(dim=0))
-                elif repr.dim() == 1:    # [D]
-                    pooled.append(repr)
-                else:
-                    raise ValueError("Unexpected embed output shape: {}".format(tuple(repr.shape)))
-            else:
-                raise ValueError("ESMC embed returned non-tensor: {}".format(type(repr)))
-        
-        repr_tensor = torch.stack(pooled, dim=0)
+        if not isinstance(proteins, list):
+            proteins = [proteins]
+
+        with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
+            # Tokenize and pad
+            token_ids_list = [self.model.embed(p) for p in proteins]
+            token_ids_batch = pad_sequence(token_ids_list, batch_first=True, padding_value=self.model.padding_idx)
+            
+            # Forward pass to get representations
+            model_output = self.model.forward(token_ids_batch, repr_layers=[self.model.num_layers])
+            representations = model_output['representations'][self.model.num_layers]
+            
+            # Pool with masking
+            mask = (token_ids_batch != self.model.padding_idx).unsqueeze(-1)
+            sequence_lengths = mask.sum(dim=1)
+            repr_tensor = (representations * mask).sum(dim=1) / sequence_lengths
 
         x = self.model.classifier[0](repr_tensor)
         x = self.model.classifier[1](x)

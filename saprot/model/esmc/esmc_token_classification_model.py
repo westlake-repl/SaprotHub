@@ -2,6 +2,7 @@ import torchmetrics
 import torch
 
 from torch.nn.functional import cross_entropy
+from torch.nn.utils.rnn import pad_sequence
 from ..model_interface import register_model
 from .base import ESMCBaseModel
 
@@ -26,34 +27,18 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
         else:
             raise ValueError("ESMCTokenClassificationModel.forward expects inputs['proteins'] (list of ESMProtein)")
 
-        # get token-level representations using embed method
-        if isinstance(proteins, list):
-            repr_list = [self.model.embed(p) for p in proteins]
-        else:
-            repr_list = [self.model.embed(proteins)]
-        
-        # collect per-seq token representations (ensure [L, D])
-        per_seq = []
-        for repr in repr_list:
-            if isinstance(repr, torch.Tensor):
-                if repr.dim() == 3:         # [B, L, D], assume B==1
-                    per_seq.append(repr.squeeze(0))
-                elif repr.dim() == 2:       # [L, D]
-                    per_seq.append(repr)
-                else:
-                    raise ValueError("Unexpected embed output shape: {}".format(tuple(repr.shape)))
-            else:
-                raise ValueError("ESMC embed returned non-tensor: {}".format(type(repr)))
+        if not isinstance(proteins, list):
+            proteins = [proteins]
 
-        max_len = max(t.shape[0] for t in per_seq)
-        hidden_size = per_seq[0].shape[-1]
-        device = per_seq[0].device
-        batch_repr = torch.zeros(len(per_seq), max_len, hidden_size, device=device)
-        attn = torch.zeros(len(per_seq), max_len, dtype=torch.bool, device=device)
-        for i, t in enumerate(per_seq):
-            L = t.shape[0]
-            batch_repr[i, :L] = t
-            attn[i, :L] = True
+        with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
+            # Tokenize and pad
+            token_ids_list = [self.model.embed(p) for p in proteins]
+            token_ids_batch = pad_sequence(token_ids_list, batch_first=True, padding_value=self.model.padding_idx)
+            
+            # Forward pass to get representations
+            model_output = self.model.forward(token_ids_batch, repr_layers=[self.model.num_layers])
+            batch_repr = model_output['representations'][self.model.num_layers]  # [B, L, D]
+            attn = (token_ids_batch != self.model.padding_idx)
 
         # position-wise classification
         x = self.model.classifier[0](batch_repr)

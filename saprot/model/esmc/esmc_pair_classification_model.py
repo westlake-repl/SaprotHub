@@ -3,6 +3,7 @@ import torch
 
 from torch.nn.functional import cross_entropy
 from torch.nn import Linear, ReLU
+from torch.nn.utils.rnn import pad_sequence
 from ..model_interface import register_model
 from .base import ESMCBaseModel
 
@@ -38,26 +39,27 @@ class ESMCPairClassificationModel(ESMCBaseModel):
 
         proteins_1 = inputs_1.get('proteins')
         proteins_2 = inputs_2.get('proteins')
+        if not isinstance(proteins_1, list):
+            proteins_1 = [proteins_1]
+        if not isinstance(proteins_2, list):
+            proteins_2 = [proteins_2]
 
-        def pool(repr):
-            if isinstance(repr, torch.Tensor):
-                if repr.dim() == 2:      # [L, D]
-                    return repr.mean(dim=0)
-                elif repr.dim() == 1:    # [D]
-                    return repr
-                else:
-                    raise ValueError("Unexpected embed output shape: {}".format(tuple(repr.shape)))
-            else:
-                raise ValueError("ESMC embed returned non-tensor: {}".format(type(repr)))
-
-        if isinstance(proteins_1, list):
-            h1 = torch.stack([pool(self.model.embed(p)) for p in proteins_1], dim=0)
-        else:
-            h1 = pool(self.model.embed(proteins_1)).unsqueeze(0)
-        if isinstance(proteins_2, list):
-            h2 = torch.stack([pool(self.model.embed(p)) for p in proteins_2], dim=0)
-        else:
-            h2 = pool(self.model.embed(proteins_2)).unsqueeze(0)
+        with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
+            # Process protein set 1
+            token_ids_list_1 = [self.model.embed(p) for p in proteins_1]
+            token_ids_batch_1 = pad_sequence(token_ids_list_1, batch_first=True, padding_value=self.model.padding_idx)
+            model_output_1 = self.model.forward(token_ids_batch_1, repr_layers=[self.model.num_layers])
+            repr_1 = model_output_1['representations'][self.model.num_layers]
+            mask_1 = (token_ids_batch_1 != self.model.padding_idx).unsqueeze(-1)
+            h1 = (repr_1 * mask_1).sum(dim=1) / mask_1.sum(dim=1)
+            
+            # Process protein set 2
+            token_ids_list_2 = [self.model.embed(p) for p in proteins_2]
+            token_ids_batch_2 = pad_sequence(token_ids_list_2, batch_first=True, padding_value=self.model.padding_idx)
+            model_output_2 = self.model.forward(token_ids_batch_2, repr_layers=[self.model.num_layers])
+            repr_2 = model_output_2['representations'][self.model.num_layers]
+            mask_2 = (token_ids_batch_2 != self.model.padding_idx).unsqueeze(-1)
+            h2 = (repr_2 * mask_2).sum(dim=1) / mask_2.sum(dim=1)
 
         hidden_concat = torch.cat([h1, h2], dim=-1)
         return self.model.classifier(hidden_concat)
