@@ -25,3 +25,4 @@ loguru==0.7.2
 colorama==0.4.6
 py3Dmol==2.4.2
 Markdown==3.7
+esm

@@ -1,0 +1,57 @@
+setting:
+  seed: 20000812
+
+  os_environ:
+    WANDB_API_KEY: ~
+    WANDB_RUN_ID: ~
+    CUDA_VISIBLE_DEVICES: 0,1,2,3,4,5,6,7
+    MASTER_ADDR: 127.0.0.1
+    MASTER_PORT: 12315
+    WORLD_SIZE: 1
+    NODE_RANK: 0
+    WANDB_MODE: offline
+
+  wandb_config:
+    project: BindingSiteDetection
+    name: esmc_300m
+
+model:
+  model_py_path: esmc/esmc_token_classification_model
+  kwargs:
+    model_name: esmc_300m
+    load_pretrained: true
+    num_labels: 2
+    device: cuda
+
+  lr_scheduler_kwargs:
+    last_epoch: -1
+    init_lr: 5.0e-5
+
+dataset:
+  dataset_py_path: esmc/esmc_token_classification_dataset
+  dataloader_kwargs:
+    batch_size: 4
+    num_workers: 8
+
+  train_lmdb: /lizhikai/workspace/ColabSaProt/dev/BindingSiteDetection/PDB/foldseek/train
+  valid_lmdb: /lizhikai/workspace/ColabSaProt/dev/BindingSiteDetection/PDB/foldseek/valid
+  test_lmdb:  /lizhikai/workspace/ColabSaProt/dev/BindingSiteDetection/PDB/foldseek/test
+  kwargs:
+    model_name: esmc_300m
+
+Trainer:
+  max_epochs: 1
+  log_every_n_steps: 1
+  strategy:
+    find_unused_parameters: True
+  logger: false
+  enable_checkpointing: false
+  val_check_interval: 0.1
+  accelerator: gpu
+  devices: 1
+  num_nodes: 1
+  accumulate_grad_batches: 16
+  precision: 16
+  num_sanity_val_steps: 0
+
+

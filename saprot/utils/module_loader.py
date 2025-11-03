@@ -57,6 +57,35 @@ def my_load_model(config):
       from model.protT5.protT5_token_classification_model import ProtT5TokenClassificationModel
       return ProtT5TokenClassificationModel(**model_config)
 
+    # ESMC models
+    if model_type == "esmc/esmc_classification_model":
+      from model.esmc.esmc_classification_model import ESMCClassificationModel
+      return ESMCClassificationModel(**model_config)
+
+    if model_type == "esmc/esmc_regression_model":
+      from model.esmc.esmc_regression_model import ESMCRegressionModel
+      return ESMCRegressionModel(**model_config)
+
+    if model_type == "esmc/esmc_token_classification_model":
+      from model.esmc.esmc_token_classification_model import ESMCTokenClassificationModel
+      return ESMCTokenClassificationModel(**model_config)
+
+    if model_type == "esmc/esmc_pair_classification_model":
+      from model.esmc.esmc_pair_classification_model import ESMCPairClassificationModel
+      return ESMCPairClassificationModel(**model_config)
+
+    if model_type == "esmc/esmc_pair_regression_model":
+      from model.esmc.esmc_pair_regression_model import ESMCPairRegressionModel
+      return ESMCPairRegressionModel(**model_config)
+
+    if model_type == "esmc/esmc_mutation_model":
+      from model.esmc.esmc_mutation_model import ESMCMutationModel
+      return ESMCMutationModel(**model_config)
+
+    if model_type == "esmc/esmc_if_model":
+      from model.esmc.esmc_if_model import ESMCIFModel
+      return ESMCIFModel(**model_config)
+
 
 ################################################################################
 ################################ load dataset ##################################
@@ -99,6 +128,27 @@ def my_load_dataset(config):
     if dataset_type == "protT5/protT5_token_classification_dataset":
       from dataset.protT5.protT5_token_classification_dataset import ProtT5TokenClassificationDataset
       return ProtT5TokenClassificationDataset(**dataset_config)
+
+    # ESMC datasets
+    if dataset_type == "esmc/esmc_classification_dataset":
+      from dataset.esmc.esmc_classification_dataset import ESMCClassificationDataset
+      return ESMCClassificationDataset(**dataset_config)
+
+    if dataset_type == "esmc/esmc_annotation_dataset":
+      from dataset.esmc.esmc_annotation_dataset import ESMCAnnotationDataset
+      return ESMCAnnotationDataset(**dataset_config)
+
+    if dataset_type == "esmc/esmc_token_classification_dataset":
+      from dataset.esmc.esmc_token_classification_dataset import ESMCTokenClassificationDataset
+      return ESMCTokenClassificationDataset(**dataset_config)
+
+    if dataset_type == "esmc/esmc_pair_classification_dataset":
+      from dataset.esmc.esmc_pair_classification_dataset import ESMCPairClassificationDataset
+      return ESMCPairClassificationDataset(**dataset_config)
+
+    if dataset_type == "esmc/esmc_pair_regression_dataset":
+      from dataset.esmc.esmc_pair_regression_dataset import ESMCPairRegressionDataset
+      return ESMCPairRegressionDataset(**dataset_config)
 
 def load_wandb(config):
     # initialize wandb

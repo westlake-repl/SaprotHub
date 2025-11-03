@@ -1,0 +1,59 @@
+import torch
+import json
+
+from ..lmdb_dataset import LMDBDataset
+from ..data_interface import register_dataset
+
+try:
+    from esm.sdk.api import ESMProtein
+    from esm.models.esmc import ESMC
+except ImportError:
+    raise ImportError("Please install esm package first: pip install esm")
+
+
+@register_dataset
+class ESMCPairRegressionDataset(LMDBDataset):
+    def __init__(self,
+                 model_name: str = "esmc_300m",
+                 max_length: int = 1024,
+                 **kwargs):
+        super().__init__(**kwargs)
+
+        temp_model = ESMC.from_pretrained(model_name)
+        self.tokenizer = temp_model.tokenizer
+        del temp_model
+
+        self.model_name = model_name
+        self.max_length = max_length
+
+    def __getitem__(self, index):
+        entry = json.loads(self._get(index))
+        seq_1, seq_2 = entry['seq_1'], entry['seq_2']
+
+        if len(seq_1) > self.max_length:
+            seq_1 = seq_1[:self.max_length]
+        if len(seq_2) > self.max_length:
+            seq_2 = seq_2[:self.max_length]
+
+        return seq_1, seq_2, entry["label"]
+
+    def __len__(self):
+        return int(self._get("length"))
+
+    def collate_fn(self, batch):
+        seqs_1, seqs_2, label_ids = tuple(zip(*batch))
+
+        label_ids = torch.tensor(label_ids)
+        labels = {"labels": label_ids}
+
+        proteins_1 = [ESMProtein(seq=s) for s in seqs_1]
+        proteins_2 = [ESMProtein(seq=s) for s in seqs_2]
+
+        inputs = {
+            "inputs_1": {"proteins": proteins_1},
+            "inputs_2": {"proteins": proteins_2}
+        }
+
+        return inputs, labels
+
+
