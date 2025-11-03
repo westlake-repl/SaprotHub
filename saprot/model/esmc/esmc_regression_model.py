@@ -28,7 +28,7 @@ class ESMCRegressionModel(ESMCBaseModel):
         else:
             raise ValueError("ESMCRegressionModel.forward expects inputs['proteins'] (list of ESMProtein)")
 
-        outputs = self.model.encode(proteins, return_hidden_states=False)
+        outputs = self.model.encode(proteins)
 
         if hasattr(outputs, 'sequence_representation'):
             repr_tensor = outputs.sequence_representation

@@ -35,8 +35,8 @@ class ESMCPairRegressionModel(ESMCBaseModel):
         proteins_1 = inputs_1.get('proteins')
         proteins_2 = inputs_2.get('proteins')
 
-        out1 = self.model.encode(proteins_1, return_hidden_states=False)
-        out2 = self.model.encode(proteins_2, return_hidden_states=False)
+        out1 = self.model.encode(proteins_1)
+        out2 = self.model.encode(proteins_2)
 
         if hasattr(out1, 'sequence_representation'):
             h1 = out1.sequence_representation

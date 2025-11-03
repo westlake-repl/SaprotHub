@@ -27,20 +27,30 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
             raise ValueError("ESMCTokenClassificationModel.forward expects inputs['proteins'] (list of ESMProtein)")
 
         # get token-level representations
-        outputs = self.model.encode(proteins, return_hidden_states=True)
+        outputs = self.model.encode(proteins)
 
-        # outputs.hidden_states: list of [L, D]
-        rep_list = outputs.hidden_states
-        max_len = max(t.shape[0] for t in rep_list)
-        hidden_size = rep_list[0].shape[-1]
-        device = rep_list[0].device
+        # token reps may come as list of [L, D] or tensor [B, L, D]
+        if hasattr(outputs, 'token_representations') and outputs.token_representations is not None:
+            rep_list = outputs.token_representations
+        elif hasattr(outputs, 'hidden_states') and outputs.hidden_states is not None:
+            rep_list = outputs.hidden_states
+        else:
+            rep_list = getattr(outputs, 'last_hidden_state', None)
 
-        batch_repr = torch.zeros(len(rep_list), max_len, hidden_size, device=device)
-        attn = torch.zeros(len(rep_list), max_len, dtype=torch.bool, device=device)
-        for i, t in enumerate(rep_list):
-            L = t.shape[0]
-            batch_repr[i, :L] = t
-            attn[i, :L] = True
+        if isinstance(rep_list, list):
+            max_len = max(t.shape[0] for t in rep_list)
+            hidden_size = rep_list[0].shape[-1]
+            device = rep_list[0].device
+            batch_repr = torch.zeros(len(rep_list), max_len, hidden_size, device=device)
+            attn = torch.zeros(len(rep_list), max_len, dtype=torch.bool, device=device)
+            for i, t in enumerate(rep_list):
+                L = t.shape[0]
+                batch_repr[i, :L] = t
+                attn[i, :L] = True
+        else:
+            # Tensor [B, L, D]
+            batch_repr = rep_list
+            attn = torch.ones(batch_repr.shape[:2], dtype=torch.bool, device=batch_repr.device)
 
         # position-wise classification
         x = self.model.classifier[0](batch_repr)

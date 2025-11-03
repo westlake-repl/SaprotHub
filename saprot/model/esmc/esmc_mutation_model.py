@@ -31,7 +31,7 @@ class ESMCMutationModel(ESMCBaseModel):
 
     @staticmethod
     def _seq_to_protein(seq: str) -> ESMProtein:
-        return ESMProtein(seq=seq)
+        return ESMProtein(sequence=seq)
 
     @staticmethod
     def _aa_index():
