@@ -36,7 +36,7 @@ class ESMCClassificationModel(ESMCBaseModel):
 
         # Build pooled representations (robust to tensor/object returns)
         pooled = []
-        for out in outputs_list:
+        for idx, out in enumerate(outputs_list):
             # Tensor returns
             if isinstance(out, torch.Tensor):
                 if out.dim() == 3:           # [B, L, D] (assume B==1 per single encode)
@@ -64,6 +64,15 @@ class ESMCClassificationModel(ESMCBaseModel):
                     break
 
             if hs is None:
+                # Debug print to understand the structure
+                print(f"[ESMC][DEBUG] Sample output #{idx} type: {type(out)}, dir: {dir(out)}")
+                if hasattr(out, '__dict__'):
+                    print(f"[ESMC][DEBUG] Sample output #{idx} __dict__: {list(out.__dict__.keys())}")
+                # Try to access .representation directly (some ESMC versions use this)
+                if hasattr(out, 'representation') and out.representation is not None:
+                    rep = out.representation
+                    pooled.append(rep if rep.dim() == 1 else rep.squeeze(0) if rep.dim() > 1 else rep)
+                    continue
                 raise ValueError("ESMC encode outputs lack representations compatible with pooling")
 
             if isinstance(hs, list):
