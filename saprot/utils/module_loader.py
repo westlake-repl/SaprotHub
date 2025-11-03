@@ -35,6 +35,9 @@ def my_load_model(config):
         model_name = "esmc_300m" if "esmc-300m" in config_path else ("esmc_600m" if "esmc-600m" in config_path else "esmc_300m")
         cfg.pop("config_path", None)
         cfg["model_name"] = model_name
+        # remove unsupported keys for ESMC models
+        cfg.pop("load_pretrained", None)
+        cfg.pop("lora_kwargs", None)
 
         # map saprot task to esmc task
         mapping = {
