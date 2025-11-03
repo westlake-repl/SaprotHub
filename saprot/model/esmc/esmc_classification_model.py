@@ -64,20 +64,20 @@ class ESMCClassificationModel(ESMCBaseModel):
                     break
 
             if hs is None:
-                # Try .structure attribute for ESMProteinTensor (some ESMC versions)
-                if hasattr(out, 'structure'):
-                    st = out.structure
-                    print(f"[ESMC][DEBUG] structure type: {type(st)}, value: {st}")
-                    if st is not None and isinstance(st, torch.Tensor):
-                        rep = st
-                        pooled.append(rep if rep.dim() == 1 else rep.squeeze(0) if rep.dim() > 1 else rep)
-                        continue
-                # Try .representation directly
-                if hasattr(out, 'representation') and out.representation is not None:
-                    rep = out.representation
-                    pooled.append(rep if rep.dim() == 1 else rep.squeeze(0) if rep.dim() > 1 else rep)
-                    continue
-                raise ValueError("ESMC encode outputs lack representations compatible with pooling. Type: {}, available attrs: {}".format(type(out), [x for x in dir(out) if not x.startswith('_')]))
+                # ESMProteinTensor: recursively detect all attributes
+                print(f"[ESMC][DEBUG] Detecting attributes for {type(out)}...")
+                for attr in ['structure', 'representation', 'embeddings', 'hidden']:
+                    if hasattr(out, attr):
+                        val = getattr(out, attr)
+                        print(f"[ESMC][DEBUG] {attr}: type={type(val)}, val={val}")
+                        if val is not None and isinstance(val, torch.Tensor):
+                            rep = val
+                            pooled.append(rep if rep.dim() == 1 else rep.squeeze(0) if rep.dim() > 1 else rep)
+                            print(f"[ESMC][DEBUG] Using {attr} with shape {tuple(rep.shape)}")
+                            break
+                else:
+                    raise ValueError("ESMC encode outputs lack representations compatible with pooling. Type: {}, available attrs: {}".format(type(out), [x for x in dir(out) if not x.startswith('_')]))
+                continue
 
             if isinstance(hs, list):
                 pooled.append(hs[0].mean(dim=0))
