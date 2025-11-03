@@ -55,6 +55,14 @@ class ESMCBaseModel(AbstractModel):
         self.model = ESMC.from_pretrained(self.model_name).to(self.device_str)
         self.tokenizer = self.model.tokenizer
 
+        # Print ESMProtein constructor signature for debugging compatibility
+        try:
+            import inspect
+            from esm.sdk.api import ESMProtein
+            print("[ESMC] ESMProtein.__init__ signature:", inspect.signature(ESMProtein.__init__))
+        except Exception as _e:
+            print("[ESMC] Failed to inspect ESMProtein signature:", _e)
+
         # Attach simple heads per task
         hidden_size = getattr(getattr(self.model, 'config', None), 'hidden_size', 960)
 
