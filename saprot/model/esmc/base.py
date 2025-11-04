@@ -159,28 +159,22 @@ class ESMCBaseModel(AbstractModel):
         Apply freezing logic after LoRA initialization.
         This should be called after LoRA is initialized and classifier is created.
         """
-        if self.lora_kwargs is None:
-            return
-        
         # First, freeze ALL parameters
         for n, p in self.model.named_parameters():
             p.requires_grad = False
-        
+
         # Then, unfreeze only LoRA parameters and classifier
         for n, p in self.model.named_parameters():
-            # Check if it's a LoRA parameter: ends with .A or .B, or contains .A. or .B.
             is_lora = n.endswith(".A") or n.endswith(".B") or ".A." in n or ".B." in n
-            # Check if it's classifier
             is_classifier = n.startswith("classifier")
-            # Only allow LoRA and classifier to be trainable
             if is_lora or is_classifier:
                 p.requires_grad = True
-        
+
         # Ensure classifier is trainable (double-check)
         if hasattr(self.model, 'classifier'):
             for name, param in self.model.classifier.named_parameters():
                 param.requires_grad = True
-        
+
         # Debug: print parameter status
         total, trainable = 0, 0
         lora_params = 0
@@ -195,6 +189,19 @@ class ESMCBaseModel(AbstractModel):
                 elif n.startswith("classifier"):
                     classifier_params += num
         print(f"ESMC LoRA Freezing Applied: Trainable={trainable:,} (LoRA={lora_params:,}, Classifier={classifier_params:,}) / Total={total:,} ({trainable/total:.2%})")
+
+    def _force_freeze_backbone_for_esmc(self):
+        # Freeze everything
+        for n, p in self.model.named_parameters():
+            p.requires_grad = False
+        # Unfreeze classifier
+        if hasattr(self.model, 'classifier'):
+            for name, param in self.model.classifier.named_parameters():
+                param.requires_grad = True
+        # Unfreeze LoRA if present
+        for n, p in self.model.named_parameters():
+            if n.endswith(".A") or n.endswith(".B") or ".A." in n or ".B." in n:
+                p.requires_grad = True
 
     def initialize_model(self):
         try:
@@ -437,6 +444,7 @@ class ESMCBaseModel(AbstractModel):
     def on_fit_start(self) -> None:
         try:
             self._apply_lora_freezing()
+            self._force_freeze_backbone_for_esmc()
         except Exception:
             pass
 
@@ -444,6 +452,7 @@ class ESMCBaseModel(AbstractModel):
     def configure_optimizers(self):
         try:
             self._apply_lora_freezing()
+            self._force_freeze_backbone_for_esmc()
         except Exception:
             pass
         return super().configure_optimizers()
@@ -452,6 +461,7 @@ class ESMCBaseModel(AbstractModel):
     def setup(self, stage: str) -> None:
         try:
             self._apply_lora_freezing()
+            self._force_freeze_backbone_for_esmc()
         except Exception:
             pass
         return super().setup(stage)
