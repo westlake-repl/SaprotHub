@@ -285,28 +285,15 @@ def load_strategy(config):
 def load_trainer(config):
     trainer_config = copy.deepcopy(config.Trainer)
     
-    # ####################################################################
-    # # START OF MODIFICATION: Force precision=32 for debugging
-    # ####################################################################
+    # Fix for ESMC models: force FP16 instead of BFloat16 for mixed precision
+    # BFloat16 has compatibility issues with certain CUDA operations
+    if hasattr(config, 'model') and hasattr(config.model, 'model_py_path'):
+        model_path = config.model.model_py_path
+        if 'esmc' in model_path.lower() and trainer_config.get('precision') == '16-mixed':
+            # Force FP16 instead of auto-selecting BFloat16
+            trainer_config['precision'] = '16'
+            print(f"ESMC model detected: Changed precision from '16-mixed' to '16' (FP16) to avoid BFloat16 compatibility issues")
     
-    # # Temporarily disable the original logic
-    # # Fix for ESMC models: force FP16 instead of BFloat16 for mixed precision
-    # # BFloat16 has compatibility issues with certain CUDA operations
-    # if hasattr(config, 'model') and hasattr(config.model, 'model_py_path'):
-    #     model_path = config.model.model_py_path
-    #     if 'esmc' in model_path.lower() and trainer_config.get('precision') == '16-mixed':
-    #         # Force FP16 instead of auto-selecting BFloat16
-    #         trainer_config['precision'] = '16'
-    #         print(f"ESMC model detected: Changed precision from '16-mixed' to '16' (FP16) to avoid BFloat16 compatibility issues")
-
-    # Force precision to 32 to completely avoid any 16-bit issues (float16 or bfloat16)
-    print("!!! DEBUGGING: Forcing trainer precision to 32 to avoid bfloat16/float16 errors. !!!")
-    trainer_config['precision'] = 32
-    
-    # ####################################################################
-    # # END OF MODIFICATION
-    # ####################################################################
-
     # Initialize wandb
     if trainer_config.logger:
         trainer_config.logger = load_wandb(config)

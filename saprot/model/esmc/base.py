@@ -161,6 +161,7 @@ class ESMCBaseModel(AbstractModel):
         # Note: Don't move model to device here - let PyTorch Lightning manage device placement
         # to avoid conflicts with mixed precision training (16-mixed)
         self.model = ESMC.from_pretrained(self.model_name)
+        self.model = self.model.to(torch.float32)
         self.tokenizer = self.model.tokenizer
 
         # Print ESMProtein constructor signature for debugging compatibility
