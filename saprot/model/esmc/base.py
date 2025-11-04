@@ -349,30 +349,4 @@ class ESMCBaseModel(AbstractModel):
                 plt.tight_layout()
                 plt.show()
         else:
-            # Fallback for non-Colab environments
-            fig = plt.figure(figsize=(6 * len(log_dict), 6))
-            ax = []
-            self.valid_metrics_list['step'].append(int(self.step))
-            for idx, metric in enumerate(log_dict.keys()):
-                value = torch.nan if log_dict[metric] is None else log_dict[metric].detach().cpu().item()
-                
-                if metric in self.valid_metrics_list:
-                    self.valid_metrics_list[metric].append(value)
-                else:
-                    self.valid_metrics_list[metric] = [value]
-                
-                ax.append(fig.add_subplot(1, len(log_dict), idx + 1))
-                ax[idx].set_title(METRIC_MAP.get(metric.lower(), metric.upper()))
-                ax[idx].set_xlabel('step')
-                ax[idx].set_ylabel(METRIC_MAP.get(metric.lower(), metric))
-                ax[idx].plot(self.valid_metrics_list['step'], self.valid_metrics_list[metric], marker='o')
-            
-            plt.tight_layout()
-            # plt.tight_layout()
-            plt.show()
-
-
-
-    # Ensure optimizer only sees LoRA + classifier as trainable (already set in _init_lora_peft)
-    def configure_optimizers(self):
-        return super().configure_optimizers()
+            # Fallback for non-Colab environm
