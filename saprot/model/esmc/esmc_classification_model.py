@@ -24,21 +24,6 @@ class ESMCClassificationModel(ESMCBaseModel):
     def initialize_model(self):
         super().initialize_model()
         
-        embed_dim = self.model.embed.embedding_dim
-        self.model.classifier = torch.nn.Sequential(
-            torch.nn.Linear(embed_dim, embed_dim),
-            torch.nn.GELU(),
-            torch.nn.Dropout(0.1),
-            torch.nn.Linear(embed_dim, self.num_labels)
-        )
-        
-        # Ensure classifier is trainable
-        # Note: If LoRA is used, freezing logic is handled in _init_lora_peft() which already ensures classifier is trainable
-        # If LoRA is not used, we need to explicitly ensure classifier is trainable
-        for name, param in self.model.named_parameters():
-            if name.startswith("classifier"):
-                param.requires_grad = True
-
         # Debug: list all Linear module names to help configure lora_kwargs.target_modules
         try:
             import torch.nn as nn
@@ -155,6 +140,8 @@ class ESMCClassificationModel(ESMCBaseModel):
     
     def loss_func(self, stage, logits, labels):
         label = labels['labels']
+        # Convert logits to float32 for stable loss calculation (FP16 can cause numerical instability)
+        logits = logits.float()
         loss = cross_entropy(logits, label)
 
         # Debug loss and label

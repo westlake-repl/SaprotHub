@@ -209,6 +209,12 @@ class ESMCBaseModel(AbstractModel):
                 torch.nn.Dropout(0.1),
                 torch.nn.Linear(hidden_size, self.num_labels)
             )
+            # Initialize classifier weights properly
+            for module in classifier:
+                if isinstance(module, torch.nn.Linear):
+                    torch.nn.init.xavier_uniform_(module.weight)
+                    if module.bias is not None:
+                        torch.nn.init.zeros_(module.bias)
             setattr(self.model, "classifier", classifier)
 
         elif self.task == 'token_classification':
@@ -218,6 +224,12 @@ class ESMCBaseModel(AbstractModel):
                 torch.nn.Dropout(0.1),
                 torch.nn.Linear(hidden_size, self.num_labels)
             )
+            # Initialize classifier weights properly
+            for module in classifier:
+                if isinstance(module, torch.nn.Linear):
+                    torch.nn.init.xavier_uniform_(module.weight)
+                    if module.bias is not None:
+                        torch.nn.init.zeros_(module.bias)
             setattr(self.model, "classifier", classifier)
 
         elif self.task == 'regression':
@@ -227,6 +239,12 @@ class ESMCBaseModel(AbstractModel):
                 torch.nn.Dropout(0.1),
                 torch.nn.Linear(hidden_size, 1)
             )
+            # Initialize classifier weights properly
+            for module in classifier:
+                if isinstance(module, torch.nn.Linear):
+                    torch.nn.init.xavier_uniform_(module.weight)
+                    if module.bias is not None:
+                        torch.nn.init.zeros_(module.bias)
             setattr(self.model, "classifier", classifier)
 
         # Freeze backbone if required
