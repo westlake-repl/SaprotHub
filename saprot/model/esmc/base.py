@@ -46,9 +46,7 @@ class ESMCBaseModel(AbstractModel):
             self.lora_kwargs = EasyDict(self.lora_kwargs)
             # Use PEFT-based LoRA to align with Saprot
             self._init_lora_peft()
-            # Re-apply freezing logic after LoRA initialization to ensure correctness
-            # This is important because subclass may override classifier after LoRA init
-            self._apply_lora_freezing()
+            # Optimizers will be (re)initialized to pick up LoRA+head params only
             self.init_optimizers()
 
         self.valid_metrics_list = {}
@@ -65,11 +63,35 @@ class ESMCBaseModel(AbstractModel):
         r = getattr(self.lora_kwargs, "r", 8)
         lora_alpha = getattr(self.lora_kwargs, "lora_alpha", 16)
         lora_dropout = getattr(self.lora_kwargs, "lora_dropout", 0.0)
-        target_modules = getattr(self.lora_kwargs, "target_modules", [
-            "q_proj", "k_proj", "v_proj", "out_proj", "fc", "mlp",
-            "intermediate.dense", "output.dense"
-        ])
+        # ESMC-specific default targets (based on actual module names from ESMC model)
+        # Module naming pattern: transformer.blocks.{i}.attn.layernorm_qkv.1, out_proj, ffn.1, ffn.3
+        # Note: Override by passing lora_kwargs.target_modules in config/Colab
+        target_modules = getattr(
+            self.lora_kwargs,
+            "target_modules",
+            [
+                # attention layers
+                "layernorm_qkv.1",  # Matches: transformer.blocks.*.attn.layernorm_qkv.1
+                "out_proj",         # Matches: transformer.blocks.*.attn.out_proj
+                # feed-forward MLP layers
+                "ffn.1",            # Matches: transformer.blocks.*.ffn.1
+                "ffn.3",            # Matches: transformer.blocks.*.ffn.3
+            ],
+        )
         task_type = "FEATURE_EXTRACTION"
+        print(f"ESMC LoRA | Config: r={r}, alpha={lora_alpha}, dropout={lora_dropout}, target_modules={target_modules}")
+        # Debug: List Linear modules that should match
+        import torch.nn as nn
+        matching_modules = []
+        for n, m in self.model.named_modules():
+            if isinstance(m, nn.Linear):
+                for target in target_modules:
+                    if target in n or n.endswith(target):
+                        matching_modules.append(n)
+                        break
+        print(f"ESMC LoRA | Found {len(matching_modules)} Linear modules that should match target_modules")
+        if matching_modules:
+            print(f"ESMC LoRA | Sample matching modules: {matching_modules[:5]}")
         config = LoraConfig(
             r=r,
             lora_alpha=lora_alpha,
@@ -80,6 +102,14 @@ class ESMCBaseModel(AbstractModel):
         )
         # Wrap model with PEFT
         self.model = get_peft_model(self.model, config)
+        # Debug: Check if LoRA parameters were actually created
+        lora_param_names = [n for n, p in self.model.named_parameters() if "lora_" in n]
+        if lora_param_names:
+            print(f"ESMC LoRA | Successfully injected LoRA into {len(lora_param_names)} parameter groups")
+            print(f"ESMC LoRA | First few LoRA params: {lora_param_names[:5]}")
+        else:
+            print(f"ESMC LoRA | WARNING: No LoRA parameters found! PEFT may not have matched any modules.")
+            print(f"ESMC LoRA | This usually means target_modules don't match the actual module names.")
         try:
             self.model.print_trainable_parameters()
         except Exception:
@@ -94,41 +124,7 @@ class ESMCBaseModel(AbstractModel):
             is_classifier = n.startswith("classifier")
             p.requires_grad = is_lora or is_classifier
     
-    def _apply_lora_freezing(self):
-        """
-        Apply freezing logic after LoRA initialization.
-        This should be called after LoRA is initialized and classifier is created.
-        """
-        # First, freeze ALL parameters
-        for n, p in self.model.named_parameters():
-            p.requires_grad = False
-
-        # Then, unfreeze only LoRA parameters and classifier
-        for n, p in self.model.named_parameters():
-            is_lora = ("lora_" in n)
-            is_classifier = n.startswith("classifier")
-            if is_lora or is_classifier:
-                p.requires_grad = True
-
-        # Ensure classifier is trainable (double-check)
-        if hasattr(self.model, 'classifier'):
-            for name, param in self.model.classifier.named_parameters():
-                param.requires_grad = True
-
-        # Debug: print parameter status
-        total, trainable = 0, 0
-        lora_params = 0
-        classifier_params = 0
-        for n, p in self.model.named_parameters():
-            num = p.numel()
-            total += num
-            if p.requires_grad:
-                trainable += num
-                if "lora_" in n:
-                    lora_params += num
-                elif n.startswith("classifier"):
-                    classifier_params += num
-        print(f"ESMC LoRA Freezing Applied: Trainable={trainable:,} (LoRA={lora_params:,}, Classifier={classifier_params:,}) / Total={total:,} ({trainable/total:.2%})")
+    # (Freezing is handled inside _init_lora_peft)
 
     def initialize_model(self):
         try:
@@ -377,10 +373,6 @@ class ESMCBaseModel(AbstractModel):
 
 
 
-    # Ensure optimizer only sees LoRA + classifier as trainable
+    # Ensure optimizer only sees LoRA + classifier as trainable (already set in _init_lora_peft)
     def configure_optimizers(self):
-        try:
-            self._apply_lora_freezing()
-        except Exception:
-            pass
         return super().configure_optimizers()

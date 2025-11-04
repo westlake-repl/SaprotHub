@@ -32,27 +32,12 @@ class ESMCClassificationModel(ESMCBaseModel):
             torch.nn.Linear(embed_dim, self.num_labels)
         )
         
-        # If LoRA is used, re-apply freezing logic after classifier is created
-        # Note: LoRA initialization happens after initialize_model() in __init__,
-        # so we need to apply freezing logic after LoRA is initialized
-        # This is handled by _apply_lora_freezing() in base class after LoRA init
-        if self.lora_kwargs is not None:
-            # Check if LoRA has been initialized (by checking if LoRA parameters exist)
-            has_lora_params = any("A" in n or "B" in n for n, _ in self.model.named_parameters())
-            if has_lora_params:
-                # LoRA already initialized, apply freezing logic
-                if hasattr(self, '_apply_lora_freezing'):
-                    self._apply_lora_freezing()
-            # If LoRA not yet initialized, freezing will be applied in __init__ after LoRA init
-        else:
-            # If not using LoRA, ensure classifier is trainable
-            for name, param in self.model.named_parameters():
-                if name.startswith("classifier"):
-                    param.requires_grad = True
-
-        # Ensure freezing is applied after classifier creation (keeps classifier trainable)
-        if hasattr(self, '_apply_lora_freezing'):
-            self._apply_lora_freezing()
+        # Ensure classifier is trainable
+        # Note: If LoRA is used, freezing logic is handled in _init_lora_peft() which already ensures classifier is trainable
+        # If LoRA is not used, we need to explicitly ensure classifier is trainable
+        for name, param in self.model.named_parameters():
+            if name.startswith("classifier"):
+                param.requires_grad = True
 
         # Debug: list all Linear module names to help configure lora_kwargs.target_modules
         try:
