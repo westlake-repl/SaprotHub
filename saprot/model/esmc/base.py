@@ -126,7 +126,7 @@ class ESMCBaseModel(AbstractModel):
                 setattr(parent, attr_name, lora_layer)
                 replaced += 1
 
-        print(f"[ESMC][LoRA] Injected LoRA into {replaced} Linear layers. r={cfg['r']} alpha={cfg['lora_alpha']} dropout={cfg['lora_dropout']}")
+        print(f"ESMC LoRA: Injected LoRA into {replaced} Linear layers. r={cfg['r']} alpha={cfg['lora_alpha']} dropout={cfg['lora_dropout']}")
         # Freeze all backbone params except LoRA and classifier
         for n, p in self.model.named_parameters():
             allow = ("A" in n or "B" in n) or n.startswith("classifier")
@@ -138,7 +138,7 @@ class ESMCBaseModel(AbstractModel):
             total += num
             if p.requires_grad:
                 trainable += num
-        print(f"[ESMC][LoRA] Trainable params: {trainable} / {total} ({trainable/total:.2%})")
+        print(f"ESMC LoRA: Trainable params: {trainable} / {total} ({trainable/total:.2%})")
 
     def initialize_model(self) -> None:
         # Workaround: ESMC's EsmSequenceTokenizer defines special tokens as read-only
@@ -163,7 +163,6 @@ class ESMCBaseModel(AbstractModel):
         try:
             import inspect
             from esm.sdk.api import ESMProtein
-            print("[ESMC] ESMProtein.__init__ signature:", inspect.signature(ESMProtein.__init__))
         except Exception as _e:
             print("[ESMC] Failed to inspect ESMProtein signature:", _e)
 
