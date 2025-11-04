@@ -104,7 +104,12 @@ class ESMCBaseModel(AbstractModel):
             "target_modules": [],
             # Dynamic discovery by substring containment (used when target_modules is empty)
             "target_name_contains": [
-                "attn", "ffn", "mlp", "q_proj", "k_proj", "v_proj", "out_proj", "proj"
+                # attention projections
+                "q_proj", "k_proj", "v_proj", "o_proj", "out_proj",
+                # transformer/ffn blocks
+                "ffn", "mlp", "fc1", "fc2", "feed_forward",
+                # generic projections
+                "proj", ".fc", ".linear", "down_proj", "up_proj"
             ],
             **(self.lora_kwargs or {}),
         }
@@ -223,19 +228,6 @@ class ESMCBaseModel(AbstractModel):
                 elif n.startswith("classifier"):
                     classifier_params += num
         print(f"ESMC LoRA Freezing Applied: Trainable={trainable:,} (LoRA={lora_params:,}, Classifier={classifier_params:,}) / Total={total:,} ({trainable/total:.2%})")
-
-    def _force_freeze_backbone_for_esmc(self):
-        # Freeze everything
-        for n, p in self.model.named_parameters():
-            p.requires_grad = False
-        # Unfreeze classifier
-        if hasattr(self.model, 'classifier'):
-            for name, param in self.model.classifier.named_parameters():
-                param.requires_grad = True
-        # Unfreeze LoRA if present
-        for n, p in self.model.named_parameters():
-            if n.endswith(".A") or n.endswith(".B") or ".A." in n or ".B." in n:
-                p.requires_grad = True
 
     def initialize_model(self):
         try:
@@ -474,28 +466,10 @@ class ESMCBaseModel(AbstractModel):
 
 
 
-    # Ensure LoRA-only freezing is applied right before training starts
-    def on_fit_start(self) -> None:
-        try:
-            self._apply_lora_freezing()
-            self._force_freeze_backbone_for_esmc()
-        except Exception:
-            pass
-
     # Ensure optimizer only sees LoRA + classifier as trainable
     def configure_optimizers(self):
         try:
             self._apply_lora_freezing()
-            self._force_freeze_backbone_for_esmc()
         except Exception:
             pass
         return super().configure_optimizers()
-
-    # Apply freezing early so Model Summary reflects correct trainables
-    def setup(self, stage: str) -> None:
-        try:
-            self._apply_lora_freezing()
-            self._force_freeze_backbone_for_esmc()
-        except Exception:
-            pass
-        return super().setup(stage)
