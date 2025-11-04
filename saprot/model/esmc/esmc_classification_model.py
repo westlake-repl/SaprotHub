@@ -139,9 +139,9 @@ class ESMCClassificationModel(ESMCBaseModel):
             # 步骤 3: 模型推理 (Inference)
             model_output = self.model.forward(
                 token_ids_batch,
-                repr_layers=[len(self.model.transformer.layers)]
+                repr_layers=[len(self.model.transformer.blocks)]
             )
-            representations = model_output['representations'][len(self.model.transformer.layers)]
+            representations = model_output['representations'][len(self.model.transformer.blocks)]
             
             # 步骤 4: 池化 (Pooling)
             mask = (token_ids_batch != self.model.tokenizer.pad_token_id).unsqueeze(-1)
