@@ -285,6 +285,15 @@ def load_strategy(config):
 def load_trainer(config):
     trainer_config = copy.deepcopy(config.Trainer)
     
+    # Fix for ESMC models: force FP16 instead of BFloat16 for mixed precision
+    # BFloat16 has compatibility issues with certain CUDA operations
+    if hasattr(config, 'model') and hasattr(config.model, 'model_py_path'):
+        model_path = config.model.model_py_path
+        if 'esmc' in model_path.lower() and trainer_config.get('precision') == '16-mixed':
+            # Force FP16 instead of auto-selecting BFloat16
+            trainer_config['precision'] = '16'
+            print(f"ESMC model detected: Changed precision from '16-mixed' to '16' (FP16) to avoid BFloat16 compatibility issues")
+    
     # Initialize wandb
     if trainer_config.logger:
         trainer_config.logger = load_wandb(config)
