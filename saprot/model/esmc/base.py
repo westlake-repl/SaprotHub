@@ -1,4 +1,5 @@
 import torch
+import os
 import matplotlib.pyplot as plt
 
 from ..abstract_model import AbstractModel
@@ -22,6 +23,7 @@ class ESMCBaseModel(AbstractModel):
                  gradient_checkpointing: bool = False,
                  lora_kwargs: dict = None,
                  **kwargs):
+                 
         assert task in ["classification", "token_classification", "regression"]
         self.task = task
         self.model_name = model_name
@@ -48,8 +50,7 @@ class ESMCBaseModel(AbstractModel):
         self.valid_metrics_list = {}
         self.valid_metrics_list['step'] = []
 
-    # ------------------------- LoRA for ESMC (lightweight) -------------------------
-    def _init_lora_lightweight(self, hidden_size: int) -> None:
+    def _init_lora_lightweight(self, hidden_size: int):
         """
         A minimal LoRA injection for ESMC: replace selected Linear layers with LoRALinear.
         Defaults target to common attention/ffn linear layers; keep classifier trainable.
@@ -82,7 +83,7 @@ class ESMCBaseModel(AbstractModel):
                     nn.init.kaiming_uniform_(self.A, a=math.sqrt(5))
                     nn.init.zeros_(self.B)
 
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
+            def forward(self, x: torch.Tensor):
                 out = torch.nn.functional.linear(x, self.weight, self.bias)
                 if self.A is not None and self.B is not None:
                     lora = self.dropout(x) @ self.A @ self.B
@@ -97,16 +98,14 @@ class ESMCBaseModel(AbstractModel):
             "lora_alpha": 16,
             "lora_dropout": 0.0,
             "target_modules": [
-                # common ESMC linear names (best-effort):
-                "attn.layernorm_qkv.1",  # qkv projection linear inside Sequential
-                "attn.out_proj",
-                "ffn.1",                  # first FFN linear
-                "ffn.3",                  # second FFN linear
+                "attn.layernorm_qkv.1",
+                "ffn.1",
+                "ffn.3",
             ],
             **(self.lora_kwargs or {}),
         }
 
-        def name_matches(name: str, targets: Iterable[str]) -> bool:
+        def name_matches(name: str, targets: Iterable[str]):
             for t in targets:
                 if name.endswith(t):
                     return True
@@ -140,10 +139,7 @@ class ESMCBaseModel(AbstractModel):
                 trainable += num
         print(f"ESMC LoRA: Trainable params: {trainable} / {total} ({trainable/total:.2%})")
 
-    def initialize_model(self) -> None:
-        # Workaround: ESMC's EsmSequenceTokenizer defines special tokens as read-only
-        # properties that clash with transformers setters in some versions.
-        # Remove those class-level properties before tokenizer construction.
+    def initialize_model(self):
         try:
             from esm.tokenization.sequence_tokenizer import EsmSequenceTokenizer
             for _prop in ["cls_token", "pad_token", "mask_token", "eos_token"]:
@@ -156,7 +152,9 @@ class ESMCBaseModel(AbstractModel):
             pass
 
         # Load ESMC backbone and tokenizer
-        self.model = ESMC.from_pretrained(self.model_name).to(self.device_str)
+        # Note: Don't move model to device here - let PyTorch Lightning manage device placement
+        # to avoid conflicts with mixed precision training (16-mixed)
+        self.model = ESMC.from_pretrained(self.model_name)
         self.tokenizer = self.model.tokenizer
 
         # Print ESMProtein constructor signature for debugging compatibility
@@ -198,13 +196,59 @@ class ESMCBaseModel(AbstractModel):
 
         # Freeze backbone if required
         if self.freeze_backbone:
-            for p in self.model.embed.parameters():
-                p.requires_grad = False
-            for p in self.model.transformer.parameters():
-                p.requires_grad = False
+            for name, param in self.model.named_parameters():
+                if not name.startswith("classifier"):
+                    param.requires_grad = False
 
     def initialize_metrics(self, stage: str) -> dict:
         return {}
+
+    def save_checkpoint(self, save_path: str, save_info: dict = None, save_weights_only: bool = True) -> None:
+        """
+        Rewrite this function to save LoRA parameters (for ESMC lightweight LoRA)
+        """
+        
+        if not self.lora_kwargs:
+            # If not using LoRA, use default save method
+            return super().save_checkpoint(save_path, save_info, save_weights_only)
+        
+        else:
+            # Save LoRA parameters (A and B) and classifier
+            try:
+                if hasattr(self.trainer.strategy, "deepspeed_engine"):
+                    save_path = os.path.dirname(save_path)
+            except Exception as e:
+                pass
+            
+            dir = os.path.dirname(save_path)
+            os.makedirs(dir, exist_ok=True)
+            
+            state_dict = {} if save_info is None else save_info
+            
+            # Extract only LoRA parameters (A and B) and classifier
+            lora_state_dict = {}
+            for name, param in self.model.named_parameters():
+                # Save LoRA parameters (A and B) and classifier
+                if ("A" in name or "B" in name) or name.startswith("classifier"):
+                    lora_state_dict[name] = param.float()  # Convert to fp32
+            
+            state_dict["model"] = lora_state_dict
+            
+            if not save_weights_only:
+                state_dict["global_step"] = self.step
+                state_dict["epoch"] = self.epoch
+                state_dict["best_value"] = getattr(self, "best_value", None)
+                state_dict["lr_scheduler"] = self.lr_schedulers().state_dict()
+                
+                # If not using DeepSpeed, save optimizer state
+                try:
+                    if not hasattr(self.trainer.strategy, "deepspeed_engine"):
+                        state_dict["optimizer"] = self.optimizers().optimizer.state_dict()
+                except Exception:
+                    pass
+            
+            torch.save(state_dict, save_path)
+            print(f"ESMC LoRA checkpoint saved to {save_path}")
 
     def output_test_metrics(self, log_dict):
         # Remove valid_loss from log_dict when the task is classification

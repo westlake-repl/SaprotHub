@@ -30,7 +30,7 @@ class ESMCMutationModel(ESMCBaseModel):
         return {f"{stage}_spearman": torchmetrics.SpearmanCorrCoef()}
 
     @staticmethod
-    def _seq_to_protein(seq: str) -> ESMProtein:
+    def _seq_to_protein(seq: str):
         return ESMProtein(sequence=seq)
 
     @staticmethod

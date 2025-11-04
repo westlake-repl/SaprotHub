@@ -21,7 +21,7 @@ class ESMCIFModel(ESMCBaseModel):
         return {f"{stage}_acc": torchmetrics.Accuracy(ignore_index=-1)}
 
     @staticmethod
-    def _seq_to_protein(seq: str) -> ESMProtein:
+    def _seq_to_protein(seq: str):
         return ESMProtein(seq=seq)
 
     @staticmethod

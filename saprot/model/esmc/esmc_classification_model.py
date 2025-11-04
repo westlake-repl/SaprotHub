@@ -3,14 +3,13 @@ import torch
 from torch.nn.functional import cross_entropy
 from torch.nn.utils.rnn import pad_sequence
 
-# 确保下面的导入路径与您的项目结构相符
 from saprot.model.model_interface import register_model
 from saprot.model.esmc.base import ESMCBaseModel
 
 try:
     from esm.sdk.api import ESMProtein
 except ImportError:
-    raise ImportError("Please install esm package first: pip install esm")
+    raise ImportError("Please install esm package first")
 
 
 @register_model
@@ -19,17 +18,19 @@ class ESMCClassificationModel(ESMCBaseModel):
         self.num_labels = num_labels
         super().__init__(task="classification", **kwargs)
 
-        embed_dim = self.model.embed.embedding_dim
+    def initialize_metrics(self, stage):
+        return {f"{stage}_acc": torchmetrics.Accuracy(task="multiclass", num_classes=self.num_labels)}
+
+    def initialize_model(self):
+        super().initialize_model()
         
+        embed_dim = self.model.embed.embedding_dim
         self.model.classifier = torch.nn.Sequential(
             torch.nn.Linear(embed_dim, embed_dim),
             torch.nn.GELU(),
-            torch.nn.LayerNorm(embed_dim),
+            torch.nn.Dropout(0.1),
             torch.nn.Linear(embed_dim, self.num_labels)
         )
-
-    def initialize_metrics(self, stage):
-        return {f"{stage}_acc": torchmetrics.Accuracy(task="multiclass", num_classes=self.num_labels)}
 
     def forward(self, inputs, coords=None):
         if isinstance(inputs, dict) and 'proteins' in inputs:
@@ -41,7 +42,7 @@ class ESMCClassificationModel(ESMCBaseModel):
             proteins = [proteins]
 
         with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            # 步骤 1 & 2: Tokenization 和 Padding (合并)
+            # Tokenization & Padding
             sequences = [p.sequence for p in proteins]
             batch_encoding = self.model.tokenizer(
                 sequences, 
@@ -52,11 +53,11 @@ class ESMCClassificationModel(ESMCBaseModel):
 
             attention_mask = batch_encoding['attention_mask'].to(self.device)
 
-            # 步骤 3: 模型推理 (Inference)
+            # Inference
             model_output = self.model.forward(token_ids_batch)
             representations = model_output.hidden_states[-1]
 
-            # 步骤 4: 池化 (Pooling)
+            #  Pooling
             mask = (token_ids_batch != self.model.tokenizer.pad_token_id).unsqueeze(-1)
             
             sequence_lengths = mask.sum(dim=1)
@@ -66,24 +67,12 @@ class ESMCClassificationModel(ESMCBaseModel):
 
         logits = self.model.classifier(pooled_repr)
 
-        # Debug: check logits
-        print(f"[ESMC Classification] Logits shape: {logits.shape}, dtype: {logits.dtype}")
-        print(f"[ESMC Classification] Logits min: {logits.min().item():.4f}, max: {logits.max().item():.4f}, mean: {logits.mean().item():.4f}")
-        print(f"[ESMC Classification] Pooled repr shape: {pooled_repr.shape}, dtype: {pooled_repr.dtype}")
-        print(f"[ESMC Classification] Pooled repr min: {pooled_repr.min().item():.4f}, max: {pooled_repr.max().item():.4f}, mean: {pooled_repr.mean().item():.4f}")
-
         return logits
     
     def loss_func(self, stage, logits, labels):
         label = labels['labels']
         
-        # Debug: check logits and labels
-        print(f"[ESMC Classification] {stage} - Logits shape: {logits.shape}, Label shape: {label.shape}")
-        print(f"[ESMC Classification] {stage} - Label dtype: {label.dtype}, Label range: [{label.min().item()}, {label.max().item()}]")
-        print(f"[ESMC Classification] {stage} - Logits stats - min: {logits.min().item():.4f}, max: {logits.max().item():.4f}, mean: {logits.mean().item():.4f}")
-        
         loss = cross_entropy(logits, label)
-        print(f"[ESMC Classification] {stage} - Loss: {loss.item():.4f}")
 
         # Update metrics
         for metric in self.metrics[stage].values():
