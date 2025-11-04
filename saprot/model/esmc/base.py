@@ -45,6 +45,9 @@ class ESMCBaseModel(AbstractModel):
             self.freeze_backbone = False
             self.lora_kwargs = EasyDict(self.lora_kwargs)
             self._init_lora_lightweight(hidden_size=None)
+            # Re-apply freezing logic after LoRA initialization to ensure correctness
+            # This is important because subclass may override classifier after LoRA init
+            self._apply_lora_freezing()
             self.init_optimizers()
 
         self.valid_metrics_list = {}
@@ -150,6 +153,48 @@ class ESMCBaseModel(AbstractModel):
             if p.requires_grad:
                 trainable += num
         print(f"ESMC LoRA: Trainable params: {trainable:,} / {total:,} ({trainable/total:.2%})")
+    
+    def _apply_lora_freezing(self):
+        """
+        Apply freezing logic after LoRA initialization.
+        This should be called after LoRA is initialized and classifier is created.
+        """
+        if self.lora_kwargs is None:
+            return
+        
+        # First, freeze ALL parameters
+        for n, p in self.model.named_parameters():
+            p.requires_grad = False
+        
+        # Then, unfreeze only LoRA parameters and classifier
+        for n, p in self.model.named_parameters():
+            # Check if it's a LoRA parameter: ends with .A or .B, or contains .A. or .B.
+            is_lora = n.endswith(".A") or n.endswith(".B") or ".A." in n or ".B." in n
+            # Check if it's classifier
+            is_classifier = n.startswith("classifier")
+            # Only allow LoRA and classifier to be trainable
+            if is_lora or is_classifier:
+                p.requires_grad = True
+        
+        # Ensure classifier is trainable (double-check)
+        if hasattr(self.model, 'classifier'):
+            for name, param in self.model.classifier.named_parameters():
+                param.requires_grad = True
+        
+        # Debug: print parameter status
+        total, trainable = 0, 0
+        lora_params = 0
+        classifier_params = 0
+        for n, p in self.model.named_parameters():
+            num = p.numel()
+            total += num
+            if p.requires_grad:
+                trainable += num
+                if n.endswith(".A") or n.endswith(".B") or ".A." in n or ".B." in n:
+                    lora_params += num
+                elif n.startswith("classifier"):
+                    classifier_params += num
+        print(f"ESMC LoRA Freezing Applied: Trainable={trainable:,} (LoRA={lora_params:,}, Classifier={classifier_params:,}) / Total={total:,} ({trainable/total:.2%})")
 
     def initialize_model(self):
         try:

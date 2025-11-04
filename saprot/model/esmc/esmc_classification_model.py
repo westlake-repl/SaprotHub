@@ -33,16 +33,18 @@ class ESMCClassificationModel(ESMCBaseModel):
         )
         
         # If LoRA is used, re-apply freezing logic after classifier is created
-        # This ensures only LoRA parameters and classifier are trainable
+        # Note: LoRA initialization happens after initialize_model() in __init__,
+        # so we need to apply freezing logic after LoRA is initialized
+        # This is handled by _apply_lora_freezing() in base class after LoRA init
+        # But we also apply it here as a safeguard
         if self.lora_kwargs is not None:
-            # Freeze all backbone params except LoRA (A and B) and classifier
-            for name, param in self.model.named_parameters():
-                # Check if it's LoRA parameter (ends with .A or .B)
-                is_lora = name.endswith(".A") or name.endswith(".B") or ".A." in name or ".B." in name
-                # Check if it's classifier
-                is_classifier = name.startswith("classifier")
-                # Only allow LoRA and classifier to be trainable
-                param.requires_grad = is_lora or is_classifier
+            # Check if LoRA has been initialized (by checking if LoRA parameters exist)
+            has_lora_params = any("A" in n or "B" in n for n, _ in self.model.named_parameters())
+            if has_lora_params:
+                # LoRA already initialized, apply freezing logic
+                if hasattr(self, '_apply_lora_freezing'):
+                    self._apply_lora_freezing()
+            # If LoRA not yet initialized, freezing will be applied in __init__ after LoRA init
         else:
             # If not using LoRA, ensure classifier is trainable
             for name, param in self.model.named_parameters():
