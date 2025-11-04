@@ -55,7 +55,7 @@ Trainer:
   devices: 1
   num_nodes: 1
   accumulate_grad_batches: 1
-  precision: 16
+  precision: 16-mixed
   num_sanity_val_steps: 0
 
 

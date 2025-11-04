@@ -54,7 +54,6 @@ class ESMCClassificationModel(ESMCBaseModel):
 
             # 步骤 3: 模型推理 (Inference)
             model_output = self.model.forward(token_ids_batch)
-            print(">>>> DEBUG: Attributes of model_output:", dir(model_output))
             representations = model_output.hidden_states[-1]
 
             # 步骤 4: 池化 (Pooling)
@@ -67,11 +66,24 @@ class ESMCClassificationModel(ESMCBaseModel):
 
         logits = self.model.classifier(pooled_repr)
 
+        # Debug: check logits
+        print(f"[ESMC Classification] Logits shape: {logits.shape}, dtype: {logits.dtype}")
+        print(f"[ESMC Classification] Logits min: {logits.min().item():.4f}, max: {logits.max().item():.4f}, mean: {logits.mean().item():.4f}")
+        print(f"[ESMC Classification] Pooled repr shape: {pooled_repr.shape}, dtype: {pooled_repr.dtype}")
+        print(f"[ESMC Classification] Pooled repr min: {pooled_repr.min().item():.4f}, max: {pooled_repr.max().item():.4f}, mean: {pooled_repr.mean().item():.4f}")
+
         return logits
     
     def loss_func(self, stage, logits, labels):
         label = labels['labels']
+        
+        # Debug: check logits and labels
+        print(f"[ESMC Classification] {stage} - Logits shape: {logits.shape}, Label shape: {label.shape}")
+        print(f"[ESMC Classification] {stage} - Label dtype: {label.dtype}, Label range: [{label.min().item()}, {label.max().item()}]")
+        print(f"[ESMC Classification] {stage} - Logits stats - min: {logits.min().item():.4f}, max: {logits.max().item():.4f}, mean: {logits.mean().item():.4f}")
+        
         loss = cross_entropy(logits, label)
+        print(f"[ESMC Classification] {stage} - Loss: {loss.item():.4f}")
 
         # Update metrics
         for metric in self.metrics[stage].values():
