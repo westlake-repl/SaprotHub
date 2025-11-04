@@ -172,20 +172,6 @@ def load_strategy(config):
 # Initialize a pytorch lightning trainer
 def load_trainer(config):
     trainer_config = copy.deepcopy(config.Trainer)
-
-    # --- 关键修正代码 ---
-    # 获取原始精度设置
-    original_precision = trainer_config.get('precision', None)
-    
-    # 检查并强制修正为 '16-mixed' (FP16)
-    if original_precision != '16-mixed':
-        print("="*80)
-        print(f"!!! [自动修正] 发现不兼容的精度设置: '{original_precision}'")
-        print("!!! 正在强制修正为 '16-mixed' 以启用FP16混合精度并避免错误。")
-        trainer_config['precision'] = '16-mixed'
-        print("="*80)
-
-    # --- 修正结束 ---
     
     # Initialize wandb
     if trainer_config.logger:
