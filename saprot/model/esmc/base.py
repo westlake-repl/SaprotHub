@@ -127,15 +127,21 @@ class ESMCBaseModel(AbstractModel):
 
         print(f"ESMC LoRA: Injected LoRA into {replaced} Linear layers. r={cfg['r']} alpha={cfg['lora_alpha']} dropout={cfg['lora_dropout']}")
         # Freeze all backbone params except LoRA and classifier
-        # This ensures LoRA parameters (A and B) and classifier are trainable
+        # LoRA parameters end with .A or .B (e.g., "transformer.layers.0.attn.layernorm_qkv.1.A")
+        # We need to be more precise with the matching to avoid false positives
         for n, p in self.model.named_parameters():
-            allow = ("A" in n or "B" in n) or n.startswith("classifier")
-            p.requires_grad = allow
+            # Check if it's a LoRA parameter: ends with .A or .B, or contains .A. or .B.
+            is_lora = n.endswith(".A") or n.endswith(".B") or ".A." in n or ".B." in n
+            # Check if it's classifier
+            is_classifier = n.startswith("classifier")
+            # Only allow LoRA and classifier to be trainable
+            p.requires_grad = is_lora or is_classifier
+        
         # Ensure classifier is trainable (in case it was overridden by subclass after LoRA init)
-        # This is a safeguard in case subclass's initialize_model() was called after LoRA init
         if hasattr(self.model, 'classifier'):
             for name, param in self.model.classifier.named_parameters():
                 param.requires_grad = True
+        
         # report
         total, trainable = 0, 0
         for p in self.model.parameters():
@@ -143,7 +149,7 @@ class ESMCBaseModel(AbstractModel):
             total += num
             if p.requires_grad:
                 trainable += num
-        print(f"ESMC LoRA: Trainable params: {trainable} / {total} ({trainable/total:.2%})")
+        print(f"ESMC LoRA: Trainable params: {trainable:,} / {total:,} ({trainable/total:.2%})")
 
     def initialize_model(self):
         try:

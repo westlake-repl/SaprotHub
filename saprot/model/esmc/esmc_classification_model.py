@@ -32,19 +32,21 @@ class ESMCClassificationModel(ESMCBaseModel):
             torch.nn.Linear(embed_dim, self.num_labels)
         )
         
-        # Ensure classifier parameters are trainable
-        # This is important because:
-        # 1. super().initialize_model() may have frozen parameters if freeze_backbone was set
-        # 2. If LoRA is used, we need to ensure classifier is trainable after LoRA init
-        for name, param in self.model.named_parameters():
-            if name.startswith("classifier"):
-                param.requires_grad = True
-        
-        # If LoRA was initialized, ensure LoRA parameters are also trainable
-        # (LoRA init happens after initialize_model() in __init__, but we want to be safe)
+        # If LoRA is used, re-apply freezing logic after classifier is created
+        # This ensures only LoRA parameters and classifier are trainable
         if self.lora_kwargs is not None:
+            # Freeze all backbone params except LoRA (A and B) and classifier
             for name, param in self.model.named_parameters():
-                if "A" in name or "B" in name:
+                # Check if it's LoRA parameter (ends with .A or .B)
+                is_lora = name.endswith(".A") or name.endswith(".B") or ".A." in name or ".B." in name
+                # Check if it's classifier
+                is_classifier = name.startswith("classifier")
+                # Only allow LoRA and classifier to be trainable
+                param.requires_grad = is_lora or is_classifier
+        else:
+            # If not using LoRA, ensure classifier is trainable
+            for name, param in self.model.named_parameters():
+                if name.startswith("classifier"):
                     param.requires_grad = True
 
     def forward(self, inputs, coords=None):
