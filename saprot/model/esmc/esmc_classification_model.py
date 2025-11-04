@@ -90,16 +90,16 @@ class ESMCClassificationModel(ESMCBaseModel):
             proteins = [proteins]
 
         with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            token_ids_list = [self.model.tokenizer(p.sequence) for p in proteins]
-
-            # 步骤 2: 填充 (Padding)
-            token_ids_batch = pad_sequence(
-                token_ids_list,
-                batch_first=True,
-                padding_value=self.model.tokenizer.pad_token_id
+            # 步骤 1 & 2: Tokenization 和 Padding (合并)
+            sequences = [p.sequence for p in proteins]
+            batch_encoding = self.model.tokenizer(
+                sequences, 
+                padding=True, 
+                return_tensors="pt"
             )
-            
-            token_ids_batch = token_ids_batch.to(self.device)
+            token_ids_batch = batch_encoding['input_ids'].to(self.device)
+
+            attention_mask = batch_encoding['attention_mask'].to(self.device)
 
             # 步骤 3: 模型推理 (Inference)
             model_output = self.model.forward(
