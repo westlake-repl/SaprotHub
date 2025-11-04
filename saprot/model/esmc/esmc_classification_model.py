@@ -55,7 +55,7 @@ class ESMCClassificationModel(ESMCBaseModel):
             # 步骤 3: 模型推理 (Inference)
             model_output = self.model.forward(token_ids_batch)
             print(">>>> DEBUG: Attributes of model_output:", dir(model_output))
-            representations = model_output.representations
+            representations = model_output.hidden_states[-1]
 
             # 步骤 4: 池化 (Pooling)
             mask = (token_ids_batch != self.model.tokenizer.pad_token_id).unsqueeze(-1)
