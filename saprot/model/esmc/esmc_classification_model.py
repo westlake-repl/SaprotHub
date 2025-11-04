@@ -63,9 +63,31 @@ class ESMCClassificationModel(ESMCBaseModel):
         if not isinstance(proteins, list):
             proteins = [proteins]
 
+        # Debug: devices and param stats
+        try:
+            model_device = next(self.model.parameters()).device
+        except Exception:
+            model_device = getattr(self, 'device', 'cpu')
+        total_params = 0
+        trainable_params = 0
+        lora_params = 0
+        classifier_params = 0
+        for n, p in self.model.named_parameters():
+            num = p.numel()
+            total_params += num
+            if p.requires_grad:
+                trainable_params += num
+                if n.endswith('.A') or n.endswith('.B') or '.A.' in n or '.B.' in n:
+                    lora_params += num
+                elif n.startswith('classifier'):
+                    classifier_params += num
+        print(f"ESMC Debug | device: model={model_device} self.device={self.device}")
+        print(f"ESMC Debug | params: trainable={trainable_params:,} (LoRA={lora_params:,}, classifier={classifier_params:,}) / total={total_params:,} ({(trainable_params/total_params if total_params else 0):.2%})")
+
         with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
             # Tokenization & Padding
             sequences = [p.sequence for p in proteins]
+            print(f"ESMC Debug | batch: {len(sequences)} sequences; lens={[len(s) for s in sequences][:8]}{'...' if len(sequences)>8 else ''}")
             batch_encoding = self.model.tokenizer(
                 sequences, 
                 padding=True, 
@@ -73,10 +95,13 @@ class ESMCClassificationModel(ESMCBaseModel):
             )
             token_ids_batch = batch_encoding['input_ids'].to(self.device)
             attention_mask = batch_encoding['attention_mask'].to(self.device)
+            print(f"ESMC Debug | token_ids: shape={tuple(token_ids_batch.shape)} dtype={token_ids_batch.dtype} device={token_ids_batch.device}")
+            print(f"ESMC Debug | attn_mask: shape={tuple(attention_mask.shape)} dtype={attention_mask.dtype} device={attention_mask.device}")
 
             # Inference
             model_output = self.model.forward(token_ids_batch)
             representations = model_output.hidden_states[-1]
+            print(f"ESMC Debug | last_hidden: shape={tuple(representations.shape)} dtype={representations.dtype} device={representations.device}")
 
             #  Pooling
             mask = (token_ids_batch != self.model.tokenizer.pad_token_id).unsqueeze(-1)
@@ -85,14 +110,28 @@ class ESMCClassificationModel(ESMCBaseModel):
             sequence_lengths = sequence_lengths.clamp(min=1)
             
             pooled_repr = (representations * mask).sum(dim=1) / sequence_lengths
+            print(f"ESMC Debug | pooled: shape={tuple(pooled_repr.shape)} dtype={pooled_repr.dtype} device={pooled_repr.device}")
 
         logits = self.model.classifier(pooled_repr)
+        # Classifier stats
+        cls_total = sum(p.numel() for p in self.model.classifier.parameters())
+        cls_trainable = sum(p.numel() for p in self.model.classifier.parameters() if p.requires_grad)
+        print(f"ESMC Debug | classifier params: trainable={cls_trainable:,} / total={cls_total:,}")
+        print(f"ESMC Debug | logits: shape={tuple(logits.shape)} dtype={logits.dtype} device={logits.device}")
 
         return logits
     
     def loss_func(self, stage, logits, labels):
         label = labels['labels']
         loss = cross_entropy(logits, label)
+
+        # Debug loss and label
+        try:
+            unique = torch.unique(label).tolist()
+        except Exception:
+            unique = []
+        print(f"ESMC Debug | stage={stage} labels: shape={tuple(label.shape)} unique={unique}")
+        print(f"ESMC Debug | stage={stage} loss: {loss.item():.6f}")
 
         # Update metrics
         for metric in self.metrics[stage].values():
