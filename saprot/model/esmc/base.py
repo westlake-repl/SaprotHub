@@ -130,6 +130,7 @@ class ESMCBaseModel(AbstractModel):
             print("ESMC Debug | failed to list Linear modules:", _e)
 
         replaced = 0
+        replaced_names = []
         named_modules_map = dict(self.model.named_modules())
         for name, module in list(named_modules_map.items()):
             # skip classifier
@@ -155,8 +156,13 @@ class ESMCBaseModel(AbstractModel):
             lora_layer = LoRALinear(module, r=cfg["r"], alpha=cfg["lora_alpha"], dropout=cfg["lora_dropout"])
             setattr(parent, attr_name, lora_layer)
             replaced += 1
+            replaced_names.append(name)
 
         print(f"ESMC LoRA: Injected LoRA into {replaced} Linear layers. r={cfg['r']} alpha={cfg['lora_alpha']} dropout={cfg['lora_dropout']}")
+        if replaced_names:
+            print("ESMC LoRA: replaced modules (first 50):")
+            for n in replaced_names[:50]:
+                print(f"  {n}")
         # Freeze all backbone params except LoRA and classifier
         # LoRA parameters end with .A or .B (e.g., "transformer.layers.0.attn.layernorm_qkv.1.A")
         # We need to be more precise with the matching to avoid false positives
