@@ -71,42 +71,6 @@ class SaprotBaseModel(AbstractModel):
         self.valid_metrics_list = {}
         self.valid_metrics_list['step'] = []
     
-    def _debug_print_trainables(self):
-        try:
-            model_device = next(self.model.parameters()).device
-        except Exception:
-            model_device = getattr(self, 'device', 'cpu')
-
-        total_params = 0
-        trainable_params = 0
-        lora_params = 0
-        classifier_params = 0
-        for n, p in self.model.named_parameters():
-            num = p.numel()
-            total_params += num
-            if p.requires_grad:
-                trainable_params += num
-                # Heuristic: PEFT/Saprot LoRA parameters usually contain 'lora' in their names
-                if ('lora' in n.lower()):
-                    lora_params += num
-                # Classifier heads commonly start with/contain 'classifier'
-                elif ('classifier' in n):
-                    classifier_params += num
-
-        print(f"Saprot Debug | lora_kwargs is None: {self.lora_kwargs is None}")
-        # If PEFT is used, these attributes may exist
-        active_adapter = getattr(self.model, 'active_adapter', None)
-        if active_adapter is not None:
-            print(f"Saprot Debug | active_adapter: {active_adapter}")
-            try:
-                # Some PEFT models provide this helper
-                self.model.print_trainable_parameters()
-            except Exception:
-                pass
-        print(f"Saprot Debug | device: model={model_device} self.device={getattr(self,'device','cpu')}")
-        ratio = (trainable_params/total_params) if total_params else 0.0
-        print(f"Saprot Debug | params: trainable={trainable_params:,} (LoRA={lora_params:,}, classifier={classifier_params:,}) / total={total_params:,} ({ratio:.2%})")
-
     def _init_lora(self):
         from peft import (
             LoraConfig,
@@ -282,9 +246,6 @@ class SaprotBaseModel(AbstractModel):
         if self.freeze_backbone:
             for param in self.model.esm.parameters():
                 param.requires_grad = False
-
-        # Debug: print trainable stats after model/backbone init (before LoRA injection)
-        self._debug_print_trainables()
         
         # # Disable the pooling layer
         # backbone = getattr(self.model, "esm", self.model.bert)
@@ -292,14 +253,6 @@ class SaprotBaseModel(AbstractModel):
     
     def initialize_metrics(self, stage: str) -> dict:
         return {}
-
-    # Ensure optimizer only sees intended trainables; also print a summary
-    def configure_optimizers(self):
-        try:
-            self._debug_print_trainables()
-        except Exception:
-            pass
-        return super().configure_optimizers()
     
     def get_hidden_states_from_dict(self, inputs: dict, reduction: str = None) -> list:
         """

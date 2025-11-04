@@ -111,6 +111,8 @@ class ESMCBaseModel(AbstractModel):
                 # generic projections
                 "proj", ".fc", ".linear", "down_proj", "up_proj"
             ],
+            # Fallback switch: inject into all Linear layers if nothing matched
+            "inject_all_when_no_match": True,
             **(self.lora_kwargs or {}),
         }
 
@@ -168,6 +170,26 @@ class ESMCBaseModel(AbstractModel):
             print("ESMC LoRA: replaced modules (first 50):")
             for n in replaced_names[:50]:
                 print(f"  {n}")
+        # Fallback: if nothing matched, inject into all Linear layers (excluding classifier)
+        if replaced == 0 and cfg.get("inject_all_when_no_match", True):
+            try:
+                named_modules_map = dict(self.model.named_modules())
+                for name, module in list(named_modules_map.items()):
+                    if not isinstance(module, nn.Linear):
+                        continue
+                    if name.startswith("classifier") or name.endswith("classifier"):
+                        continue
+                    parent_name = name.rsplit('.', 1)[0] if '.' in name else ''
+                    attr_name = name.split('.')[-1]
+                    parent = self.model if parent_name == '' else named_modules_map.get(parent_name)
+                    if parent is None:
+                        continue
+                    lora_layer = LoRALinear(module, r=cfg["r"], alpha=cfg["lora_alpha"], dropout=cfg["lora_dropout"])
+                    setattr(parent, attr_name, lora_layer)
+                    replaced += 1
+                print(f"ESMC LoRA: Fallback injected into {replaced} Linear layers in total.")
+            except Exception as _e:
+                print("ESMC LoRA: Fallback injection failed:", _e)
         # Freeze all backbone params except LoRA and classifier
         # LoRA parameters end with .A or .B (e.g., "transformer.layers.0.attn.layernorm_qkv.1.A")
         # We need to be more precise with the matching to avoid false positives
