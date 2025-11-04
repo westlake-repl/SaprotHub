@@ -127,9 +127,15 @@ class ESMCBaseModel(AbstractModel):
 
         print(f"ESMC LoRA: Injected LoRA into {replaced} Linear layers. r={cfg['r']} alpha={cfg['lora_alpha']} dropout={cfg['lora_dropout']}")
         # Freeze all backbone params except LoRA and classifier
+        # This ensures LoRA parameters (A and B) and classifier are trainable
         for n, p in self.model.named_parameters():
             allow = ("A" in n or "B" in n) or n.startswith("classifier")
             p.requires_grad = allow
+        # Ensure classifier is trainable (in case it was overridden by subclass after LoRA init)
+        # This is a safeguard in case subclass's initialize_model() was called after LoRA init
+        if hasattr(self.model, 'classifier'):
+            for name, param in self.model.classifier.named_parameters():
+                param.requires_grad = True
         # report
         total, trainable = 0, 0
         for p in self.model.parameters():
@@ -195,7 +201,8 @@ class ESMCBaseModel(AbstractModel):
             setattr(self.model, "classifier", classifier)
 
         # Freeze backbone if required
-        if self.freeze_backbone:
+        # Note: Don't freeze if LoRA will be used (LoRA initialization will handle parameter freezing)
+        if self.freeze_backbone and self.lora_kwargs is None:
             for name, param in self.model.named_parameters():
                 if not name.startswith("classifier"):
                     param.requires_grad = False

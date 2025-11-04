@@ -31,6 +31,21 @@ class ESMCClassificationModel(ESMCBaseModel):
             torch.nn.Dropout(0.1),
             torch.nn.Linear(embed_dim, self.num_labels)
         )
+        
+        # Ensure classifier parameters are trainable
+        # This is important because:
+        # 1. super().initialize_model() may have frozen parameters if freeze_backbone was set
+        # 2. If LoRA is used, we need to ensure classifier is trainable after LoRA init
+        for name, param in self.model.named_parameters():
+            if name.startswith("classifier"):
+                param.requires_grad = True
+        
+        # If LoRA was initialized, ensure LoRA parameters are also trainable
+        # (LoRA init happens after initialize_model() in __init__, but we want to be safe)
+        if self.lora_kwargs is not None:
+            for name, param in self.model.named_parameters():
+                if "A" in name or "B" in name:
+                    param.requires_grad = True
 
     def forward(self, inputs, coords=None):
         if isinstance(inputs, dict) and 'proteins' in inputs:
