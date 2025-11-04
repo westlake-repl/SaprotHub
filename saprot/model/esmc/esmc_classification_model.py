@@ -28,55 +28,6 @@ class ESMCClassificationModel(ESMCBaseModel):
             torch.nn.Linear(embed_dim, self.num_labels)
         )
 
-        # ====================================================================
-        # ======================= 诊断代码注入处 ===========================
-        # ====================================================================
-        # 当这个类被实例化时，下面的代码会立即执行，
-        # 打印出关键对象的属性，帮助我们找到正确的 padding_idx 路径。
-        print("\n" + "="*60)
-        print("=== RUNNING DIAGNOSTIC TO FIND CORRECT `padding_idx` PATH ===")
-        print("="*60)
-        try:
-            # 打印 self.model 的类型和不带下划线的属性
-            print(f"\n[INFO] Inspecting object: self.model (type: {type(self.model)})")
-            model_attrs = [attr for attr in dir(self.model) if not attr.startswith('_')]
-            print(f"       Attributes of self.model: {model_attrs}\n")
-
-            # 打印 self.model.tokenizer 的类型和不带下划线的属性
-            print(f"[INFO] Inspecting object: self.model.tokenizer (type: {type(self.model.tokenizer)})")
-            tokenizer_attrs = [attr for attr in dir(self.model.tokenizer) if not attr.startswith('_')]
-            print(f"       Attributes of self.model.tokenizer: {tokenizer_attrs}\n")
-
-            # --- 开始测试不同的路径 ---
-            print("--- Testing potential paths for `padding_idx` ---")
-
-            # 测试路径1 (我最新的猜测): self.model.alphabet.padding_idx
-            try:
-                print("   [TESTING] Path 1: `self.model.alphabet.padding_idx`")
-                padding_idx_1 = self.model.alphabet.padding_idx
-                print(f"   [SUCCESS] Path 1 is VALID. Value found: {padding_idx_1}. Please use this path.")
-            except AttributeError as e:
-                print(f"   [FAILED]  Path 1 is INVALID. Error: {e}")
-
-            # 测试路径2 (您代码中导致崩溃的路径): self.model.tokenizer.alphabet.padding_idx
-            try:
-                print("\n   [TESTING] Path 2: `self.model.tokenizer.alphabet.padding_idx` (the failing one)")
-                padding_idx_2 = self.model.tokenizer.alphabet.padding_idx
-                print(f"   [SUCCESS] Path 2 is VALID. Value found: {padding_idx_2}. This is unexpected.")
-            except AttributeError as e:
-                print(f"   [FAILED]  Path 2 is INVALID. Error: {e} (This is expected based on your traceback)")
-        
-        except Exception as e:
-            print(f"\n[ERROR] An unexpected error occurred during the diagnostic: {e}")
-
-        print("\n" + "="*60)
-        print("=== DIAGNOSTIC COMPLETE. Check the output above.      ===")
-        print("=== The program will now continue and may crash later.  ===")
-        print("="*60 + "\n")
-        # ====================================================================
-        # ======================= 诊断代码结束 ===========================
-        # ====================================================================
-
     def initialize_metrics(self, stage):
         return {f"{stage}_acc": torchmetrics.Accuracy(task="multiclass", num_classes=self.num_labels)}
 
@@ -137,12 +88,9 @@ class ESMCClassificationModel(ESMCBaseModel):
             attention_mask = batch_encoding['attention_mask'].to(self.device)
 
             # 步骤 3: 模型推理 (Inference)
-            model_output = self.model.forward(
-                token_ids_batch,
-                repr_layers=[len(self.model.transformer.blocks)]
-            )
-            representations = model_output['representations'][len(self.model.transformer.blocks)]
-            
+            model_output = self.model.forward(token_ids_batch)
+            representations = model_output['representations']
+
             # 步骤 4: 池化 (Pooling)
             mask = (token_ids_batch != self.model.tokenizer.pad_token_id).unsqueeze(-1)
             
