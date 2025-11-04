@@ -100,10 +100,11 @@ class ESMCBaseModel(AbstractModel):
             "r": 8,
             "lora_alpha": 16,
             "lora_dropout": 0.0,
-            "target_modules": [
-                "attn.layernorm_qkv.1",
-                "ffn.1",
-                "ffn.3",
+            # Keep empty to enable dynamic discovery
+            "target_modules": [],
+            # Dynamic discovery by substring containment (used when target_modules is empty)
+            "target_name_contains": [
+                "attn", "ffn", "mlp", "q_proj", "k_proj", "v_proj", "out_proj", "proj"
             ],
             **(self.lora_kwargs or {}),
         }
@@ -114,19 +115,46 @@ class ESMCBaseModel(AbstractModel):
                     return True
             return False
 
+        def name_contains_any(name: str, substrs: Iterable[str]):
+            return any(s in name for s in substrs)
+
+        # Debug: list some Linear layers for user to inspect
+        try:
+            linear_names = [n for n, m in self.model.named_modules() if isinstance(m, nn.Linear)]
+            print("ESMC Debug | First Linear modules:")
+            for idx, n in enumerate(linear_names[:80]):
+                print(f"  ESMC Linear -> {n}")
+            if len(linear_names) > 80:
+                print(f"  ... total Linear modules: {len(linear_names)}")
+        except Exception as _e:
+            print("ESMC Debug | failed to list Linear modules:", _e)
+
         replaced = 0
-        for name, module in list(self.model.named_modules()):
+        named_modules_map = dict(self.model.named_modules())
+        for name, module in list(named_modules_map.items()):
             # skip classifier
-            if name.endswith("classifier"):
+            if name.startswith("classifier") or name.endswith("classifier"):
                 continue
-            if isinstance(module, nn.Linear) and name_matches(name, cfg["target_modules"]):
-                # find parent module and attribute
-                parent_name = name.rsplit('.', 1)[0] if '.' in name else ''
-                attr_name = name.split('.')[-1]
-                parent = self.model if parent_name == '' else dict(self.model.named_modules())[parent_name]
-                lora_layer = LoRALinear(module, r=cfg["r"], alpha=cfg["lora_alpha"], dropout=cfg["lora_dropout"])
-                setattr(parent, attr_name, lora_layer)
-                replaced += 1
+            if not isinstance(module, nn.Linear):
+                continue
+            should_replace = False
+            if cfg.get("target_modules"):
+                should_replace = name_matches(name, cfg["target_modules"])
+            else:
+                should_replace = name_contains_any(name, cfg.get("target_name_contains", []))
+
+            if not should_replace:
+                continue
+
+            # find parent module and attribute
+            parent_name = name.rsplit('.', 1)[0] if '.' in name else ''
+            attr_name = name.split('.')[-1]
+            parent = self.model if parent_name == '' else named_modules_map.get(parent_name)
+            if parent is None:
+                continue
+            lora_layer = LoRALinear(module, r=cfg["r"], alpha=cfg["lora_alpha"], dropout=cfg["lora_dropout"])
+            setattr(parent, attr_name, lora_layer)
+            replaced += 1
 
         print(f"ESMC LoRA: Injected LoRA into {replaced} Linear layers. r={cfg['r']} alpha={cfg['lora_alpha']} dropout={cfg['lora_dropout']}")
         # Freeze all backbone params except LoRA and classifier
