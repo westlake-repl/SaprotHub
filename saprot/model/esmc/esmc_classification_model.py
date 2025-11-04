@@ -1,14 +1,9 @@
-# ==================== 临时诊断代码 ====================
-# 请用这段代码替换您原来的 ESMCClassificationModel 类定义
-
 import torchmetrics
 import torch
-import sys  # 导入 sys 模块以安全退出
 from torch.nn.functional import cross_entropy
 from torch.nn.utils.rnn import pad_sequence
 
-# 假设这些导入路径在您的项目中是正确的
-# 您需要确保下面的导入路径与您的项目结构相符
+# 确保下面的导入路径与您的项目结构相符
 from saprot.model.model_interface import register_model
 from saprot.model.esmc.base import ESMCBaseModel
 
@@ -21,62 +16,100 @@ except ImportError:
 @register_model
 class ESMCClassificationModel(ESMCBaseModel):
     def __init__(self, num_labels: int, **kwargs):
-        """
-        这是一个临时的、用于诊断的 __init__ 方法。
-        """
-        print("--- 进入诊断版 __init__ ---")
         self.num_labels = num_labels
-        
-        # 调用父类，这会创建 self.model 对象
-        print("正在调用 super().__init__() 来加载模型...")
         super().__init__(task="classification", **kwargs)
-        print("模型加载完成！")
-        
-        print("\n--- 开始打印 self.model 的诊断信息 ---")
-        
-        # 1. 打印 self.model 的类型
-        print(f"1. self.model 的类型是: {type(self.model)}")
-        
-        # 2. 打印 self.model 的所有属性和方法 (这是最重要的！)
-        #    我们将在这里寻找 'config', 'params', 'embed_dim' 等关键词
-        print("\n2. 使用 dir(self.model) 打印所有可用属性和方法:")
-        print(dir(self.model))
-        
-        # 3. 根据 dir() 的输出，我们猜测配置信息可能在 'model_config_' 中，尝试打印它
-        if hasattr(self.model, 'model_config_'):
-            print("\n3. 发现 'model_config_' 属性，正在打印其内容...")
-            config_dict = self.model.model_config_
-            print(f"   - 'model_config_' 的类型是: {type(config_dict)}")
-            print(f"   - 'model_config_' 包含的键 (keys): {list(config_dict.keys())}")
-            if 'embed_dim' in config_dict:
-                print(f"   - ✅ 成功找到 'embed_dim' 键！其值为: {config_dict['embed_dim']}")
-            else:
-                print("   - ❌ 在 'model_config_' 字典中未找到 'embed_dim' 键。")
-        else:
-            print("\n3. 未找到 'model_config_' 属性。")
 
-        print("\n--- 诊断完成 ---")
+        # === 核心修正点 ===
+        # 根据诊断报告 (dir(self.model) 的输出)，我们发现 self.model 有一个 'embed' 属性，
+        # 它是一个 torch.nn.Embedding 层。我们可以从这个层直接获取嵌入维度。
+        # 这是针对 <class 'esm.models.esmc.ESMC'> 对象的正确方法。
+        embed_dim = self.model.embed.embedding_dim
         
-        # 安全地停止程序，防止它因为后续的错误而崩溃
-        sys.exit("诊断已完成，程序已安全停止。请检查上面的输出。")
+        # 使用正确获取到的 embed_dim 来安全地创建或替换分类器。
+        # 注意：我们在这里是替换模型上可能已存在的 'classifier' 属性。
+        self.model.classifier = torch.nn.Sequential(
+            torch.nn.Linear(embed_dim, embed_dim),
+            torch.nn.GELU(),
+            torch.nn.LayerNorm(embed_dim),
+            torch.nn.Linear(embed_dim, self.num_labels)
+        )
 
-    # --- 以下的方法暂时不会被执行，可以保持原样 ---
     def initialize_metrics(self, stage):
+        # 使用新的 torchmetrics API，需要指定 task
         return {f"{stage}_acc": torchmetrics.Accuracy(task="multiclass", num_classes=self.num_labels)}
 
     def forward(self, inputs, coords=None):
-        pass
+        # 从输入字典中获取蛋白质数据列表
+        if isinstance(inputs, dict) and 'proteins' in inputs:
+            proteins = inputs['proteins']
+        else:
+            raise ValueError("ESMCClassificationModel.forward expects inputs['proteins'] (list of ESMProtein)")
+
+        if not isinstance(proteins, list):
+            proteins = [proteins]
+
+        with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
+            # 步骤 1: Tokenization
+            # 注意：这里的 self.model.tokenizer 是在 ESMCBaseModel 中被正确设置的
+            token_ids_list = [self.model.tokenizer(p.sequence) for p in proteins]
+
+            # 步骤 2: 填充 (Padding)
+            token_ids_batch = pad_sequence(
+                token_ids_list,
+                batch_first=True,
+                padding_value=self.model.tokenizer.padding_idx
+            )
+            
+            # 将张量移动到正确的设备
+            token_ids_batch = token_ids_batch.to(self.device)
+
+            # 步骤 3: 模型推理 (Inference)
+            # 注意：底层的 esm.models.esmc.ESMC 模型的 forward 签名可能不同
+            # 它直接接收 token_ids，而不是一个复杂的字典
+            model_output = self.model.forward(
+                token_ids_batch,
+                repr_layers=[len(self.model.transformer.layers)] # 获取正确的层数
+            )
+            representations = model_output['representations'][len(self.model.transformer.layers)]
+            
+            # 步骤 4: 池化 (Pooling)
+            mask = (token_ids_batch != self.model.tokenizer.padding_idx).unsqueeze(-1)
+            sequence_lengths = mask.sum(dim=1)
+            sequence_lengths = sequence_lengths.clamp(min=1)
+            
+            pooled_repr = (representations * mask).sum(dim=1) / sequence_lengths
+
+        # 将池化后的表示送入我们定义的分类头
+        logits = self.model.classifier(pooled_repr)
+
+        return logits
     
     def loss_func(self, stage, logits, labels):
-        pass
+        label = labels['labels']
+        loss = cross_entropy(logits, label)
+
+        stage_metrics = self.metrics[stage]
+        for metric in stage_metrics.values():
+            metric.update(logits.detach(), label)
+
+        if stage == "train":
+            self.log("train_loss", loss, on_step=True, on_epoch=False, prog_bar=True)
+
+        return loss
 
     def on_validation_epoch_end(self):
-        pass
+        log_dict = self.get_log_dict("valid")
+        self.log_info(log_dict)
+        self.reset_metrics("valid")
 
     def get_log_dict(self, stage):
-        pass
+        log_dict = {}
+        stage_metrics = self.metrics.get(stage, {})
+        for name, metric in stage_metrics.items():
+            log_dict[name] = metric.compute()
+        return log_dict
 
     def reset_metrics(self, stage):
-        pass
-
-# ==================== 诊断代码结束 ====================
+        stage_metrics = self.metrics.get(stage, {})
+        for metric in stage_metrics.values():
+            metric.reset()
