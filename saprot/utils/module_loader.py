@@ -37,7 +37,7 @@ def my_load_model(config):
         cfg["model_name"] = model_name
         # remove unsupported keys for ESMC models
         cfg.pop("load_pretrained", None)
-        cfg.pop("lora_kwargs", None)
+        # keep lora_kwargs so LoRA can be applied by ESMCBaseModel
 
         # map saprot task to esmc task
         mapping = {

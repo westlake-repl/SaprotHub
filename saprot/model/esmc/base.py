@@ -70,12 +70,10 @@ class ESMCBaseModel(AbstractModel):
             self.lora_kwargs,
             "target_modules",
             [
-                # attention layers
-                "layernorm_qkv.1",  # Matches: transformer.blocks.*.attn.layernorm_qkv.1
-                "out_proj",         # Matches: transformer.blocks.*.attn.out_proj
-                # feed-forward MLP layers
-                "ffn.1",            # Matches: transformer.blocks.*.ffn.1
-                "ffn.3",            # Matches: transformer.blocks.*.ffn.3
+                "layernorm_qkv.1", 
+                "out_proj",
+                "ffn.1",
+                "ffn.3",
             ],
         )
         task_type = "FEATURE_EXTRACTION"
@@ -121,7 +119,8 @@ class ESMCBaseModel(AbstractModel):
         # Freeze non-LoRA, non-classifier params (align with Saprot behavior: only update LoRA+head)
         for n, p in self.model.named_parameters():
             is_lora = ("lora_" in n)
-            is_classifier = n.startswith("classifier")
+            # PEFT may prefix module paths; be robust by checking substring
+            is_classifier = ("classifier" in n)
             p.requires_grad = is_lora or is_classifier
     
     # (Freezing is handled inside _init_lora_peft)

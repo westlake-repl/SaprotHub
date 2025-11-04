@@ -75,7 +75,11 @@ class ESMCClassificationModel(ESMCBaseModel):
             total_params += num
             if p.requires_grad:
                 trainable_params += num
-                if n.endswith('.A') or n.endswith('.B') or '.A.' in n or '.B.' in n:
+                # Count LoRA params from either lightweight (A/B) or PEFT (lora_*)
+                if (
+                    n.endswith('.A') or n.endswith('.B') or '.A.' in n or '.B.' in n
+                    or ('lora_' in n)
+                ):
                     lora_params += num
                 elif n.startswith('classifier'):
                     classifier_params += num
