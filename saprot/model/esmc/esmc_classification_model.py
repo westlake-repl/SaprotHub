@@ -49,9 +49,11 @@ class ESMCClassificationModel(ESMCBaseModel):
                 padding=True, 
                 return_tensors="pt"
             )
-            token_ids_batch = batch_encoding['input_ids'].to(self.device)
-
-            attention_mask = batch_encoding['attention_mask'].to(self.device)
+            # Use model's device to ensure compatibility with mixed precision training
+            # PyTorch Lightning will handle device placement automatically
+            model_device = next(self.model.parameters()).device
+            token_ids_batch = batch_encoding['input_ids'].to(model_device)
+            attention_mask = batch_encoding['attention_mask'].to(model_device)
 
             # Inference
             model_output = self.model.forward(token_ids_batch)

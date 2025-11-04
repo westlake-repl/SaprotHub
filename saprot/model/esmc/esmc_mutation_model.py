@@ -58,7 +58,8 @@ class ESMCMutationModel(ESMCBaseModel):
         raise RuntimeError("ESMC logits API: sequence_logits not found. Please verify ESMC SDK.")
 
     def forward(self, wild_type, seqs, mut_info, structure_content, structure_type, plddt):
-        device = self.device
+        # Use model's device to ensure compatibility with mixed precision training
+        device = next(self.model.parameters()).device
         # Compute logits for original (masked) and optionally variant positions
         aa_list = self._aa_index()
 
