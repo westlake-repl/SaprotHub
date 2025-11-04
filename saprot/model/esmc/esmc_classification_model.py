@@ -90,7 +90,14 @@ class ESMCClassificationModel(ESMCBaseModel):
             # Tokenization & Padding
             sequences = [p.sequence for p in proteins]
             print(f"ESMC Debug | batch: {len(sequences)} sequences; lens={[len(s) for s in sequences][:8]}{'...' if len(sequences)>8 else ''}")
-            batch_encoding = self.model.tokenizer(
+            # Get tokenizer - PEFT usually keeps it accessible at top level, but check base_model if needed
+            if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model') and hasattr(self.model.base_model.model, 'tokenizer'):
+                tokenizer = self.model.base_model.model.tokenizer
+            elif hasattr(self.model, 'tokenizer'):
+                tokenizer = self.model.tokenizer
+            else:
+                raise AttributeError("Cannot find tokenizer in model")
+            batch_encoding = tokenizer(
                 sequences, 
                 padding=True, 
                 return_tensors="pt"
@@ -101,12 +108,25 @@ class ESMCClassificationModel(ESMCBaseModel):
             print(f"ESMC Debug | attn_mask: shape={tuple(attention_mask.shape)} dtype={attention_mask.dtype} device={attention_mask.device}")
 
             # Inference
-            model_output = self.model.forward(token_ids_batch)
+            # When wrapped by PEFT, forward may receive kwargs, but ESMC expects positional args
+            # Access base_model directly if PEFT is active
+            if hasattr(self.model, 'base_model'):
+                # PEFT wrapped model: call base_model forward with positional args
+                base_model = self.model.base_model.model if hasattr(self.model.base_model, 'model') else self.model.base_model
+                model_output = base_model.forward(token_ids_batch)
+            else:
+                # Not wrapped by PEFT: direct call
+                model_output = self.model.forward(token_ids_batch)
             representations = model_output.hidden_states[-1]
             print(f"ESMC Debug | last_hidden: shape={tuple(representations.shape)} dtype={representations.dtype} device={representations.device}")
 
             #  Pooling
-            mask = (token_ids_batch != self.model.tokenizer.pad_token_id).unsqueeze(-1)
+            # Get tokenizer from base_model if PEFT wrapped, otherwise from model directly
+            if hasattr(self.model, 'base_model'):
+                tokenizer = self.model.base_model.model.tokenizer if hasattr(self.model.base_model, 'model') and hasattr(self.model.base_model.model, 'tokenizer') else self.model.tokenizer
+            else:
+                tokenizer = self.model.tokenizer
+            mask = (token_ids_batch != tokenizer.pad_token_id).unsqueeze(-1)
             
             sequence_lengths = mask.sum(dim=1)
             sequence_lengths = sequence_lengths.clamp(min=1)
