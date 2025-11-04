@@ -54,6 +54,19 @@ class ESMCClassificationModel(ESMCBaseModel):
         if hasattr(self, '_apply_lora_freezing'):
             self._apply_lora_freezing()
 
+        # Debug: list all Linear module names to help configure lora_kwargs.target_modules
+        try:
+            import torch.nn as nn
+            print("ESMC Debug | Linear module names (for target_modules):")
+            count = 0
+            for n, m in self.model.named_modules():
+                if isinstance(m, nn.Linear):
+                    print(f"  {n}")
+                    count += 1
+            print(f"ESMC Debug | Total Linear modules: {count}")
+        except Exception as _e:
+            print("ESMC Debug | listing Linear modules failed:", _e)
+
     def forward(self, inputs, coords=None):
         if isinstance(inputs, dict) and 'proteins' in inputs:
             proteins = inputs['proteins']
