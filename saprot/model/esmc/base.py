@@ -44,7 +44,8 @@ class ESMCBaseModel(AbstractModel):
             # No need to freeze backbone if LoRA is used
             self.freeze_backbone = False
             self.lora_kwargs = EasyDict(self.lora_kwargs)
-            self._init_lora_lightweight(hidden_size=None)
+            # Use PEFT-based LoRA to align with Saprot
+            self._init_lora_peft()
             # Re-apply freezing logic after LoRA initialization to ensure correctness
             # This is important because subclass may override classifier after LoRA init
             self._apply_lora_freezing()
@@ -53,167 +54,45 @@ class ESMCBaseModel(AbstractModel):
         self.valid_metrics_list = {}
         self.valid_metrics_list['step'] = []
 
-    def _init_lora_lightweight(self, hidden_size: int):
+    # (removed lightweight injector per user's request)
+
+    def _init_lora_peft(self):
         """
-        A minimal LoRA injection for ESMC: replace selected Linear layers with LoRALinear.
-        Defaults target to common attention/ffn linear layers; keep classifier trainable.
+        Apply LoRA via PEFT to ESMC backbone, mirroring Saprot's usage.
         """
-        import types
-        import torch.nn as nn
-        from typing import Iterable
-
-        class LoRALinear(nn.Module):
-            def __init__(self, base_linear: nn.Linear, r: int, alpha: int, dropout: float = 0.0):
-                super().__init__()
-                self.in_features = base_linear.in_features
-                self.out_features = base_linear.out_features
-                self.r = r
-                self.scaling = alpha / float(r) if r > 0 else 0.0
-                self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
-                # Freeze base weight/bias
-                self.weight = base_linear.weight
-                self.bias = base_linear.bias
-                self.weight.requires_grad_(False)
-                if self.bias is not None:
-                    self.bias.requires_grad_(False)
-                # LoRA params
-                self.A = nn.Parameter(torch.zeros(self.in_features, r)) if r > 0 else None
-                self.B = nn.Parameter(torch.zeros(r, self.out_features)) if r > 0 else None
-                self.reset_parameters()
-
-            def reset_parameters(self):
-                if self.A is not None and self.B is not None:
-                    nn.init.kaiming_uniform_(self.A, a=math.sqrt(5))
-                    nn.init.zeros_(self.B)
-
-            def forward(self, x: torch.Tensor):
-                out = torch.nn.functional.linear(x, self.weight, self.bias)
-                if self.A is not None and self.B is not None:
-                    lora = self.dropout(x) @ self.A @ self.B
-                    out = out + self.scaling * lora
-                return out
-
-        import math
-        import torch.nn as nn
-
-        cfg = {
-            "r": 8,
-            "lora_alpha": 16,
-            "lora_dropout": 0.0,
-            # Keep empty to enable dynamic discovery
-            "target_modules": [],
-            # Dynamic discovery by substring containment (used when target_modules is empty)
-            "target_name_contains": [
-                # attention projections
-                "q_proj", "k_proj", "v_proj", "o_proj", "out_proj",
-                # transformer/ffn blocks
-                "ffn", "mlp", "fc1", "fc2", "feed_forward",
-                # generic projections
-                "proj", ".fc", ".linear", "down_proj", "up_proj"
-            ],
-            # Fallback switch: inject into all Linear layers if nothing matched
-            "inject_all_when_no_match": True,
-            **(self.lora_kwargs or {}),
-        }
-
-        def name_matches(name: str, targets: Iterable[str]):
-            for t in targets:
-                if name.endswith(t):
-                    return True
-            return False
-
-        def name_contains_any(name: str, substrs: Iterable[str]):
-            return any(s in name for s in substrs)
-
-        # Debug: list some Linear layers for user to inspect
+        from peft import LoraConfig, get_peft_model
+        # Defaults similar to Saprot/your Colab example; user config can override
+        r = getattr(self.lora_kwargs, "r", 8)
+        lora_alpha = getattr(self.lora_kwargs, "lora_alpha", 16)
+        lora_dropout = getattr(self.lora_kwargs, "lora_dropout", 0.0)
+        target_modules = getattr(self.lora_kwargs, "target_modules", [
+            "q_proj", "k_proj", "v_proj", "out_proj", "fc", "mlp",
+            "intermediate.dense", "output.dense"
+        ])
+        task_type = "FEATURE_EXTRACTION"
+        config = LoraConfig(
+            r=r,
+            lora_alpha=lora_alpha,
+            lora_dropout=lora_dropout,
+            bias="none",
+            target_modules=target_modules,
+            task_type=task_type,
+        )
+        # Wrap model with PEFT
+        self.model = get_peft_model(self.model, config)
         try:
-            linear_names = [n for n, m in self.model.named_modules() if isinstance(m, nn.Linear)]
-            print("ESMC Debug | First Linear modules:")
-            for idx, n in enumerate(linear_names[:80]):
-                print(f"  ESMC Linear -> {n}")
-            if len(linear_names) > 80:
-                print(f"  ... total Linear modules: {len(linear_names)}")
-        except Exception as _e:
-            print("ESMC Debug | failed to list Linear modules:", _e)
-
-        replaced = 0
-        replaced_names = []
-        named_modules_map = dict(self.model.named_modules())
-        for name, module in list(named_modules_map.items()):
-            # skip classifier
-            if name.startswith("classifier") or name.endswith("classifier"):
-                continue
-            if not isinstance(module, nn.Linear):
-                continue
-            should_replace = False
-            if cfg.get("target_modules"):
-                should_replace = name_matches(name, cfg["target_modules"])
-            else:
-                should_replace = name_contains_any(name, cfg.get("target_name_contains", []))
-
-            if not should_replace:
-                continue
-
-            # find parent module and attribute
-            parent_name = name.rsplit('.', 1)[0] if '.' in name else ''
-            attr_name = name.split('.')[-1]
-            parent = self.model if parent_name == '' else named_modules_map.get(parent_name)
-            if parent is None:
-                continue
-            lora_layer = LoRALinear(module, r=cfg["r"], alpha=cfg["lora_alpha"], dropout=cfg["lora_dropout"])
-            setattr(parent, attr_name, lora_layer)
-            replaced += 1
-            replaced_names.append(name)
-
-        print(f"ESMC LoRA: Injected LoRA into {replaced} Linear layers. r={cfg['r']} alpha={cfg['lora_alpha']} dropout={cfg['lora_dropout']}")
-        if replaced_names:
-            print("ESMC LoRA: replaced modules (first 50):")
-            for n in replaced_names[:50]:
-                print(f"  {n}")
-        # Fallback: if nothing matched, inject into all Linear layers (excluding classifier)
-        if replaced == 0 and cfg.get("inject_all_when_no_match", True):
-            try:
-                named_modules_map = dict(self.model.named_modules())
-                for name, module in list(named_modules_map.items()):
-                    if not isinstance(module, nn.Linear):
-                        continue
-                    if name.startswith("classifier") or name.endswith("classifier"):
-                        continue
-                    parent_name = name.rsplit('.', 1)[0] if '.' in name else ''
-                    attr_name = name.split('.')[-1]
-                    parent = self.model if parent_name == '' else named_modules_map.get(parent_name)
-                    if parent is None:
-                        continue
-                    lora_layer = LoRALinear(module, r=cfg["r"], alpha=cfg["lora_alpha"], dropout=cfg["lora_dropout"])
-                    setattr(parent, attr_name, lora_layer)
-                    replaced += 1
-                print(f"ESMC LoRA: Fallback injected into {replaced} Linear layers in total.")
-            except Exception as _e:
-                print("ESMC LoRA: Fallback injection failed:", _e)
-        # Freeze all backbone params except LoRA and classifier
-        # LoRA parameters end with .A or .B (e.g., "transformer.layers.0.attn.layernorm_qkv.1.A")
-        # We need to be more precise with the matching to avoid false positives
-        for n, p in self.model.named_parameters():
-            # Check if it's a LoRA parameter: ends with .A or .B, or contains .A. or .B.
-            is_lora = n.endswith(".A") or n.endswith(".B") or ".A." in n or ".B." in n
-            # Check if it's classifier
-            is_classifier = n.startswith("classifier")
-            # Only allow LoRA and classifier to be trainable
-            p.requires_grad = is_lora or is_classifier
-        
-        # Ensure classifier is trainable (in case it was overridden by subclass after LoRA init)
+            self.model.print_trainable_parameters()
+        except Exception:
+            pass
+        # Ensure classifier is trainable
         if hasattr(self.model, 'classifier'):
-            for name, param in self.model.classifier.named_parameters():
-                param.requires_grad = True
-        
-        # report
-        total, trainable = 0, 0
-        for p in self.model.parameters():
-            num = p.numel()
-            total += num
-            if p.requires_grad:
-                trainable += num
-        print(f"ESMC LoRA: Trainable params: {trainable:,} / {total:,} ({trainable/total:.2%})")
+            for n, p in self.model.classifier.named_parameters():
+                p.requires_grad = True
+        # Freeze non-LoRA, non-classifier params (align with Saprot behavior: only update LoRA+head)
+        for n, p in self.model.named_parameters():
+            is_lora = ("lora_" in n)
+            is_classifier = n.startswith("classifier")
+            p.requires_grad = is_lora or is_classifier
     
     def _apply_lora_freezing(self):
         """
@@ -226,7 +105,7 @@ class ESMCBaseModel(AbstractModel):
 
         # Then, unfreeze only LoRA parameters and classifier
         for n, p in self.model.named_parameters():
-            is_lora = n.endswith(".A") or n.endswith(".B") or ".A." in n or ".B." in n
+            is_lora = ("lora_" in n)
             is_classifier = n.startswith("classifier")
             if is_lora or is_classifier:
                 p.requires_grad = True
@@ -245,7 +124,7 @@ class ESMCBaseModel(AbstractModel):
             total += num
             if p.requires_grad:
                 trainable += num
-                if n.endswith(".A") or n.endswith(".B") or ".A." in n or ".B." in n:
+                if "lora_" in n:
                     lora_params += num
                 elif n.startswith("classifier"):
                     classifier_params += num
@@ -327,7 +206,17 @@ class ESMCBaseModel(AbstractModel):
             return super().save_checkpoint(save_path, save_info, save_weights_only)
         
         else:
-            # Save LoRA parameters (A and B) and classifier
+            # If PEFT is active, prefer saving adapter via save_pretrained
+            try:
+                if hasattr(self.model, 'save_pretrained'):
+                    dir = os.path.dirname(save_path)
+                    os.makedirs(dir, exist_ok=True)
+                    self.model.save_pretrained(dir)
+                    print(f"ESMC LoRA (PEFT) adapter saved to {dir}")
+                    return
+            except Exception:
+                pass
+            # Fallback: Save lightweight LoRA parameters (A and B) and classifier
             try:
                 if hasattr(self.trainer.strategy, "deepspeed_engine"):
                     save_path = os.path.dirname(save_path)
