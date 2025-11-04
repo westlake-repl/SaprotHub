@@ -432,3 +432,18 @@ class ESMCBaseModel(AbstractModel):
             plt.show()
 
 
+
+    # Ensure LoRA-only freezing is applied right before training starts
+    def on_fit_start(self) -> None:
+        try:
+            self._apply_lora_freezing()
+        except Exception:
+            pass
+
+    # Ensure optimizer only sees LoRA + classifier as trainable
+    def configure_optimizers(self):
+        try:
+            self._apply_lora_freezing()
+        except Exception:
+            pass
+        return super().configure_optimizers()
