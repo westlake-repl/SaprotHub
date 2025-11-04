@@ -287,12 +287,18 @@ def load_trainer(config):
     
     # Fix for ESMC models: force FP16 instead of BFloat16 for mixed precision
     # BFloat16 has compatibility issues with certain CUDA operations
+    # Solution: Disable mixed precision for ESMC models (use FP32)
+    # This is safer than trying to force FP16, which may still trigger BFloat16
     if hasattr(config, 'model') and hasattr(config.model, 'model_py_path'):
         model_path = config.model.model_py_path
-        if 'esmc' in model_path.lower() and trainer_config.get('precision') == '16-mixed':
-            # Force FP16 instead of auto-selecting BFloat16
-            trainer_config['precision'] = '16'
-            print(f"ESMC model detected: Changed precision from '16-mixed' to '16' (FP16) to avoid BFloat16 compatibility issues")
+        if 'esmc' in model_path.lower():
+            precision = trainer_config.get('precision')
+            # Disable mixed precision to avoid BFloat16 issues
+            if precision == '16-mixed' or precision == 16 or precision == '16':
+                # Use FP32 instead - this avoids BFloat16 completely
+                trainer_config['precision'] = 32
+                print(f"ESMC model detected: Changed precision from '{precision}' to 32 (FP32) to avoid BFloat16 compatibility issues")
+                print(f"  Note: FP32 training is slower but avoids BFloat16 errors. Consider using FP32 in config if this works.")
     
     # Initialize wandb
     if trainer_config.logger:
