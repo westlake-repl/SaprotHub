@@ -447,3 +447,11 @@ class ESMCBaseModel(AbstractModel):
         except Exception:
             pass
         return super().configure_optimizers()
+
+    # Apply freezing early so Model Summary reflects correct trainables
+    def setup(self, stage: str) -> None:
+        try:
+            self._apply_lora_freezing()
+        except Exception:
+            pass
+        return super().setup(stage)

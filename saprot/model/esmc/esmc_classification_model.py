@@ -50,6 +50,10 @@ class ESMCClassificationModel(ESMCBaseModel):
                 if name.startswith("classifier"):
                     param.requires_grad = True
 
+        # Ensure freezing is applied after classifier creation (keeps classifier trainable)
+        if hasattr(self, '_apply_lora_freezing'):
+            self._apply_lora_freezing()
+
     def forward(self, inputs, coords=None):
         if isinstance(inputs, dict) and 'proteins' in inputs:
             proteins = inputs['proteins']
