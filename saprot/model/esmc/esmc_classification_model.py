@@ -32,41 +32,6 @@ class ESMCClassificationModel(ESMCBaseModel):
         return {f"{stage}_acc": torchmetrics.Accuracy(task="multiclass", num_classes=self.num_labels)}
 
     def forward(self, inputs, coords=None):
-        # ====================================================================
-        # ======================= 新增诊断代码注入处 =========================
-        # ====================================================================
-        print("\n" + "="*60)
-        print("=== RUNNING DIAGNOSTIC FOR `self.model.transformer` OBJECT ===")
-        print("="*60)
-        try:
-            transformer_obj = self.model.transformer
-            print(f"\n[INFO] Inspecting object: self.model.transformer (type: {type(transformer_obj)})")
-            
-            # 打印 transformer 对象的属性
-            transformer_attrs = [attr for attr in dir(transformer_obj) if not attr.startswith('_')]
-            print(f"       Attributes of self.model.transformer: {transformer_attrs}\n")
-
-            # 测试 transformer 对象是否支持 len()
-            print("--- Testing `len()` support for `self.model.transformer` ---")
-            try:
-                num_layers_test = len(transformer_obj)
-                print(f"   [SUCCESS] `len(self.model.transformer)` is VALID. Value: {num_layers_test}.")
-                print("              This suggests the correct way to get the number of layers is `len(self.model.transformer)`.")
-            except TypeError as e:
-                print(f"   [FAILED]  `self.model.transformer` does not support `len()`. Error: {e}")
-
-        except AttributeError:
-            print("\n[ERROR] `self.model.transformer` does not exist! This is unexpected.")
-        except Exception as e:
-            print(f"\n[ERROR] An unexpected error occurred during the transformer diagnostic: {e}")
-
-        print("\n" + "="*60)
-        print("=== TRANSFORMER DIAGNOSTIC COMPLETE. Check output above. ===")
-        print("=== The program will now continue and likely crash.      ===")
-        print("="*60 + "\n")
-        # ====================================================================
-        # ======================= 诊断代码结束 ===========================
-        # ====================================================================
         if isinstance(inputs, dict) and 'proteins' in inputs:
             proteins = inputs['proteins']
         else:
@@ -89,7 +54,7 @@ class ESMCClassificationModel(ESMCBaseModel):
 
             # 步骤 3: 模型推理 (Inference)
             model_output = self.model.forward(token_ids_batch)
-            representations = model_output['representations']
+            representations = model_output.representations
 
             # 步骤 4: 池化 (Pooling)
             mask = (token_ids_batch != self.model.tokenizer.pad_token_id).unsqueeze(-1)
