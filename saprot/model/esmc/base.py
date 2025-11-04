@@ -164,7 +164,7 @@ class ESMCBaseModel(AbstractModel):
             import inspect
             from esm.sdk.api import ESMProtein
         except Exception as _e:
-            print("[ESMC] Failed to inspect ESMProtein signature:", _e)
+            print("ESMC Failed to inspect ESMProtein signature:", _e)
 
         # Attach simple heads per task
         hidden_size = getattr(getattr(self.model, 'config', None), 'hidden_size', 960)
