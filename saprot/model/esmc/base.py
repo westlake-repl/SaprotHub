@@ -1,8 +1,10 @@
 import torch
 import os
-import matplotlib.pyplot as plt
 
+from easydict import EasyDict
 from ..abstract_model import AbstractModel
+
+import matplotlib.pyplot as plt
 
 try:
     from esm.models.esmc import ESMC
@@ -14,7 +16,7 @@ class ESMCBaseModel(AbstractModel):
     """
     ESMC base model. Provides model initialization for downstream tasks.
     """
-
+    
     def __init__(self,
                  task: str,
                  model_name: str = "esmc_300m",
@@ -23,7 +25,22 @@ class ESMCBaseModel(AbstractModel):
                  gradient_checkpointing: bool = False,
                  lora_kwargs: dict = None,
                  **kwargs):
-                 
+        """
+        Args:
+            task: Task name.
+
+            model_name: Model name for ESMC (esmc_300m or esmc_600m)
+
+            device: Device to use (cuda or cpu)
+
+            freeze_backbone: Whether to freeze the backbone of the model
+
+            gradient_checkpointing: Whether to enable gradient checkpointing
+
+            lora_kwargs: LoRA configuration
+
+            **kwargs: Other arguments for AbstractModel
+        """
         assert task in ["classification", "token_classification", "regression"]
         self.task = task
         self.model_name = model_name
@@ -37,81 +54,118 @@ class ESMCBaseModel(AbstractModel):
             self.device_str = device
 
         super().__init__(**kwargs)
-
-        # Align order with saprot: apply LoRA right after model init, then set metrics list
+        
+        # After all initialization done, lora technique is applied if needed
         if self.lora_kwargs is not None:
-            from easydict import EasyDict
             # No need to freeze backbone if LoRA is used
             self.freeze_backbone = False
+            
             self.lora_kwargs = EasyDict(self.lora_kwargs)
-            # Use PEFT-based LoRA to align with Saprot
-            self._init_lora_peft()
-            # Optimizers will be (re)initialized to pick up LoRA+head params only
-            self.init_optimizers()
-
+            self._init_lora()
+        
         self.valid_metrics_list = {}
         self.valid_metrics_list['step'] = []
-
-    # (removed lightweight injector per user's request)
-
-    def _init_lora_peft(self):
-        """
-        Apply LoRA via PEFT to ESMC backbone, mirroring Saprot's usage.
-        """
+    
+    def _init_lora(self):
         from peft import LoraConfig, get_peft_model
-        # Defaults similar to Saprot/your Colab example; user config can override
-        r = getattr(self.lora_kwargs, "r", 8)
-        lora_alpha = getattr(self.lora_kwargs, "lora_alpha", 16)
-        lora_dropout = getattr(self.lora_kwargs, "lora_dropout", 0.0)
-        # ESMC-specific default targets (based on actual module names from ESMC model)
-        # Module naming pattern: transformer.blocks.{i}.attn.layernorm_qkv.1, out_proj, ffn.1, ffn.3
-        # Note: Override by passing lora_kwargs.target_modules in config/Colab
-        target_modules = getattr(
-            self.lora_kwargs,
-            "target_modules",
-            [
-                "layernorm_qkv.1", 
-                "out_proj",
-                "ffn.1",
-                "ffn.3",
-            ],
-        )
-        task_type = "FEATURE_EXTRACTION"
-        print(f"ESMC LoRA | Config: r={r}, alpha={lora_alpha}, dropout={lora_dropout}, target_modules={target_modules}")
-        # Debug: List Linear modules that should match
-        import torch.nn as nn
-        matching_modules = []
-        for n, m in self.model.named_modules():
-            if isinstance(m, nn.Linear):
-                for target in target_modules:
-                    if target in n or n.endswith(target):
-                        matching_modules.append(n)
-                        break
-        print(f"ESMC LoRA | Found {len(matching_modules)} Linear modules that should match target_modules")
-        if matching_modules:
-            print(f"ESMC LoRA | Sample matching modules: {matching_modules[:5]}")
-        config = LoraConfig(
-            r=r,
-            lora_alpha=lora_alpha,
-            lora_dropout=lora_dropout,
-            bias="none",
-            target_modules=target_modules,
-            task_type=task_type,
-        )
-        # Wrap model with PEFT
-        self.model = get_peft_model(self.model, config)
-        # Debug: Check if LoRA parameters were actually created
-        lora_param_names = [n for n, p in self.model.named_parameters() if "lora_" in n]
-        if lora_param_names:
-            print(f"ESMC LoRA | Successfully injected LoRA into {len(lora_param_names)} parameter groups")
-            print(f"ESMC LoRA | First few LoRA params: {lora_param_names[:5]}")
-        else:
-            print(f"ESMC LoRA | WARNING: No LoRA parameters found! PEFT may not have matched any modules.")
-            print(f"ESMC LoRA | This usually means target_modules don't match the actual module names.")
-        try:
-            self.model.print_trainable_parameters()
-        except Exception:
-            pass
+        
+        is_trainable = getattr(self.lora_kwargs, "is_trainable", False)
+        config_list = getattr(self.lora_kwargs, "config_list", [])
+        assert self.lora_kwargs.num_lora >= len(config_list), ("The number of LoRA models should be greater than or "
+                                                               "equal to the number of weight files.")
+        for i in range(self.lora_kwargs.num_lora):
+            adapter_name = f"adapter_{i}" if self.lora_kwargs.num_lora > 1 else "default"
+            
+            # Load pre-trained LoRA weights
+            if i < len(config_list):
+                lora_config_path = config_list[i].lora_config_path
+                if i == 0:
+                    # If i == 0, initialize a PEFT model
+                    self.model = get_peft_model(self.model, lora_config_path, adapter_name=adapter_name)
+                else:
+                    self.model.load_adapter(lora_config_path, adapter_name=adapter_name, is_trainable=is_trainable)
+            
+            # Initialize LoRA model for training
+            else:
+                # ESMC-specific default targets
+                target_modules = getattr(
+                    self.lora_kwargs,
+                    "target_modules",
+                    [
+                        "layernorm_qkv.1", 
+                        "out_proj",
+                        "ffn.1",
+                        "ffn.3",
+                    ],
+                )
+                lora_config = {
+                    "task_type": "FEATURE_EXTRACTION",
+                    "target_modules": target_modules,
+                    "modules_to_save": ["classifier"],
+                    "inference_mode": False,
+                    "r": getattr(self.lora_kwargs, "r", 8),
+                    "lora_dropout": getattr(self.lora_kwargs, "lora_dropout", 0.0),
+                    "lora_alpha": getattr(self.lora_kwargs, "lora_alpha", 16),
+                    "bias": "none",
+                }
+                
+                lora_config = LoraConfig(**lora_config)
+                
+                if i == 0:
+                    # If i == 0, initialize a PEFT model
+                    self.model = get_peft_model(self.model, lora_config, adapter_name=adapter_name)
+                
+                else:
+                    self.model.add_adapter(adapter_name, lora_config)
+        
+        if self.lora_kwargs.num_lora > 1:
+            # Multiple LoRA models only support inference mode
+            print("Multiple LoRA models are used. This only supports inference mode. If you want to train the model,"
+                  "set num_lora to 1.")
+            
+            # Replace the normal forward function with the lora ensemble function, which averages the outputs of all
+            # LoRA models.
+            def lora_forward(func):
+                
+                def forward(*args, **kwargs):
+                    logits_list = []
+                    ori_shape = None
+                    
+                    for i in range(self.lora_kwargs.num_lora):
+                        adapter_name = f"adapter_{i}"
+                        self.model.set_adapter(adapter_name)
+                        logits = func(*args, **kwargs)
+                        logits_list.append(logits)
+                        
+                        if ori_shape is None:
+                            ori_shape = logits.shape
+                    
+                    logits = torch.stack(logits_list, dim=0)
+                    
+                    # For classification task, final labels are voted by all LoRA models
+                    if len(ori_shape) == 2:
+                        logits = logits.permute(1, 0, 2)
+                        preds = logits.argmax(dim=-1)
+                        preds = torch.mode(preds, dim=1).values
+                        
+                        # Generate dummy logits to match the original output
+                        dummy_logits = torch.zeros(ori_shape).to(logits)
+                        for i, pred in enumerate(preds):
+                            dummy_logits[i, pred] = 1.0
+                    
+                    # For regression task, final labels are averaged among all LoRA models
+                    else:
+                        dummy_logits = logits.mean(dim=0)
+                    
+                    return dummy_logits.detach()
+                
+                return forward
+            
+            self.forward = lora_forward(self.forward)
+        
+        print(f"Now active LoRA model: {self.model.active_adapter}")
+        self.model.print_trainable_parameters()
+        
         # Ensure classifier is trainable
         if hasattr(self.model, 'classifier'):
             for n, p in self.model.classifier.named_parameters():
@@ -122,9 +176,10 @@ class ESMCBaseModel(AbstractModel):
             # PEFT may prefix module paths; be robust by checking substring
             is_classifier = ("classifier" in n)
             p.requires_grad = is_lora or is_classifier
+        
+        # After LoRA model is initialized, add trainable parameters to optimizer)
+        self.init_optimizers()
     
-    # (Freezing is handled inside _init_lora_peft)
-
     def initialize_model(self):
         try:
             from esm.tokenization.sequence_tokenizer import EsmSequenceTokenizer
@@ -143,13 +198,6 @@ class ESMCBaseModel(AbstractModel):
         self.model = ESMC.from_pretrained(self.model_name)
         self.model = self.model.to(torch.float32)
         self.tokenizer = self.model.tokenizer
-
-        # Print ESMProtein constructor signature for debugging compatibility
-        try:
-            import inspect
-            from esm.sdk.api import ESMProtein
-        except Exception as _e:
-            print("ESMC Failed to inspect ESMProtein signature:", _e)
 
         # Attach simple heads per task
         hidden_size = getattr(getattr(self.model, 'config', None), 'hidden_size', 960)
@@ -190,63 +238,23 @@ class ESMCBaseModel(AbstractModel):
 
     def initialize_metrics(self, stage: str) -> dict:
         return {}
-
+    
     def save_checkpoint(self, save_path: str, save_info: dict = None, save_weights_only: bool = True) -> None:
         """
-        Rewrite this function to save LoRA parameters (for ESMC lightweight LoRA)
+        Rewrite this function to save LoRA parameters
         """
         
         if not self.lora_kwargs:
-            # If not using LoRA, use default save method
             return super().save_checkpoint(save_path, save_info, save_weights_only)
         
         else:
-            # If PEFT is active, prefer saving adapter via save_pretrained
-            try:
-                if hasattr(self.model, 'save_pretrained'):
-                    dir = os.path.dirname(save_path)
-                    os.makedirs(dir, exist_ok=True)
-                    self.model.save_pretrained(dir)
-                    print(f"ESMC LoRA (PEFT) adapter saved to {dir}")
-                    return
-            except Exception:
-                pass
-            # Fallback: Save lightweight LoRA parameters (A and B) and classifier
             try:
                 if hasattr(self.trainer.strategy, "deepspeed_engine"):
                     save_path = os.path.dirname(save_path)
             except Exception as e:
                 pass
             
-            dir = os.path.dirname(save_path)
-            os.makedirs(dir, exist_ok=True)
-            
-            state_dict = {} if save_info is None else save_info
-            
-            # Extract only LoRA parameters (A and B) and classifier
-            lora_state_dict = {}
-            for name, param in self.model.named_parameters():
-                # Save LoRA parameters (A and B) and classifier
-                if ("A" in name or "B" in name) or name.startswith("classifier"):
-                    lora_state_dict[name] = param.float()  # Convert to fp32
-            
-            state_dict["model"] = lora_state_dict
-            
-            if not save_weights_only:
-                state_dict["global_step"] = self.step
-                state_dict["epoch"] = self.epoch
-                state_dict["best_value"] = getattr(self, "best_value", None)
-                state_dict["lr_scheduler"] = self.lr_schedulers().state_dict()
-                
-                # If not using DeepSpeed, save optimizer state
-                try:
-                    if not hasattr(self.trainer.strategy, "deepspeed_engine"):
-                        state_dict["optimizer"] = self.optimizers().optimizer.state_dict()
-                except Exception:
-                    pass
-            
-            torch.save(state_dict, save_path)
-            print(f"ESMC LoRA checkpoint saved to {save_path}")
+            self.model.save_pretrained(save_path)
 
     def output_test_metrics(self, log_dict):
         # Remove valid_loss from log_dict when the task is classification
@@ -286,15 +294,11 @@ class ESMCBaseModel(AbstractModel):
     
     def plot_valid_metrics_curve(self, log_dict):
         if not hasattr(self, 'grid'):
-            try:
-                from google.colab import widgets
-                width = 400 * len(log_dict)
-                height = 400
-                self.grid = widgets.Grid(1, 1, header_row=False, header_column=False,
-                                         style=f'width:{width}px; height:{height}px')
-            except ImportError:
-                # If not in Colab, create a simple grid alternative
-                self.grid = None
+            from google.colab import widgets
+            width = 400 * len(log_dict)
+            height = 400
+            self.grid = widgets.Grid(1, 1, header_row=False, header_column=False,
+                                     style=f'width:{width}px; height:{height}px')
         
         # Remove valid_loss from log_dict when the task is classification
         if "valid_acc" in log_dict:
@@ -313,42 +317,9 @@ class ESMCBaseModel(AbstractModel):
             "valid_pearson": "Pearson correlation",
         }
         
-        if self.grid is not None:
-            with self.grid.output_to(0, 0):
-                self.grid.clear_cell()
-                fig = plt.figure(figsize=(6 * len(log_dict), 6))
-                ax = []
-                self.valid_metrics_list['step'].append(int(self.step))
-                for idx, metric in enumerate(log_dict.keys()):
-                    value = torch.nan if log_dict[metric] is None else log_dict[metric].detach().cpu().item()
-                    
-                    if metric in self.valid_metrics_list:
-                        self.valid_metrics_list[metric].append(value)
-                    else:
-                        self.valid_metrics_list[metric] = [value]
-                    
-                    ax.append(fig.add_subplot(1, len(log_dict), idx + 1))
-                    ax[idx].set_title(METRIC_MAP.get(metric.lower(), metric.upper()))
-                    ax[idx].set_xlabel('step')
-                    ax[idx].set_ylabel(METRIC_MAP.get(metric.lower(), metric))
-                    ax[idx].plot(self.valid_metrics_list['step'], self.valid_metrics_list[metric], marker='o')
-                
-                import ipywidgets
-                import markdown
-                from IPython.display import display
-                
-                hint = ipywidgets.HTML(
-                    markdown.markdown(
-                        f"### The model is saved to {self.save_path}.\n\n"
-                        "### Evaluation results on the validation set are shown below.\n\n"
-                        "### You can check <a href='https://github.com/westlake-repl/SaprotHub/wiki/SaprotHub-v2-(latest)#3-how-can-i-monitor-model-performance-during-training-and-detect-overfitting' target='blank'>here</a> to see how to judge the overfitting of your model."
-                    )
-                )
-                display(hint)
-                plt.tight_layout()
-                plt.show()
-        else:
-            # Fallback for non-Colab environments
+        with self.grid.output_to(0, 0):
+            self.grid.clear_cell()
+            
             fig = plt.figure(figsize=(6 * len(log_dict), 6))
             ax = []
             self.valid_metrics_list['step'].append(int(self.step))
@@ -361,17 +332,22 @@ class ESMCBaseModel(AbstractModel):
                     self.valid_metrics_list[metric] = [value]
                 
                 ax.append(fig.add_subplot(1, len(log_dict), idx + 1))
-                ax[idx].set_title(METRIC_MAP.get(metric.lower(), metric.upper()))
+                ax[idx].set_title(METRIC_MAP[metric.lower()])
                 ax[idx].set_xlabel('step')
-                ax[idx].set_ylabel(METRIC_MAP.get(metric.lower(), metric))
+                ax[idx].set_ylabel(METRIC_MAP[metric.lower()])
                 ax[idx].plot(self.valid_metrics_list['step'], self.valid_metrics_list[metric], marker='o')
             
-            plt.tight_layout()
+            import ipywidgets
+            import markdown
+            from IPython.display import display
+            
+            hint = ipywidgets.HTML(
+                markdown.markdown(
+                    f"### The model is saved to {self.save_path}.\n\n"
+                    "### Evaluation results on the validation set are shown below.\n\n"
+                    "### You can check <a href='https://github.com/westlake-repl/SaprotHub/wiki/SaprotHub-v2-(latest)#3-how-can-i-monitor-model-performance-during-training-and-detect-overfitting' target='blank'>here</a> to see how to judge the overfitting of your model."
+                )
+            )
+            display(hint)
             # plt.tight_layout()
             plt.show()
-
-
-
-    # Ensure optimizer only sees LoRA + classifier as trainable (already set in _init_lora_peft)
-    def configure_optimizers(self):
-        return super().configure_optimizers()
