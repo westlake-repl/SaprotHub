@@ -96,7 +96,7 @@ class ESMCClassificationModel(ESMCBaseModel):
             token_ids_batch = pad_sequence(
                 token_ids_list,
                 batch_first=True,
-                padding_value=self.model.tokenizer.alphabet.padding_idx
+                padding_value=self.model.tokenizer.pad_token_id
             )
             
             token_ids_batch = token_ids_batch.to(self.device)
@@ -109,7 +109,7 @@ class ESMCClassificationModel(ESMCBaseModel):
             representations = model_output['representations'][len(self.model.transformer.layers)]
             
             # 步骤 4: 池化 (Pooling)
-            mask = (token_ids_batch != self.model.tokenizer.alphabet.padding_idx).unsqueeze(-1)
+            mask = (token_ids_batch != self.model.tokenizer.pad_token_id).unsqueeze(-1)
             
             sequence_lengths = mask.sum(dim=1)
             sequence_lengths = sequence_lengths.clamp(min=1)
