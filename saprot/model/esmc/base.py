@@ -1,4 +1,5 @@
 import torch
+import matplotlib.pyplot as plt
 
 from ..abstract_model import AbstractModel
 
@@ -205,5 +206,127 @@ class ESMCBaseModel(AbstractModel):
 
     def initialize_metrics(self, stage: str) -> dict:
         return {}
+
+    def output_test_metrics(self, log_dict):
+        # Remove valid_loss from log_dict when the task is classification
+        if "test_acc" in log_dict:
+            log_dict.pop("test_loss", None)
+        
+        # Remove mcc metric if the number of classes is greater than 2
+        if self.task == "token_classification" and hasattr(self, "num_labels") and self.num_labels > 2:
+            log_dict.pop("test_mcc", None)
+        
+        METRIC_MAP = {
+            "test_acc": "Classification accuracy (Acc)",
+            "test_loss": "Root mean squared error (RMSE)",  # Only for regression task
+            "test_mcc": "Matthews correlation coefficient (MCC)",
+            "test_r2": "Coefficient of determination (R^2)",
+            "test_spearman": "Spearman correlation",
+            "test_pearson": "Pearson correlation",
+        }
+        
+        print('=' * 100)
+        print('Evaluation results on the test set:')
+        flag = False
+        for key, value in log_dict.items():
+            if value is not None:
+                print_value = value.item()
+            else:
+                print_value = torch.nan
+                flag = True
+            
+            metric_name = METRIC_MAP.get(key.lower(), key)
+            print(f"{metric_name}: {print_value}")
+        
+        if "classification" not in self.task and flag:
+            print("\033[31m\nWarning: To calculate some metrics (R^2, Spearman correlation, Pearson correlation), "
+                  "a minimum of two examples from the validation/test set is required.\033[0m")
+        print('=' * 100)
+    
+    def plot_valid_metrics_curve(self, log_dict):
+        if not hasattr(self, 'grid'):
+            try:
+                from google.colab import widgets
+                width = 400 * len(log_dict)
+                height = 400
+                self.grid = widgets.Grid(1, 1, header_row=False, header_column=False,
+                                         style=f'width:{width}px; height:{height}px')
+            except ImportError:
+                # If not in Colab, create a simple grid alternative
+                self.grid = None
+        
+        # Remove valid_loss from log_dict when the task is classification
+        if "valid_acc" in log_dict:
+            log_dict.pop("valid_loss", None)
+        
+        # Remove mcc metric if the number of classes is greater than 2
+        if self.task == "token_classification" and hasattr(self, "num_labels") and self.num_labels > 2:
+            log_dict.pop("valid_mcc", None)
+        
+        METRIC_MAP = {
+            "valid_acc": "Classification accuracy (Acc)",
+            "valid_loss": "Root mean squared error (RMSE)",  # Only for regression task
+            "valid_mcc": "Matthews correlation coefficient (MCC)",
+            "valid_r2": "Coefficient of determination (R$^2$)",
+            "valid_spearman": "Spearman correlation",
+            "valid_pearson": "Pearson correlation",
+        }
+        
+        if self.grid is not None:
+            with self.grid.output_to(0, 0):
+                self.grid.clear_cell()
+                fig = plt.figure(figsize=(6 * len(log_dict), 6))
+                ax = []
+                self.valid_metrics_list['step'].append(int(self.step))
+                for idx, metric in enumerate(log_dict.keys()):
+                    value = torch.nan if log_dict[metric] is None else log_dict[metric].detach().cpu().item()
+                    
+                    if metric in self.valid_metrics_list:
+                        self.valid_metrics_list[metric].append(value)
+                    else:
+                        self.valid_metrics_list[metric] = [value]
+                    
+                    ax.append(fig.add_subplot(1, len(log_dict), idx + 1))
+                    ax[idx].set_title(METRIC_MAP.get(metric.lower(), metric.upper()))
+                    ax[idx].set_xlabel('step')
+                    ax[idx].set_ylabel(METRIC_MAP.get(metric.lower(), metric))
+                    ax[idx].plot(self.valid_metrics_list['step'], self.valid_metrics_list[metric], marker='o')
+                
+                import ipywidgets
+                import markdown
+                from IPython.display import display
+                
+                hint = ipywidgets.HTML(
+                    markdown.markdown(
+                        f"### The model is saved to {self.save_path}.\n\n"
+                        "### Evaluation results on the validation set are shown below.\n\n"
+                        "### You can check <a href='https://github.com/westlake-repl/SaprotHub/wiki/SaprotHub-v2-(latest)#3-how-can-i-monitor-model-performance-during-training-and-detect-overfitting' target='blank'>here</a> to see how to judge the overfitting of your model."
+                    )
+                )
+                display(hint)
+                plt.tight_layout()
+                plt.show()
+        else:
+            # Fallback for non-Colab environments
+            fig = plt.figure(figsize=(6 * len(log_dict), 6))
+            ax = []
+            self.valid_metrics_list['step'].append(int(self.step))
+            for idx, metric in enumerate(log_dict.keys()):
+                value = torch.nan if log_dict[metric] is None else log_dict[metric].detach().cpu().item()
+                
+                if metric in self.valid_metrics_list:
+                    self.valid_metrics_list[metric].append(value)
+                else:
+                    self.valid_metrics_list[metric] = [value]
+                
+                ax.append(fig.add_subplot(1, len(log_dict), idx + 1))
+                ax[idx].set_title(METRIC_MAP.get(metric.lower(), metric.upper()))
+                ax[idx].set_xlabel('step')
+                ax[idx].set_ylabel(METRIC_MAP.get(metric.lower(), metric))
+                ax[idx].plot(self.valid_metrics_list['step'], self.valid_metrics_list[metric], marker='o')
+            
+            plt.tight_layout()
+            # plt.tight_layout()
+            plt.show()
 
 
