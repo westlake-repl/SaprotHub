@@ -81,7 +81,9 @@ class ESMCClassificationModel(ESMCBaseModel):
                     or ('lora_' in n)
                 ):
                     lora_params += num
-                elif n.startswith('classifier'):
+                elif 'classifier' in n:
+                    # PEFT wraps model, so classifier path may be 'base_model.model.classifier.xxx'
+                    # or just 'classifier.xxx' - check for substring instead of startswith
                     classifier_params += num
         print(f"ESMC Debug | device: model={model_device} self.device={self.device}")
         print(f"ESMC Debug | params: trainable={trainable_params:,} (LoRA={lora_params:,}, classifier={classifier_params:,}) / total={total_params:,} ({(trainable_params/total_params if total_params else 0):.2%})")
@@ -134,10 +136,18 @@ class ESMCClassificationModel(ESMCBaseModel):
             pooled_repr = (representations * mask).sum(dim=1) / sequence_lengths
             print(f"ESMC Debug | pooled: shape={tuple(pooled_repr.shape)} dtype={pooled_repr.dtype} device={pooled_repr.device}")
 
-        logits = self.model.classifier(pooled_repr)
+        # Get classifier - handle PEFT wrapping
+        if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model') and hasattr(self.model.base_model.model, 'classifier'):
+            classifier = self.model.base_model.model.classifier
+        elif hasattr(self.model, 'classifier'):
+            classifier = self.model.classifier
+        else:
+            raise AttributeError("Cannot find classifier in model")
+        
+        logits = classifier(pooled_repr)
         # Classifier stats
-        cls_total = sum(p.numel() for p in self.model.classifier.parameters())
-        cls_trainable = sum(p.numel() for p in self.model.classifier.parameters() if p.requires_grad)
+        cls_total = sum(p.numel() for p in classifier.parameters())
+        cls_trainable = sum(p.numel() for p in classifier.parameters() if p.requires_grad)
         print(f"ESMC Debug | classifier params: trainable={cls_trainable:,} / total={cls_total:,}")
         print(f"ESMC Debug | logits: shape={tuple(logits.shape)} dtype={logits.dtype} device={logits.device}")
 
