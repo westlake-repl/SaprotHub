@@ -216,8 +216,7 @@ class ESMCBaseModel(AbstractModel):
                         classifier_params += num
         
         print(f"trainable params: {trainable_params:,} || all params: {total_params:,} || trainable%: {100.0 * trainable_params / total_params if total_params > 0 else 0:.6f}")
-        print(f"  LoRA params: {lora_params:,}, Classifier params: {classifier_params:,}")
-        
+
         # Ensure classifier is trainable
         if hasattr(self.model, 'classifier'):
             for n, p in self.model.classifier.named_parameters():
