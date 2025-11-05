@@ -240,6 +240,21 @@ def apply_dataset_redirect_in_config(config):
     
     return config
 
+def apply_all_redirects_in_config(config):
+    """
+    Apply both model and dataset redirect logic to config before printing (for Colab notebook).
+    This is a convenience function that calls both apply_model_redirect_in_config and 
+    apply_dataset_redirect_in_config.
+    
+    Usage in Colab notebook:
+        from saprot.utils.module_loader import apply_all_redirects_in_config
+        config = apply_all_redirects_in_config(config)
+        pprint.pprint(config)
+    """
+    config = apply_model_redirect_in_config(config)
+    config = apply_dataset_redirect_in_config(config)
+    return config
+
 def my_load_dataset(config):
     dataset_config = copy.deepcopy(config)
     dataset_type = dataset_config.pop("dataset_py_path")
