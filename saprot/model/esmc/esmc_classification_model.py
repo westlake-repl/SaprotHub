@@ -1,6 +1,7 @@
 import torchmetrics
 import torch
 from torch.nn.functional import cross_entropy
+from torch.nn.utils.rnn import pad_sequence
 
 from saprot.model.model_interface import register_model
 from saprot.model.esmc.base import ESMCBaseModel
@@ -34,40 +35,30 @@ class ESMCClassificationModel(ESMCBaseModel):
         if not isinstance(proteins, list):
             proteins = [proteins]
 
-        # Tokenization & Padding
-        sequences = [p.sequence for p in proteins]
-        # Get tokenizer - handle PEFT wrapping
-        if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model') and hasattr(self.model.base_model.model, 'tokenizer'):
-            tokenizer = self.model.base_model.model.tokenizer
-        elif hasattr(self.model, 'tokenizer'):
-            tokenizer = self.model.tokenizer
-        else:
-            raise AttributeError("Cannot find tokenizer in model")
-        
-        batch_encoding = tokenizer(
-            sequences, 
-            padding=True, 
-            return_tensors="pt"
-        )
-        token_ids_batch = batch_encoding['input_ids'].to(self.device)
-        attention_mask = batch_encoding['attention_mask'].to(self.device)
-
         # Wrap backbone forward and pooling in no_grad context when freeze_backbone=True
         # This saves memory and computation when backbone is frozen
         with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            # Inference
+            # Get base model for embed and padding_idx (handle PEFT wrapping)
+            if hasattr(self.model, 'base_model'):
+                base_model = self.model.base_model.model if hasattr(self.model.base_model, 'model') else self.model.base_model
+            else:
+                base_model = self.model
+            
+            # Tokenize and pad using ESMProtein.embed
+            token_ids_list = [base_model.embed(p) for p in proteins]
+            token_ids_batch = pad_sequence(token_ids_list, batch_first=True, padding_value=base_model.padding_idx)
+            token_ids_batch = token_ids_batch.to(self.device)
+            
+            # Forward pass to get representations
             # When wrapped by PEFT, forward may receive kwargs, but ESMC expects positional args
             if hasattr(self.model, 'base_model'):
-                # PEFT wrapped model: call base_model forward with positional args
-                base_model = self.model.base_model.model if hasattr(self.model.base_model, 'model') else self.model.base_model
                 model_output = base_model.forward(token_ids_batch)
             else:
-                # Not wrapped by PEFT: direct call
                 model_output = self.model.forward(token_ids_batch)
             representations = model_output.hidden_states[-1]
 
             # Pooling
-            mask = (token_ids_batch != tokenizer.pad_token_id).unsqueeze(-1)
+            mask = (token_ids_batch != base_model.padding_idx).unsqueeze(-1)
             sequence_lengths = mask.sum(dim=1)
             sequence_lengths = sequence_lengths.clamp(min=1)
             pooled_repr = (representations * mask).sum(dim=1) / sequence_lengths
