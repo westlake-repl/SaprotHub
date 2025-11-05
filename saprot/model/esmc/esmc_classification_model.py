@@ -120,6 +120,12 @@ class ESMCClassificationModel(ESMCBaseModel):
             
             pooled_repr = (representations * mask).sum(dim=1) / sequence_lengths
             print(f"ESMC Debug | pooled: shape={tuple(pooled_repr.shape)} dtype={pooled_repr.dtype} device={pooled_repr.device}")
+            # Debug: check pooled_repr values
+            pooled_min = pooled_repr.min().item()
+            pooled_max = pooled_repr.max().item()
+            pooled_mean = pooled_repr.mean().item()
+            pooled_std = pooled_repr.std().item()
+            print(f"ESMC Debug | pooled stats: min={pooled_min:.4f} max={pooled_max:.4f} mean={pooled_mean:.4f} std={pooled_std:.4f}")
 
         # Get classifier - handle PEFT wrapping
         if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model') and hasattr(self.model.base_model.model, 'classifier'):
@@ -135,6 +141,19 @@ class ESMCClassificationModel(ESMCBaseModel):
         cls_trainable = sum(p.numel() for p in classifier.parameters() if p.requires_grad)
         print(f"ESMC Debug | classifier params: trainable={cls_trainable:,} / total={cls_total:,}")
         print(f"ESMC Debug | logits: shape={tuple(logits.shape)} dtype={logits.dtype} device={logits.device}")
+        
+        # Debug: check logits values for extreme values
+        logits_min = logits.min().item()
+        logits_max = logits.max().item()
+        logits_mean = logits.mean().item()
+        logits_std = logits.std().item()
+        print(f"ESMC Debug | logits stats: min={logits_min:.4f} max={logits_max:.4f} mean={logits_mean:.4f} std={logits_std:.4f}")
+        
+        # Check for NaN or Inf
+        if torch.isnan(logits).any():
+            print(f"ESMC Debug | WARNING: logits contains NaN!")
+        if torch.isinf(logits).any():
+            print(f"ESMC Debug | WARNING: logits contains Inf!")
 
         return logits
     
