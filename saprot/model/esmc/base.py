@@ -302,6 +302,77 @@ class ESMCBaseModel(AbstractModel):
     def initialize_metrics(self, stage: str) -> dict:
         return {}
     
+    def get_hidden_states_from_seqs(self, seqs: list, reduction: str = None) -> list:
+        """
+        Get hidden representations of protein sequences
+        
+        Args:
+            seqs: A list of protein sequences (amino acid sequences as strings)
+            reduction: Whether to reduce the hidden states. If None, returns sequence-level representations for each position.
+                       If "mean", the hidden states are averaged over the sequence length.
+        
+        Returns:
+            hidden_states: A list of tensors. Each tensor is of shape [D] if reduction="mean", 
+                          or [L, D] if reduction=None, where L is the sequence length and D is the hidden dimension.
+        """
+        # Get tokenizer - handle PEFT wrapping
+        if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model') and hasattr(self.model.base_model.model, 'tokenizer'):
+            tokenizer = self.model.base_model.model.tokenizer
+        elif hasattr(self.model, 'tokenizer'):
+            tokenizer = self.model.tokenizer
+        else:
+            raise AttributeError("Cannot find tokenizer in model")
+        
+        # Tokenize sequences
+        batch_encoding = tokenizer(
+            seqs, 
+            padding=True, 
+            return_tensors="pt"
+        )
+        
+        # Get device - use device_str from initialization or infer from model
+        if hasattr(self, 'device_str'):
+            device = torch.device(self.device_str)
+        elif hasattr(self.model, 'device'):
+            device = self.model.device
+        else:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        token_ids_batch = batch_encoding['input_ids'].to(device)
+        attention_mask = batch_encoding['attention_mask'].to(device)
+        
+        # Forward pass to get representations
+        with torch.no_grad():
+            # When wrapped by PEFT, forward may receive kwargs, but ESMC expects positional args
+            if hasattr(self.model, 'base_model'):
+                # PEFT wrapped model: call base_model forward with positional args
+                base_model = self.model.base_model.model if hasattr(self.model.base_model, 'model') else self.model.base_model
+                model_output = base_model.forward(token_ids_batch)
+            else:
+                # Not wrapped by PEFT: direct call
+                model_output = self.model.forward(token_ids_batch)
+            
+            representations = model_output.hidden_states[-1]  # [B, L, D]
+        
+        # Process each sequence
+        repr_list = []
+        pad_token_id = tokenizer.pad_token_id if hasattr(tokenizer, 'pad_token_id') else tokenizer.padding_idx
+        
+        for i in range(len(seqs)):
+            # Get mask for this sequence (excluding padding tokens)
+            mask = (token_ids_batch[i] != pad_token_id)
+            
+            if reduction == "mean":
+                # Average pooling over sequence length (excluding padding)
+                seq_repr = representations[i][mask].mean(dim=0)  # [D]
+            else:
+                # Return all hidden states for this sequence (excluding padding)
+                seq_repr = representations[i][mask]  # [L, D]
+            
+            repr_list.append(seq_repr)
+        
+        return repr_list
+    
     def save_checkpoint(self, save_path: str, save_info: dict = None, save_weights_only: bool = True) -> None:
         """
         Rewrite this function to save LoRA parameters
