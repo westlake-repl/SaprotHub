@@ -164,7 +164,29 @@ class ESMCBaseModel(AbstractModel):
             self.forward = lora_forward(self.forward)
         
         print(f"Now active LoRA model: {self.model.active_adapter}")
-        self.model.print_trainable_parameters()
+        
+        # Custom parameter counting with deduplication to avoid PEFT modules_to_save double counting
+        unique_params = set()
+        total_params = 0
+        trainable_params = 0
+        lora_params = 0
+        classifier_params = 0
+        
+        for n, p in self.model.named_parameters():
+            param_id = id(p)
+            if param_id not in unique_params:
+                unique_params.add(param_id)
+                num = p.numel()
+                total_params += num
+                if p.requires_grad:
+                    trainable_params += num
+                    if "lora_" in n:
+                        lora_params += num
+                    elif "classifier" in n:
+                        classifier_params += num
+        
+        print(f"trainable params: {trainable_params:,} || all params: {total_params:,} || trainable%: {100.0 * trainable_params / total_params if total_params > 0 else 0:.6f}")
+        print(f"  LoRA params: {lora_params:,}, Classifier params: {classifier_params:,}")
         
         # Ensure classifier is trainable
         if hasattr(self.model, 'classifier'):

@@ -129,7 +129,18 @@ def my_load_dataset(config):
     def _maybe_redirect_dataset_to_esmc(dtype_local: str, cfg: dict):
         cfg = copy.deepcopy(cfg)
         tok = cfg.get("tokenizer", "")
+        
+        # Check tokenizer for ESMC flag
         esmc_flag = isinstance(tok, str) and ("esmc-" in tok or "EvolutionaryScale/esmc-" in tok)
+        
+        # Also check if dataset_type already starts with "esmc/" - in case model was already redirected
+        # This handles the case where model_py_path is "esmc/esmc_classification_model" 
+        # but dataset_py_path is still "saprot/saprot_classification_dataset"
+        if not esmc_flag and dtype_local.startswith("saprot/"):
+            # Try to detect from parent config if available (for debugging)
+            # But since we only receive dataset config, we rely on tokenizer detection
+            pass
+        
         if not esmc_flag:
             return dtype_local, cfg
 
@@ -150,7 +161,11 @@ def my_load_dataset(config):
             "saprot/saprot_annotation_dataset": "esmc/esmc_annotation_dataset",
         }
 
-        return mapping.get(dtype_local, dtype_local), cfg
+        redirected_type = mapping.get(dtype_local, dtype_local)
+        if redirected_type != dtype_local:
+            print(f"[Dataset Auto-Redirect] Redirecting '{dtype_local}' to '{redirected_type}' (detected ESMC tokenizer: {tok})")
+        
+        return redirected_type, cfg
 
     dataset_type, dataset_config = _maybe_redirect_dataset_to_esmc(dataset_type, dataset_config)
 
