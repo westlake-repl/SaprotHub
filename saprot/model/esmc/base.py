@@ -12,36 +12,6 @@ except ImportError:
     raise ImportError("Please install esm package first: pip install esm")
 
 
-class StableClassificationHead(torch.nn.Module):
-    """Classification head with numerical stability protection"""
-    def __init__(self, hidden_size, num_labels):
-        super().__init__()
-        self.classifier = torch.nn.Sequential(
-            torch.nn.Linear(hidden_size, hidden_size),
-            torch.nn.ReLU(),
-            torch.nn.Dropout(0.1),
-            torch.nn.Linear(hidden_size, num_labels)
-        )
-        # Initialize classifier weights with smaller scale to prevent extreme logits
-        # Using smaller initialization helps when input (pooled_repr) is normalized
-        for module in self.classifier:
-            if isinstance(module, torch.nn.Linear):
-                # Use Kaiming normal with smaller gain for better stability
-                torch.nn.init.kaiming_normal_(module.weight, mode='fan_in', nonlinearity='relu')
-                # Scale down weights to prevent extreme outputs
-                module.weight.data *= 0.1
-                if module.bias is not None:
-                    torch.nn.init.zeros_(module.bias)
-    
-    def forward(self, x):
-        logits = self.classifier(x)
-        # Convert to float32 for numerical stability
-        logits = logits.float()
-        # Clamp logits to prevent extreme values
-        logits = torch.clamp(logits, min=-20.0, max=20.0)
-        return logits
-
-
 class ESMCBaseModel(AbstractModel):
     """
     ESMC base model. Provides model initialization for downstream tasks.
@@ -216,7 +186,8 @@ class ESMCBaseModel(AbstractModel):
                         classifier_params += num
         
         print(f"trainable params: {trainable_params:,} || all params: {total_params:,} || trainable%: {100.0 * trainable_params / total_params if total_params > 0 else 0:.6f}")
-
+        print(f"  LoRA params: {lora_params:,}, Classifier params: {classifier_params:,}")
+        
         # Ensure classifier is trainable
         if hasattr(self.model, 'classifier'):
             for n, p in self.model.classifier.named_parameters():

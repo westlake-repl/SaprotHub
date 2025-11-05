@@ -1,7 +1,6 @@
 import torchmetrics
 import torch
 from torch.nn.functional import cross_entropy
-from torch.nn.utils.rnn import pad_sequence
 
 from saprot.model.model_interface import register_model
 from saprot.model.esmc.base import ESMCBaseModel
