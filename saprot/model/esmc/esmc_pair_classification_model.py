@@ -22,7 +22,30 @@ class ESMCPairClassificationModel(ESMCBaseModel):
     def initialize_model(self):
         super().initialize_model()
 
-        hidden_size = getattr(getattr(self.model, 'config', None), 'hidden_size', 960) * 2
+        # Get hidden_size from base model (already initialized in super())
+        # Try multiple methods to be robust
+        hidden_size = None
+        if hasattr(self.model, 'config') and hasattr(self.model.config, 'hidden_size'):
+            hidden_size = self.model.config.hidden_size
+        elif hasattr(self.model, 'embed') and hasattr(self.model.embed, 'embedding_dim'):
+            hidden_size = self.model.embed.embedding_dim
+        elif hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model'):
+            # PEFT wrapped model
+            base_model = self.model.base_model.model
+            if hasattr(base_model, 'config') and hasattr(base_model.config, 'hidden_size'):
+                hidden_size = base_model.config.hidden_size
+            elif hasattr(base_model, 'embed') and hasattr(base_model.embed, 'embedding_dim'):
+                hidden_size = base_model.embed.embedding_dim
+        
+        # Fallback: infer from model_name
+        if hidden_size is None:
+            model_name = getattr(self, 'model_name', 'esmc_300m')
+            if '600m' in model_name.lower() or '600' in model_name:
+                hidden_size = 1152
+            else:
+                hidden_size = 960
+        
+        hidden_size = hidden_size * 2  # Pair models need 2x hidden size
         classifier = torch.nn.Sequential(
             Linear(hidden_size, hidden_size),
             ReLU(),

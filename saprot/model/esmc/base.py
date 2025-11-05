@@ -222,7 +222,26 @@ class ESMCBaseModel(AbstractModel):
         self.tokenizer = self.model.tokenizer
 
         # Attach simple heads per task
-        hidden_size = getattr(getattr(self.model, 'config', None), 'hidden_size', 960)
+        # Get hidden_size: try multiple methods to be robust
+        hidden_size = None
+        # Method 1: Try to get from config
+        if hasattr(self.model, 'config') and hasattr(self.model.config, 'hidden_size'):
+            hidden_size = self.model.config.hidden_size
+        # Method 2: Try to get from embedding layer dimension
+        elif hasattr(self.model, 'embed') and hasattr(self.model.embed, 'embedding_dim'):
+            hidden_size = self.model.embed.embedding_dim
+        # Method 3: Infer from model_name (fallback)
+        if hidden_size is None:
+            if '600m' in self.model_name.lower() or '600' in self.model_name:
+                hidden_size = 1152  # ESMC-600M hidden size
+            elif '300m' in self.model_name.lower() or '300' in self.model_name:
+                hidden_size = 960   # ESMC-300M hidden size
+            else:
+                # Default to 300M size, but this should rarely happen
+                hidden_size = 960
+                import warnings
+                warnings.warn(f"Could not determine hidden_size for model {self.model_name}, defaulting to 960. "
+                            f"If this is ESMC-600M, set hidden_size to 1152 manually.")
 
         if self.task == 'classification':
             classifier = torch.nn.Sequential(
