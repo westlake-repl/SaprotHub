@@ -12,6 +12,65 @@ from pytorch_lightning.strategies import DDPStrategy, DeepSpeedStrategy, Strateg
 ################################################################################
 ################################ load model ####################################
 ################################################################################
+
+def apply_model_redirect_in_config(config):
+    """
+    Apply model redirect logic to config.model before printing (for Colab notebook).
+    This updates config.model.model_py_path and config.model.kwargs if ESMC is detected.
+    
+    Usage in Colab notebook:
+        from saprot.utils.module_loader import apply_model_redirect_in_config
+        config = apply_model_redirect_in_config(config)
+        pprint.pprint(config)
+    """
+    if not hasattr(config, 'model') or not hasattr(config.model, 'model_py_path'):
+        return config
+    
+    model_type = config.model.model_py_path
+    
+    # Convert EasyDict kwargs to dict
+    if hasattr(config.model, 'kwargs'):
+        if hasattr(config.model.kwargs, 'to_dict'):
+            cfg_dict = config.model.kwargs.to_dict()
+        else:
+            # Convert EasyDict to regular dict
+            cfg_dict = {}
+            for k in config.model.kwargs.keys():
+                cfg_dict[k] = config.model.kwargs[k]
+    else:
+        cfg_dict = {}
+    
+    # Apply redirect logic (same as in my_load_model)
+    cfg = copy.deepcopy(cfg_dict)
+    config_path = cfg.get("config_path", "")
+    esmc_flag = isinstance(config_path, str) and ("esmc-" in config_path or "EvolutionaryScale/esmc-" in config_path)
+    
+    if not esmc_flag:
+        return config
+    
+    model_name = "esmc_300m" if "esmc-300m" in config_path else ("esmc_600m" if "esmc-600m" in config_path else "esmc_300m")
+    cfg.pop("config_path", None)
+    cfg["model_name"] = model_name
+    cfg.pop("load_pretrained", None)
+    
+    mapping = {
+        "saprot/saprot_classification_model": "esmc/esmc_classification_model",
+        "saprot/saprot_regression_model": "esmc/esmc_regression_model",
+        "saprot/saprot_token_classification_model": "esmc/esmc_token_classification_model",
+        "saprot/saprot_pair_classification_model": "esmc/esmc_pair_classification_model",
+        "saprot/saprot_pair_regression_model": "esmc/esmc_pair_regression_model",
+    }
+    
+    redirected_type = mapping.get(model_type, model_type)
+    
+    # Update config
+    config.model.model_py_path = redirected_type
+    if hasattr(config.model, 'kwargs'):
+        for k, v in cfg.items():
+            config.model.kwargs[k] = v
+    
+    return config
+
 def my_load_model(config):
     model_config = copy.deepcopy(config)
     model_type = model_config.pop("model_py_path")
@@ -119,6 +178,68 @@ def my_load_model(config):
 ################################################################################
 ################################ load dataset ##################################
 ################################################################################
+
+def apply_dataset_redirect_in_config(config):
+    """
+    Apply dataset redirect logic to config.dataset before printing (for Colab notebook).
+    This updates config.dataset.dataset_py_path and config.dataset.kwargs if ESMC is detected.
+    
+    Usage in Colab notebook:
+        from saprot.utils.module_loader import apply_dataset_redirect_in_config
+        config = apply_dataset_redirect_in_config(config)
+        pprint.pprint(config)
+    """
+    if not hasattr(config, 'dataset') or not hasattr(config.dataset, 'dataset_py_path'):
+        return config
+    
+    dataset_type = config.dataset.dataset_py_path
+    
+    # Convert EasyDict kwargs to dict
+    if hasattr(config.dataset, 'kwargs'):
+        if hasattr(config.dataset.kwargs, 'to_dict'):
+            cfg_dict = config.dataset.kwargs.to_dict()
+        else:
+            # Convert EasyDict to regular dict
+            cfg_dict = {}
+            for k in config.dataset.kwargs.keys():
+                cfg_dict[k] = config.dataset.kwargs[k]
+    else:
+        cfg_dict = {}
+    
+    # Apply redirect logic (same as in my_load_dataset)
+    cfg = copy.deepcopy(cfg_dict)
+    tok = cfg.get("tokenizer", "")
+    esmc_flag = isinstance(tok, str) and ("esmc-" in tok or "EvolutionaryScale/esmc-" in tok)
+    
+    if not esmc_flag:
+        return config
+    
+    model_name = "esmc_300m" if "esmc-300m" in tok else ("esmc_600m" if "esmc-600m" in tok else "esmc_300m")
+    cfg.pop("tokenizer", None)
+    cfg["model_name"] = model_name
+    for k in ["plddt_threshold", "mask_struc_ratio"]:
+        if k in cfg:
+            cfg.pop(k, None)
+    
+    mapping = {
+        "saprot/saprot_classification_dataset": "esmc/esmc_classification_dataset",
+        "saprot/saprot_token_classification_dataset": "esmc/esmc_token_classification_dataset",
+        "saprot/saprot_regression_dataset": "esmc/esmc_regression_dataset",
+        "saprot/saprot_pair_classification_dataset": "esmc/esmc_pair_classification_dataset",
+        "saprot/saprot_pair_regression_dataset": "esmc/esmc_pair_regression_dataset",
+        "saprot/saprot_annotation_dataset": "esmc/esmc_annotation_dataset",
+    }
+    
+    redirected_type = mapping.get(dataset_type, dataset_type)
+    
+    # Update config
+    config.dataset.dataset_py_path = redirected_type
+    if hasattr(config.dataset, 'kwargs'):
+        for k, v in cfg.items():
+            config.dataset.kwargs[k] = v
+    
+    return config
+
 def my_load_dataset(config):
     dataset_config = copy.deepcopy(config)
     dataset_type = dataset_config.pop("dataset_py_path")
@@ -132,14 +253,6 @@ def my_load_dataset(config):
         
         # Check tokenizer for ESMC flag
         esmc_flag = isinstance(tok, str) and ("esmc-" in tok or "EvolutionaryScale/esmc-" in tok)
-        
-        # Also check if dataset_type already starts with "esmc/" - in case model was already redirected
-        # This handles the case where model_py_path is "esmc/esmc_classification_model" 
-        # but dataset_py_path is still "saprot/saprot_classification_dataset"
-        if not esmc_flag and dtype_local.startswith("saprot/"):
-            # Try to detect from parent config if available (for debugging)
-            # But since we only receive dataset config, we rely on tokenizer detection
-            pass
         
         if not esmc_flag:
             return dtype_local, cfg
