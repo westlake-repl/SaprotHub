@@ -119,13 +119,21 @@ class ESMCClassificationModel(ESMCBaseModel):
             sequence_lengths = sequence_lengths.clamp(min=1)
             
             pooled_repr = (representations * mask).sum(dim=1) / sequence_lengths
+            
+            # Normalize pooled representation to prevent extreme values
+            # This helps stabilize training when hidden states have large magnitudes
+            pooled_mean = pooled_repr.mean(dim=-1, keepdim=True)
+            pooled_std = pooled_repr.std(dim=-1, keepdim=True)
+            pooled_std = pooled_std.clamp(min=1e-6)  # Prevent division by zero
+            pooled_repr = (pooled_repr - pooled_mean) / pooled_std
+            
             print(f"ESMC Debug | pooled: shape={tuple(pooled_repr.shape)} dtype={pooled_repr.dtype} device={pooled_repr.device}")
-            # Debug: check pooled_repr values
+            # Debug: check pooled_repr values after normalization
             pooled_min = pooled_repr.min().item()
             pooled_max = pooled_repr.max().item()
             pooled_mean = pooled_repr.mean().item()
             pooled_std = pooled_repr.std().item()
-            print(f"ESMC Debug | pooled stats: min={pooled_min:.4f} max={pooled_max:.4f} mean={pooled_mean:.4f} std={pooled_std:.4f}")
+            print(f"ESMC Debug | pooled stats (after norm): min={pooled_min:.4f} max={pooled_max:.4f} mean={pooled_mean:.4f} std={pooled_std:.4f}")
 
         # Get classifier - handle PEFT wrapping
         if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model') and hasattr(self.model.base_model.model, 'classifier'):
@@ -136,6 +144,14 @@ class ESMCClassificationModel(ESMCBaseModel):
             raise AttributeError("Cannot find classifier in model")
         
         logits = classifier(pooled_repr)
+        
+        # Convert to float32 for numerical stability (FP16 can cause extreme values)
+        logits = logits.float()
+        
+        # Clamp logits to prevent extreme values that cause unstable loss
+        # Using a tighter range to prevent softmax saturation
+        logits = torch.clamp(logits, min=-20.0, max=20.0)
+        
         # Classifier stats
         cls_total = sum(p.numel() for p in classifier.parameters())
         cls_trainable = sum(p.numel() for p in classifier.parameters() if p.requires_grad)
@@ -147,7 +163,7 @@ class ESMCClassificationModel(ESMCBaseModel):
         logits_max = logits.max().item()
         logits_mean = logits.mean().item()
         logits_std = logits.std().item()
-        print(f"ESMC Debug | logits stats: min={logits_min:.4f} max={logits_max:.4f} mean={logits_mean:.4f} std={logits_std:.4f}")
+        print(f"ESMC Debug | logits stats (after clamp): min={logits_min:.4f} max={logits_max:.4f} mean={logits_mean:.4f} std={logits_std:.4f}")
         
         # Check for NaN or Inf
         if torch.isnan(logits).any():
