@@ -40,13 +40,11 @@ class ESMCRegressionDataset(LMDBDataset):
         return int(self._get("length"))
 
     def collate_fn(self, batch):
-        seqs, fitness = tuple(zip(*batch))
+        seqs, labels = tuple(zip(*batch))
 
-        labels = {"labels": torch.tensor(fitness, dtype=torch.float32)}
+        labels = {"labels": torch.tensor(labels, dtype=torch.float32)}
 
         proteins = [ESMProtein(sequence=s) for s in seqs]
         inputs = {"inputs": {"proteins": proteins}}
 
         return inputs, labels
-
-

@@ -1,4 +1,5 @@
 import torchmetrics
+import torch.distributed as dist
 import torch
 
 from torch.nn.utils.rnn import pad_sequence
@@ -14,6 +15,11 @@ except ImportError:
 @register_model
 class ESMCRegressionModel(ESMCBaseModel):
     def __init__(self, test_result_path: str = None, **kwargs):
+        """
+        Args:
+            test_result_path: path to save test result
+            **kwargs: other arguments for ESMCBaseModel
+        """
         self.test_result_path = test_result_path
         super().__init__(task="regression", **kwargs)
 
@@ -24,47 +30,79 @@ class ESMCRegressionModel(ESMCBaseModel):
                 f"{stage}_pearson": torchmetrics.PearsonCorrCoef()}
 
     def forward(self, inputs, coords=None):
-        if isinstance(inputs, dict) and 'proteins' in inputs:
-            proteins = inputs['proteins']
-        else:
-            raise ValueError("ESMCRegressionModel.forward expects inputs['proteins'] (list of ESMProtein)")
+        # Parse proteins input
+        proteins = self._parse_proteins_input(inputs)
 
-        if not isinstance(proteins, list):
-            proteins = [proteins]
+        # Tokenization & Padding
+        token_ids_batch, attention_mask, tokenizer = self._tokenize_sequences(proteins)
 
+        # Backbone representations
+        representations = self._get_representations(token_ids_batch)
+
+        # Pooling (inside same grad context as backbone)
         with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            # Tokenize and pad
-            token_ids_list = [self.model.embed(p) for p in proteins]
-            token_ids_batch = pad_sequence(token_ids_list, batch_first=True, padding_value=self.model.padding_idx)
-            
-            # Forward pass to get representations
-            model_output = self.model.forward(token_ids_batch, repr_layers=[self.model.num_layers])
-            representations = model_output['representations'][self.model.num_layers]
-            
-            # Pool with masking
-            mask = (token_ids_batch != self.model.padding_idx).unsqueeze(-1)
-            sequence_lengths = mask.sum(dim=1)
-            repr_tensor = (representations * mask).sum(dim=1) / sequence_lengths
+            pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
 
-        x = self.model.classifier[0](repr_tensor)
-        x = self.model.classifier[1](x)
-        x = self.model.classifier[2](x)
-        logits = self.model.classifier[3](x).squeeze(dim=-1)
+        # Head forward, then squeeze to scalar per sample
+        head = self._get_head()
+        logits = head(pooled_repr).squeeze(dim=-1)
+        
         return logits
 
     def loss_func(self, stage, outputs, labels):
         fitness = labels['labels'].to(outputs)
         loss = torch.nn.functional.mse_loss(outputs, fitness)
 
+        # Update metrics
         for metric in self.metrics[stage].values():
+            # Training is on half precision, but metrics expect float to compute correctly.
             metric.set_dtype(torch.float32)
             metric.update(outputs.detach(), fitness)
 
         if stage == "train":
             log_dict = {"train_loss": loss.item()}
             self.log_info(log_dict)
+
+            # Reset train metrics
             self.reset_metrics("train")
 
         return loss
 
+    def on_test_epoch_end(self):
+        if self.test_result_path is not None:
+            from torchmetrics.utilities.distributed import gather_all_tensors
+            
+            preds = self.test_spearman.preds
+            preds[-1] = preds[-1].unsqueeze(dim=0) if preds[-1].shape == () else preds[-1]
+            preds = torch.cat(gather_all_tensors(torch.cat(preds, dim=0)))
+            
+            targets = self.test_spearman.target
+            targets[-1] = targets[-1].unsqueeze(dim=0) if targets[-1].shape == () else targets[-1]
+            targets = torch.cat(gather_all_tensors(torch.cat(targets, dim=0)))
 
+            if dist.get_rank() == 0:
+                with open(self.test_result_path, 'w') as w:
+                    w.write("pred\ttarget\n")
+                    for pred, target in zip(preds, targets):
+                        w.write(f"{pred.item()}\t{target.item()}\n")
+        
+        log_dict = self.get_log_dict("test")
+
+        # if dist.get_rank() == 0:
+        #     print(log_dict)
+
+        self.output_test_metrics(log_dict)
+
+        self.log_info(log_dict)
+        self.reset_metrics("test")
+
+    def on_validation_epoch_end(self):
+        log_dict = self.get_log_dict("valid")
+
+        # if dist.get_rank() == 0:
+        #     print(log_dict)
+        self.log_info(log_dict)
+        self.reset_metrics("valid")
+        self.check_save_condition(log_dict["valid_loss"], mode="min")
+        
+        self.plot_valid_metrics_curve(log_dict)
