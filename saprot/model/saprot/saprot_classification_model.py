@@ -36,6 +36,13 @@ class SaprotClassificationModel(SaprotBaseModel):
 
         else:
             logits = self.model(**inputs).logits
+
+        # Debug: print logits shape (B, num_classes) on rank 0 only
+        try:
+            if (not dist.is_available()) or (not dist.is_initialized()) or (dist.get_rank() == 0):
+                print(f"[Saprot][classification] logits shape: {tuple(logits.shape)}")
+        except Exception:
+            print(f"[Saprot][classification] logits shape: {tuple(logits.shape)}")
         
         return logits
 
