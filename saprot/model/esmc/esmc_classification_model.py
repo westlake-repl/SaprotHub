@@ -44,12 +44,6 @@ class ESMCClassificationModel(ESMCBaseModel):
         # Head always needs gradients
         head = self._get_head()
         logits = head(pooled_repr)
-        # Debug: print logits shape (B, num_classes)
-        try:
-            if (not torch.distributed.is_available()) or (not torch.distributed.is_initialized()) or (torch.distributed.get_rank() == 0):
-                print(f"[ESMC][classification] logits shape: {tuple(logits.shape)}")
-        except Exception:
-            print(f"[ESMC][classification] logits shape: {tuple(logits.shape)}")
         
         # Convert to float32 for numerical stability
         logits = logits.float()
