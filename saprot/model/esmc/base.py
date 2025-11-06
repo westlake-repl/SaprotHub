@@ -271,13 +271,11 @@ class ESMCBaseModel(AbstractModel):
     def initialize_metrics(self, stage: str) -> dict:
         return {}
     
-    # ============================================================================
-    # Generic Helper Methods (通用辅助方法 - 所有任务)
-    # ============================================================================
+    # Generic Helper Methods
     def _parse_proteins_input(self, inputs):
         """
         Parse proteins input from inputs dict
-        
+
         Args:
             inputs: Input dict containing 'proteins' key
             
@@ -288,16 +286,14 @@ class ESMCBaseModel(AbstractModel):
             proteins = inputs['proteins']
         else:
             raise ValueError(f"{self.__class__.__name__}.forward expects inputs['proteins'] (list of ESMProtein)")
-        
         if not isinstance(proteins, list):
             proteins = [proteins]
-        
         return proteins
     
     def _get_tokenizer(self):
         """
         Get tokenizer from model, handling PEFT wrapping
-        
+
         Returns:
             tokenizer: The tokenizer object
         """
@@ -347,13 +343,10 @@ class ESMCBaseModel(AbstractModel):
             # Not wrapped by PEFT: return model directly
             return self.model
     
-    # ============================================================================
-    # Tokenization & Forward Methods (Tokenization和前向传播 - 所有任务通用)
-    # ============================================================================
-    
+    # Tokenization & Forward Methods
     def _tokenize_sequences(self, proteins, return_tensors="pt", device=None):
         """
-        Tokenize protein sequences and pad them (通用 - 所有任务).
+        Tokenize protein sequences and pad them
         
         Args:
             proteins: List of ESMProtein objects
@@ -384,7 +377,7 @@ class ESMCBaseModel(AbstractModel):
     
     def _forward_backbone(self, token_ids_batch, repr_layers=None):
         """
-        Forward pass through backbone, handling PEFT wrapping (通用 - 所有任务).
+        Forward pass through backbone, handling PEFT wrapping
         Note: This method does NOT handle freeze_backbone context - 
         callers should wrap this in appropriate context if needed.
         
@@ -409,7 +402,7 @@ class ESMCBaseModel(AbstractModel):
     
     def _get_representations(self, token_ids_batch, repr_layers=None, layer_idx=-1):
         """
-        Forward through backbone and extract representations, handling freeze_backbone (通用 - 所有任务).
+        Forward through backbone and extract representations, handling freeze_backbone
         This wraps the forward pass in appropriate gradient context based on freeze_backbone flag.
         
         Args:
@@ -436,14 +429,10 @@ class ESMCBaseModel(AbstractModel):
         
         return representations
     
-    # ============================================================================
-    # Pooling & Normalization Methods (池化和归一化 - 主要用于分类和回归任务)
-    # ============================================================================
-    
+    # Pooling & Normalization Methods
     def _pool_representations(self, representations, token_ids_batch, pad_token_id=None):
         """
         Pool sequence representations by averaging over sequence length (excluding padding).
-        (通用 - 分类和回归任务都使用)
         
         Args:
             representations: Hidden states tensor [B, L, D]
@@ -472,7 +461,6 @@ class ESMCBaseModel(AbstractModel):
         """
         Normalize pooled representation to prevent extreme values.
         This is useful for classification tasks to improve numerical stability.
-        (主要用于分类任务 - 回归任务通常不使用)
         
         Args:
             pooled_repr: Pooled representation tensor [B, D]
@@ -486,11 +474,7 @@ class ESMCBaseModel(AbstractModel):
         normalized_repr = (pooled_repr - pooled_mean) / pooled_std
         
         return normalized_repr
-    
-    # ============================================================================
-    # Utility Methods (工具方法 - 所有任务通用)
-    # ============================================================================
-    
+
     def get_hidden_states_from_seqs(self, seqs: list, reduction: str = None) -> list:
         """
         Get hidden representations of protein sequences (通用 - 所有任务).
@@ -566,14 +550,7 @@ class ESMCBaseModel(AbstractModel):
             
             self.model.save_pretrained(save_path)
 
-    # ============================================================================
-    # Task-Specific Evaluation & Visualization Methods (任务特定的评估和可视化)
-    # ============================================================================
-    
     def output_test_metrics(self, log_dict):
-        """
-        Output test metrics (所有任务共享，但根据task类型显示不同的指标).
-        """
         # Remove valid_loss from log_dict when the task is classification
         if "test_acc" in log_dict:
             log_dict.pop("test_loss", None)
@@ -583,12 +560,12 @@ class ESMCBaseModel(AbstractModel):
             log_dict.pop("test_mcc", None)
         
         METRIC_MAP = {
-            "test_acc": "Classification accuracy (Acc)",  # 分类任务
-            "test_loss": "Root mean squared error (RMSE)",  # 回归任务
-            "test_mcc": "Matthews correlation coefficient (MCC)",  # Token分类任务
-            "test_r2": "Coefficient of determination (R^2)",  # 回归任务
-            "test_spearman": "Spearman correlation",  # 回归任务
-            "test_pearson": "Pearson correlation",  # 回归任务
+            "test_acc": "Classification accuracy (Acc)",
+            "test_loss": "Root mean squared error (RMSE)",  # Only for regression task
+            "test_mcc": "Matthews correlation coefficient (MCC)",
+            "test_r2": "Coefficient of determination (R^2)",
+            "test_spearman": "Spearman correlation",
+            "test_pearson": "Pearson correlation",
         }
         
         print('=' * 100)
@@ -610,9 +587,6 @@ class ESMCBaseModel(AbstractModel):
         print('=' * 100)
     
     def plot_valid_metrics_curve(self, log_dict):
-        """
-        Plot validation metrics curves (所有任务共享，但根据task类型显示不同的指标).
-        """
         if not hasattr(self, 'grid'):
             from google.colab import widgets
             width = 400 * len(log_dict)
@@ -629,12 +603,12 @@ class ESMCBaseModel(AbstractModel):
             log_dict.pop("valid_mcc", None)
         
         METRIC_MAP = {
-            "valid_acc": "Classification accuracy (Acc)",  # 分类任务
-            "valid_loss": "Root mean squared error (RMSE)",  # 回归任务
-            "valid_mcc": "Matthews correlation coefficient (MCC)",  # Token分类任务
-            "valid_r2": "Coefficient of determination (R$^2$)",  # 回归任务
-            "valid_spearman": "Spearman correlation",  # 回归任务
-            "valid_pearson": "Pearson correlation",  # 回归任务
+            "valid_acc": "Classification accuracy (Acc)",
+            "valid_loss": "Root mean squared error (RMSE)", # Only for regression task
+            "valid_mcc": "Matthews correlation coefficient (MCC)",
+            "valid_r2": "Coefficient of determination (R$^2$)",
+            "valid_spearman": "Spearman correlation",
+            "valid_pearson": "Pearson correlation",
         }
         
         with self.grid.output_to(0, 0):
