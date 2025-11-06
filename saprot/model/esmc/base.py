@@ -24,6 +24,7 @@ class ESMCBaseModel(AbstractModel):
                  freeze_backbone: bool = False,
                  gradient_checkpointing: bool = False,
                  lora_kwargs: dict = None,
+                 extra_config: dict = None,
                  **kwargs):
         """
         Args:
@@ -39,6 +40,8 @@ class ESMCBaseModel(AbstractModel):
 
             lora_kwargs: LoRA configuration
 
+            extra_config: Extra config for the model (for compatibility, not used by ESMC)
+
             **kwargs: Other arguments for AbstractModel
         """
         assert task in ["classification", "token_classification", "regression"]
@@ -47,6 +50,7 @@ class ESMCBaseModel(AbstractModel):
         self.freeze_backbone = freeze_backbone
         self.gradient_checkpointing = gradient_checkpointing
         self.lora_kwargs = lora_kwargs
+        self.extra_config = extra_config  # Store for compatibility, though ESMC doesn't use it
         if device is None:
             self.device_str = "cuda" if torch.cuda.is_available() else "cpu"
         else:
