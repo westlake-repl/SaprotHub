@@ -32,18 +32,18 @@ class ESMCClassificationModel(ESMCBaseModel):
         # Tokenization & Padding
         token_ids_batch, attention_mask, tokenizer = self._tokenize_sequences(proteins)
 
-        # Forward through backbone and get representations (handles freeze_backbone)
+        # Forward through backbone and get representations
         representations = self._get_representations(token_ids_batch)
         
         with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            # Pooling (inside freeze_backbone context if needed)
+            # Pooling
             pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
-            # Normalize pooled representation to prevent extreme values (for classification stability)
+            # Normalize pooled representation to prevent extreme values
             pooled_repr = self._normalize_pooled_repr(pooled_repr)
 
-        # Classifier always needs gradients (even when backbone is frozen)
-        classifier = self._get_classifier()
-        logits = classifier(pooled_repr)
+        # Head always needs gradients
+        head = self._get_head()
+        logits = head(pooled_repr)
         
         # Convert to float32 for numerical stability
         logits = logits.float()

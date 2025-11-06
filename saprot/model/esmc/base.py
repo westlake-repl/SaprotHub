@@ -16,11 +16,7 @@ class ESMCBaseModel(AbstractModel):
     """
     ESMC base model. Provides model initialization for downstream tasks.
     """
-    
-    # ============================================================================
-    # Initialization Methods (通用 - 所有任务)
-    # ============================================================================
-    
+
     def __init__(self,
                  task: str,
                  model_name: str = "esmc_300m",
@@ -213,7 +209,6 @@ class ESMCBaseModel(AbstractModel):
 
         # Task-specific classifier initialization
         if self.task == 'classification':
-            # 分类任务: 输出num_labels个类别，使用较小的权重初始化
             classifier = torch.nn.Sequential(
                 torch.nn.Linear(hidden_size, hidden_size),
                 torch.nn.ReLU(),
@@ -231,9 +226,10 @@ class ESMCBaseModel(AbstractModel):
                     if module.bias is not None:
                         torch.nn.init.zeros_(module.bias)
             setattr(self.model, "classifier", classifier)
+            # Also expose as a generic head for naming consistency
+            setattr(self.model, "head", classifier)
 
         elif self.task == 'token_classification':
-            # Token分类任务: 每个token位置输出num_labels个类别
             classifier = torch.nn.Sequential(
                 torch.nn.Linear(hidden_size, hidden_size),
                 torch.nn.ReLU(),
@@ -247,9 +243,9 @@ class ESMCBaseModel(AbstractModel):
                     if module.bias is not None:
                         torch.nn.init.zeros_(module.bias)
             setattr(self.model, "classifier", classifier)
+            setattr(self.model, "head", classifier)
 
         elif self.task == 'regression':
-            # 回归任务: 输出单个连续值
             classifier = torch.nn.Sequential(
                 torch.nn.Linear(hidden_size, hidden_size),
                 torch.nn.ReLU(),
@@ -263,6 +259,7 @@ class ESMCBaseModel(AbstractModel):
                     if module.bias is not None:
                         torch.nn.init.zeros_(module.bias)
             setattr(self.model, "classifier", classifier)
+            setattr(self.model, "head", classifier)
 
         # Freeze backbone if required
         # Note: Don't freeze if LoRA will be used (LoRA initialization will handle parameter freezing)
@@ -272,16 +269,14 @@ class ESMCBaseModel(AbstractModel):
                     param.requires_grad = False
 
     def initialize_metrics(self, stage: str) -> dict:
-        """Initialize metrics for a stage (通用 - 子类可以重写)"""
         return {}
     
     # ============================================================================
     # Generic Helper Methods (通用辅助方法 - 所有任务)
     # ============================================================================
-    
     def _parse_proteins_input(self, inputs):
         """
-        Parse proteins input from inputs dict (通用 - 所有任务).
+        Parse proteins input from inputs dict
         
         Args:
             inputs: Input dict containing 'proteins' key
@@ -301,7 +296,7 @@ class ESMCBaseModel(AbstractModel):
     
     def _get_tokenizer(self):
         """
-        Get tokenizer from model, handling PEFT wrapping (通用 - 所有任务).
+        Get tokenizer from model, handling PEFT wrapping
         
         Returns:
             tokenizer: The tokenizer object
@@ -313,23 +308,34 @@ class ESMCBaseModel(AbstractModel):
         else:
             raise AttributeError("Cannot find tokenizer in model")
     
-    def _get_classifier(self):
+    def _get_head(self):
         """
-        Get classifier from model, handling PEFT wrapping (通用 - 所有任务).
+        Get task head module (prefer `head`, fallback to `classifier`), handling PEFT wrapping
         
         Returns:
-            classifier: The classifier module
+            head: The task head module
         """
-        if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model') and hasattr(self.model.base_model.model, 'classifier'):
-            return self.model.base_model.model.classifier
-        elif hasattr(self.model, 'classifier'):
+        # PEFT-wrapped path first
+        if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model'):
+            base = self.model.base_model.model
+            if hasattr(base, 'head'):
+                return base.head
+            if hasattr(base, 'classifier'):
+                return base.classifier
+        # Non-PEFT
+        if hasattr(self.model, 'head'):
+            return self.model.head
+        if hasattr(self.model, 'classifier'):
             return self.model.classifier
-        else:
-            raise AttributeError("Cannot find classifier in model")
+        raise AttributeError("Cannot find task head (head/classifier) in model")
+
+    # Backward-compatible alias
+    def _get_classifier(self):
+        return self._get_head()
     
     def _get_base_model(self):
         """
-        Get base model from PEFT-wrapped model or return model itself (通用 - 所有任务).
+        Get base model from PEFT-wrapped model or return model itself
         
         Returns:
             base_model: The base model (unwrapped from PEFT if needed)
