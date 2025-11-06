@@ -17,6 +17,10 @@ class ESMCBaseModel(AbstractModel):
     ESMC base model. Provides model initialization for downstream tasks.
     """
     
+    # ============================================================================
+    # Initialization Methods (通用 - 所有任务)
+    # ============================================================================
+    
     def __init__(self,
                  task: str,
                  model_name: str = "esmc_300m",
@@ -47,14 +51,12 @@ class ESMCBaseModel(AbstractModel):
         self.freeze_backbone = freeze_backbone
         self.gradient_checkpointing = gradient_checkpointing
         self.lora_kwargs = lora_kwargs
-
         if device is None:
             self.device_str = "cuda" if torch.cuda.is_available() else "cpu"
         else:
             self.device_str = device
-
         super().__init__(**kwargs)
-        
+
         # After all initialization done, lora technique is applied if needed
         if self.lora_kwargs is not None:
             # No need to freeze backbone if LoRA is used
@@ -67,6 +69,7 @@ class ESMCBaseModel(AbstractModel):
         self.valid_metrics_list['step'] = []
     
     def _init_lora(self):
+        """Initialize LoRA adapters"""
         from peft import LoraConfig, get_peft_model
         
         is_trainable = getattr(self.lora_kwargs, "is_trainable", False)
@@ -164,45 +167,13 @@ class ESMCBaseModel(AbstractModel):
             self.forward = lora_forward(self.forward)
         
         print(f"Now active LoRA model: {self.model.active_adapter}")
-        
-        # Custom parameter counting with deduplication to avoid PEFT modules_to_save double counting
-        unique_params = set()
-        total_params = 0
-        trainable_params = 0
-        lora_params = 0
-        classifier_params = 0
-        
-        for n, p in self.model.named_parameters():
-            param_id = id(p)
-            if param_id not in unique_params:
-                unique_params.add(param_id)
-                num = p.numel()
-                total_params += num
-                if p.requires_grad:
-                    trainable_params += num
-                    if "lora_" in n:
-                        lora_params += num
-                    elif "classifier" in n:
-                        classifier_params += num
-        
-        print(f"trainable params: {trainable_params:,} || all params: {total_params:,} || trainable%: {100.0 * trainable_params / total_params if total_params > 0 else 0:.6f}")
-        print(f"  LoRA params: {lora_params:,}, Classifier params: {classifier_params:,}")
-        
-        # Ensure classifier is trainable
-        if hasattr(self.model, 'classifier'):
-            for n, p in self.model.classifier.named_parameters():
-                p.requires_grad = True
-        # Freeze non-LoRA, non-classifier params (align with Saprot behavior: only update LoRA+head)
-        for n, p in self.model.named_parameters():
-            is_lora = ("lora_" in n)
-            # PEFT may prefix module paths; be robust by checking substring
-            is_classifier = ("classifier" in n)
-            p.requires_grad = is_lora or is_classifier
+        self.model.print_trainable_parameters()
         
         # After LoRA model is initialized, add trainable parameters to optimizer)
         self.init_optimizers()
     
     def initialize_model(self):
+        """Initialize ESMC model and task-specific classifiers"""
         try:
             from esm.tokenization.sequence_tokenizer import EsmSequenceTokenizer
             for _prop in ["cls_token", "pad_token", "mask_token", "eos_token"]:
@@ -215,14 +186,11 @@ class ESMCBaseModel(AbstractModel):
             pass
 
         # Load ESMC backbone and tokenizer
-        # Note: Don't move model to device here - let PyTorch Lightning manage device placement
-        # to avoid conflicts with mixed precision training (16-mixed)
         self.model = ESMC.from_pretrained(self.model_name)
         self.model = self.model.to(torch.float32)
         self.tokenizer = self.model.tokenizer
 
         # Attach simple heads per task
-        # Get hidden_size: try multiple methods to be robust
         hidden_size = None
         # Method 1: Try to get from config
         if hasattr(self.model, 'config') and hasattr(self.model.config, 'hidden_size'):
@@ -243,7 +211,9 @@ class ESMCBaseModel(AbstractModel):
                 warnings.warn(f"Could not determine hidden_size for model {self.model_name}, defaulting to 960. "
                             f"If this is ESMC-600M, set hidden_size to 1152 manually.")
 
+        # Task-specific classifier initialization
         if self.task == 'classification':
+            # 分类任务: 输出num_labels个类别，使用较小的权重初始化
             classifier = torch.nn.Sequential(
                 torch.nn.Linear(hidden_size, hidden_size),
                 torch.nn.ReLU(),
@@ -263,6 +233,7 @@ class ESMCBaseModel(AbstractModel):
             setattr(self.model, "classifier", classifier)
 
         elif self.task == 'token_classification':
+            # Token分类任务: 每个token位置输出num_labels个类别
             classifier = torch.nn.Sequential(
                 torch.nn.Linear(hidden_size, hidden_size),
                 torch.nn.ReLU(),
@@ -278,6 +249,7 @@ class ESMCBaseModel(AbstractModel):
             setattr(self.model, "classifier", classifier)
 
         elif self.task == 'regression':
+            # 回归任务: 输出单个连续值
             classifier = torch.nn.Sequential(
                 torch.nn.Linear(hidden_size, hidden_size),
                 torch.nn.ReLU(),
@@ -300,11 +272,222 @@ class ESMCBaseModel(AbstractModel):
                     param.requires_grad = False
 
     def initialize_metrics(self, stage: str) -> dict:
+        """Initialize metrics for a stage (通用 - 子类可以重写)"""
         return {}
+    
+    # ============================================================================
+    # Generic Helper Methods (通用辅助方法 - 所有任务)
+    # ============================================================================
+    
+    def _parse_proteins_input(self, inputs):
+        """
+        Parse proteins input from inputs dict (通用 - 所有任务).
+        
+        Args:
+            inputs: Input dict containing 'proteins' key
+            
+        Returns:
+            proteins: List of ESMProtein objects
+        """
+        if isinstance(inputs, dict) and 'proteins' in inputs:
+            proteins = inputs['proteins']
+        else:
+            raise ValueError(f"{self.__class__.__name__}.forward expects inputs['proteins'] (list of ESMProtein)")
+        
+        if not isinstance(proteins, list):
+            proteins = [proteins]
+        
+        return proteins
+    
+    def _get_tokenizer(self):
+        """
+        Get tokenizer from model, handling PEFT wrapping (通用 - 所有任务).
+        
+        Returns:
+            tokenizer: The tokenizer object
+        """
+        if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model') and hasattr(self.model.base_model.model, 'tokenizer'):
+            return self.model.base_model.model.tokenizer
+        elif hasattr(self.model, 'tokenizer'):
+            return self.model.tokenizer
+        else:
+            raise AttributeError("Cannot find tokenizer in model")
+    
+    def _get_classifier(self):
+        """
+        Get classifier from model, handling PEFT wrapping (通用 - 所有任务).
+        
+        Returns:
+            classifier: The classifier module
+        """
+        if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model') and hasattr(self.model.base_model.model, 'classifier'):
+            return self.model.base_model.model.classifier
+        elif hasattr(self.model, 'classifier'):
+            return self.model.classifier
+        else:
+            raise AttributeError("Cannot find classifier in model")
+    
+    def _get_base_model(self):
+        """
+        Get base model from PEFT-wrapped model or return model itself (通用 - 所有任务).
+        
+        Returns:
+            base_model: The base model (unwrapped from PEFT if needed)
+        """
+        if hasattr(self.model, 'base_model'):
+            # PEFT wrapped model: get the actual base model
+            return self.model.base_model.model if hasattr(self.model.base_model, 'model') else self.model.base_model
+        else:
+            # Not wrapped by PEFT: return model directly
+            return self.model
+    
+    # ============================================================================
+    # Tokenization & Forward Methods (Tokenization和前向传播 - 所有任务通用)
+    # ============================================================================
+    
+    def _tokenize_sequences(self, proteins, return_tensors="pt", device=None):
+        """
+        Tokenize protein sequences and pad them (通用 - 所有任务).
+        
+        Args:
+            proteins: List of ESMProtein objects
+            return_tensors: Return format ("pt" for PyTorch tensors)
+            device: Device to move tensors to. If None, uses self.device
+            
+        Returns:
+            token_ids_batch: Token IDs tensor [B, L]
+            attention_mask: Attention mask tensor [B, L]
+            tokenizer: The tokenizer used
+        """
+        sequences = [p.sequence for p in proteins]
+        tokenizer = self._get_tokenizer()
+        
+        batch_encoding = tokenizer(
+            sequences, 
+            padding=True, 
+            return_tensors=return_tensors
+        )
+        
+        if device is None:
+            device = self.device
+        
+        token_ids_batch = batch_encoding['input_ids'].to(device)
+        attention_mask = batch_encoding['attention_mask'].to(device)
+        
+        return token_ids_batch, attention_mask, tokenizer
+    
+    def _forward_backbone(self, token_ids_batch, repr_layers=None):
+        """
+        Forward pass through backbone, handling PEFT wrapping (通用 - 所有任务).
+        Note: This method does NOT handle freeze_backbone context - 
+        callers should wrap this in appropriate context if needed.
+        
+        Args:
+            token_ids_batch: Token IDs tensor [B, L]
+            repr_layers: List of layer indices to return representations from (optional)
+            
+        Returns:
+            model_output: Model output containing hidden_states or representations
+        """
+        base_model = self._get_base_model()
+        
+        # When wrapped by PEFT, forward may receive kwargs, but ESMC expects positional args
+        if repr_layers is not None:
+            # For models that use repr_layers parameter
+            model_output = base_model.forward(token_ids_batch, repr_layers=repr_layers)
+        else:
+            # Standard forward
+            model_output = base_model.forward(token_ids_batch)
+        
+        return model_output
+    
+    def _get_representations(self, token_ids_batch, repr_layers=None, layer_idx=-1):
+        """
+        Forward through backbone and extract representations, handling freeze_backbone (通用 - 所有任务).
+        This wraps the forward pass in appropriate gradient context based on freeze_backbone flag.
+        
+        Args:
+            token_ids_batch: Token IDs tensor [B, L]
+            repr_layers: List of layer indices to return representations from (optional)
+            layer_idx: Which layer to extract from hidden_states. -1 means last layer.
+                      If model uses repr_layers, this is used to index into representations dict.
+            
+        Returns:
+            representations: Hidden states tensor [B, L, D]
+        """
+        # Wrap backbone forward in no_grad context when freeze_backbone=True
+        # This saves memory and computation when backbone is frozen
+        with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
+            model_output = self._forward_backbone(token_ids_batch, repr_layers=repr_layers)
+            
+            # Extract representations based on output format
+            if repr_layers is not None:
+                # Model returns dict with 'representations' key
+                representations = model_output['representations'][repr_layers[0]]
+            else:
+                # Model returns object with hidden_states attribute
+                representations = model_output.hidden_states[layer_idx]
+        
+        return representations
+    
+    # ============================================================================
+    # Pooling & Normalization Methods (池化和归一化 - 主要用于分类和回归任务)
+    # ============================================================================
+    
+    def _pool_representations(self, representations, token_ids_batch, pad_token_id=None):
+        """
+        Pool sequence representations by averaging over sequence length (excluding padding).
+        (通用 - 分类和回归任务都使用)
+        
+        Args:
+            representations: Hidden states tensor [B, L, D]
+            token_ids_batch: Token IDs tensor [B, L] for creating mask
+            pad_token_id: Padding token ID. If None, will try to get from tokenizer or model
+            
+        Returns:
+            pooled_repr: Pooled representation tensor [B, D]
+        """
+        # Get pad_token_id if not provided
+        if pad_token_id is None:
+            tokenizer = self._get_tokenizer()
+            pad_token_id = tokenizer.pad_token_id if hasattr(tokenizer, 'pad_token_id') else getattr(tokenizer, 'padding_idx', 0)
+        
+        # Create mask and compute sequence lengths
+        mask = (token_ids_batch != pad_token_id).unsqueeze(-1)
+        sequence_lengths = mask.sum(dim=1)
+        sequence_lengths = sequence_lengths.clamp(min=1)
+        
+        # Average pooling over sequence length
+        pooled_repr = (representations * mask).sum(dim=1) / sequence_lengths
+        
+        return pooled_repr
+    
+    def _normalize_pooled_repr(self, pooled_repr):
+        """
+        Normalize pooled representation to prevent extreme values.
+        This is useful for classification tasks to improve numerical stability.
+        (主要用于分类任务 - 回归任务通常不使用)
+        
+        Args:
+            pooled_repr: Pooled representation tensor [B, D]
+            
+        Returns:
+            normalized_repr: Normalized pooled representation tensor [B, D]
+        """
+        pooled_mean = pooled_repr.mean(dim=-1, keepdim=True)
+        pooled_std = pooled_repr.std(dim=-1, keepdim=True)
+        pooled_std = pooled_std.clamp(min=1e-6)
+        normalized_repr = (pooled_repr - pooled_mean) / pooled_std
+        
+        return normalized_repr
+    
+    # ============================================================================
+    # Utility Methods (工具方法 - 所有任务通用)
+    # ============================================================================
     
     def get_hidden_states_from_seqs(self, seqs: list, reduction: str = None) -> list:
         """
-        Get hidden representations of protein sequences
+        Get hidden representations of protein sequences (通用 - 所有任务).
         
         Args:
             seqs: A list of protein sequences (amino acid sequences as strings)
@@ -316,12 +499,7 @@ class ESMCBaseModel(AbstractModel):
                           or [L, D] if reduction=None, where L is the sequence length and D is the hidden dimension.
         """
         # Get tokenizer - handle PEFT wrapping
-        if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model') and hasattr(self.model.base_model.model, 'tokenizer'):
-            tokenizer = self.model.base_model.model.tokenizer
-        elif hasattr(self.model, 'tokenizer'):
-            tokenizer = self.model.tokenizer
-        else:
-            raise AttributeError("Cannot find tokenizer in model")
+        tokenizer = self._get_tokenizer()
         
         # Tokenize sequences
         batch_encoding = tokenizer(
@@ -343,15 +521,7 @@ class ESMCBaseModel(AbstractModel):
         
         # Forward pass to get representations
         with torch.no_grad():
-            # When wrapped by PEFT, forward may receive kwargs, but ESMC expects positional args
-            if hasattr(self.model, 'base_model'):
-                # PEFT wrapped model: call base_model forward with positional args
-                base_model = self.model.base_model.model if hasattr(self.model.base_model, 'model') else self.model.base_model
-                model_output = base_model.forward(token_ids_batch)
-            else:
-                # Not wrapped by PEFT: direct call
-                model_output = self.model.forward(token_ids_batch)
-            
+            model_output = self._forward_backbone(token_ids_batch)
             representations = model_output.hidden_states[-1]  # [B, L, D]
         
         # Process each sequence
@@ -375,7 +545,7 @@ class ESMCBaseModel(AbstractModel):
     
     def save_checkpoint(self, save_path: str, save_info: dict = None, save_weights_only: bool = True) -> None:
         """
-        Rewrite this function to save LoRA parameters
+        Rewrite this function to save LoRA parameters (通用 - 所有任务).
         """
         
         if not self.lora_kwargs:
@@ -390,7 +560,14 @@ class ESMCBaseModel(AbstractModel):
             
             self.model.save_pretrained(save_path)
 
+    # ============================================================================
+    # Task-Specific Evaluation & Visualization Methods (任务特定的评估和可视化)
+    # ============================================================================
+    
     def output_test_metrics(self, log_dict):
+        """
+        Output test metrics (所有任务共享，但根据task类型显示不同的指标).
+        """
         # Remove valid_loss from log_dict when the task is classification
         if "test_acc" in log_dict:
             log_dict.pop("test_loss", None)
@@ -400,12 +577,12 @@ class ESMCBaseModel(AbstractModel):
             log_dict.pop("test_mcc", None)
         
         METRIC_MAP = {
-            "test_acc": "Classification accuracy (Acc)",
-            "test_loss": "Root mean squared error (RMSE)",  # Only for regression task
-            "test_mcc": "Matthews correlation coefficient (MCC)",
-            "test_r2": "Coefficient of determination (R^2)",
-            "test_spearman": "Spearman correlation",
-            "test_pearson": "Pearson correlation",
+            "test_acc": "Classification accuracy (Acc)",  # 分类任务
+            "test_loss": "Root mean squared error (RMSE)",  # 回归任务
+            "test_mcc": "Matthews correlation coefficient (MCC)",  # Token分类任务
+            "test_r2": "Coefficient of determination (R^2)",  # 回归任务
+            "test_spearman": "Spearman correlation",  # 回归任务
+            "test_pearson": "Pearson correlation",  # 回归任务
         }
         
         print('=' * 100)
@@ -427,6 +604,9 @@ class ESMCBaseModel(AbstractModel):
         print('=' * 100)
     
     def plot_valid_metrics_curve(self, log_dict):
+        """
+        Plot validation metrics curves (所有任务共享，但根据task类型显示不同的指标).
+        """
         if not hasattr(self, 'grid'):
             from google.colab import widgets
             width = 400 * len(log_dict)
@@ -443,12 +623,12 @@ class ESMCBaseModel(AbstractModel):
             log_dict.pop("valid_mcc", None)
         
         METRIC_MAP = {
-            "valid_acc": "Classification accuracy (Acc)",
-            "valid_loss": "Root mean squared error (RMSE)",  # Only for regression task
-            "valid_mcc": "Matthews correlation coefficient (MCC)",
-            "valid_r2": "Coefficient of determination (R$^2$)",
-            "valid_spearman": "Spearman correlation",
-            "valid_pearson": "Pearson correlation",
+            "valid_acc": "Classification accuracy (Acc)",  # 分类任务
+            "valid_loss": "Root mean squared error (RMSE)",  # 回归任务
+            "valid_mcc": "Matthews correlation coefficient (MCC)",  # Token分类任务
+            "valid_r2": "Coefficient of determination (R$^2$)",  # 回归任务
+            "valid_spearman": "Spearman correlation",  # 回归任务
+            "valid_pearson": "Pearson correlation",  # 回归任务
         }
         
         with self.grid.output_to(0, 0):

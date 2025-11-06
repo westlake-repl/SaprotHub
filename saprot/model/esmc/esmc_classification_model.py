@@ -26,67 +26,23 @@ class ESMCClassificationModel(ESMCBaseModel):
         return {f"{stage}_acc": torchmetrics.Accuracy()}
 
     def forward(self, inputs, coords=None):
-        if isinstance(inputs, dict) and 'proteins' in inputs:
-            proteins = inputs['proteins']
-        else:
-            raise ValueError("ESMCClassificationModel.forward expects inputs['proteins'] (list of ESMProtein)")
-
-        if not isinstance(proteins, list):
-            proteins = [proteins]
+        # Parse proteins input
+        proteins = self._parse_proteins_input(inputs)
 
         # Tokenization & Padding
-        sequences = [p.sequence for p in proteins]
-        # Get tokenizer - handle PEFT wrapping
-        if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model') and hasattr(self.model.base_model.model, 'tokenizer'):
-            tokenizer = self.model.base_model.model.tokenizer
-        elif hasattr(self.model, 'tokenizer'):
-            tokenizer = self.model.tokenizer
-        else:
-            raise AttributeError("Cannot find tokenizer in model")
+        token_ids_batch, attention_mask, tokenizer = self._tokenize_sequences(proteins)
+
+        # Forward through backbone and get representations (handles freeze_backbone)
+        representations = self._get_representations(token_ids_batch)
         
-        batch_encoding = tokenizer(
-            sequences, 
-            padding=True, 
-            return_tensors="pt"
-        )
-        token_ids_batch = batch_encoding['input_ids'].to(self.device)
-        attention_mask = batch_encoding['attention_mask'].to(self.device)
-
-        # Wrap backbone forward and pooling in no_grad context when freeze_backbone=True
-        # This saves memory and computation when backbone is frozen
         with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            # Inference
-            # When wrapped by PEFT, forward may receive kwargs, but ESMC expects positional args
-            if hasattr(self.model, 'base_model'):
-                # PEFT wrapped model: call base_model forward with positional args
-                base_model = self.model.base_model.model if hasattr(self.model.base_model, 'model') else self.model.base_model
-                model_output = base_model.forward(token_ids_batch)
-            else:
-                # Not wrapped by PEFT: direct call
-                model_output = self.model.forward(token_ids_batch)
-            representations = model_output.hidden_states[-1]
-
-            # Pooling
-            mask = (token_ids_batch != tokenizer.pad_token_id).unsqueeze(-1)
-            sequence_lengths = mask.sum(dim=1)
-            sequence_lengths = sequence_lengths.clamp(min=1)
-            pooled_repr = (representations * mask).sum(dim=1) / sequence_lengths
-            
-            # Normalize pooled representation to prevent extreme values
-            pooled_mean = pooled_repr.mean(dim=-1, keepdim=True)
-            pooled_std = pooled_repr.std(dim=-1, keepdim=True)
-            pooled_std = pooled_std.clamp(min=1e-6)
-            pooled_repr = (pooled_repr - pooled_mean) / pooled_std
+            # Pooling (inside freeze_backbone context if needed)
+            pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
+            # Normalize pooled representation to prevent extreme values (for classification stability)
+            pooled_repr = self._normalize_pooled_repr(pooled_repr)
 
         # Classifier always needs gradients (even when backbone is frozen)
-        # Get classifier - handle PEFT wrapping
-        if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model') and hasattr(self.model.base_model.model, 'classifier'):
-            classifier = self.model.base_model.model.classifier
-        elif hasattr(self.model, 'classifier'):
-            classifier = self.model.classifier
-        else:
-            raise AttributeError("Cannot find classifier in model")
-        
+        classifier = self._get_classifier()
         logits = classifier(pooled_repr)
         
         # Convert to float32 for numerical stability
