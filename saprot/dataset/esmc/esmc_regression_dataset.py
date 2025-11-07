@@ -16,15 +16,33 @@ class ESMCRegressionDataset(LMDBDataset):
     def __init__(self,
                  model_name: str = "esmc_300m",
                  max_length: int = 1024,
+                 min_clip: [float, float] = None,
+                 mix_max_norm: [float, float] = None,
                  **kwargs):
-        super().__init__(**kwargs)
+        """
 
+        Args:
+            model_name: name of the model
+
+            max_length: maximum length of the sequence
+
+            min_clip: [given_value, clip_value]
+                      Set the fitness value to a fixed value if it is less than a given value
+
+            mix_max_norm: [min_norm, max_norm]
+                      Normalize the fitness value to [0, 1] by min-max normalization
+            
+            **kwargs:
+        """
+
+        super().__init__(**kwargs)
         temp_model = ESMC.from_pretrained(model_name)
         self.tokenizer = temp_model.tokenizer
         del temp_model
-
         self.model_name = model_name
         self.max_length = max_length
+        self.min_clip = min_clip
+        self.mix_max_norm = mix_max_norm
 
     def __getitem__(self, index):
         entry = json.loads(self._get(index))
@@ -33,8 +51,17 @@ class ESMCRegressionDataset(LMDBDataset):
         if len(seq) > self.max_length:
             seq = seq[:self.max_length]
 
-        fitness = entry["fitness"]
-        return seq, float(fitness)
+        if self.min_clip is not None:
+            given_min, clip_value = self.min_clip
+            if entry["fitness"] < given_min:
+                entry["fitness"] = clip_value
+
+        if self.mix_max_norm is not None:
+            min_norm, max_norm = self.mix_max_norm
+            entry["fitness"] = (entry["fitness"] - min_norm) / (max_norm - min_norm)
+
+        label = entry["fitness"]
+        return seq, label
 
     def __len__(self):
         return int(self._get("length"))

@@ -46,11 +46,19 @@ class ESMCRegressionModel(ESMCBaseModel):
         # Head forward, then squeeze to scalar per sample
         head = self._get_head()
         logits = head(pooled_repr).squeeze(dim=-1)
+
+        if self.training and not hasattr(self, "_printed_train_logits"):
+            print("[ESMCRegressionModel] logits:", logits[:5].detach().cpu().numpy())
+            self._printed_train_logits = True
         
         return logits
 
     def loss_func(self, stage, outputs, labels):
         fitness = labels['labels'].to(outputs)
+
+        if self.training and not hasattr(self, "_printed_train_labels"):
+            print("[ESMCRegressionModel] labels:", fitness[:5].detach().cpu().numpy())
+            self._printed_train_labels = True
         loss = torch.nn.functional.mse_loss(outputs, fitness)
 
         # Update metrics
