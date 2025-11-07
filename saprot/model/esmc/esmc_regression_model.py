@@ -39,30 +39,20 @@ class ESMCRegressionModel(ESMCBaseModel):
         # Backbone representations
         representations = self._get_representations(token_ids_batch)
 
-        # Pooling (inside same grad context as backbone)
-        with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
 
-        # Head forward, then squeeze to scalar per sample
+        with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
+            # Pooling
+            pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
+            # Normalize pooled representation to prevent extreme values
+            pooled_repr = self._normalize_pooled_repr(pooled_repr)
+
         head = self._get_head()
         logits = head(pooled_repr).squeeze(dim=-1)
-
-        if self.training:
-            count = getattr(self, "_printed_train_logits_count", 0)
-            if count < 5:
-                print(f"[ESMCRegressionModel] logits (step {count + 1}):", logits[:5].detach().cpu().numpy())
-                self._printed_train_logits_count = count + 1
         
         return logits
 
     def loss_func(self, stage, outputs, labels):
         fitness = labels['labels'].to(outputs)
-
-        if self.training:
-            count = getattr(self, "_printed_train_labels_count", 0)
-            if count < 5:
-                print(f"[ESMCRegressionModel] labels (step {count + 1}):", fitness[:5].detach().cpu().numpy())
-                self._printed_train_labels_count = count + 1
         loss = torch.nn.functional.mse_loss(outputs, fitness)
 
         # Update metrics
