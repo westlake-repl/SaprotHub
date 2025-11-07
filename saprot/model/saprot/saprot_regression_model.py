@@ -43,9 +43,11 @@ class SaprotRegressionModel(SaprotBaseModel):
             else:
                 logits = self.model(**inputs).logits.squeeze(dim=-1)
 
-        if self.training and not hasattr(self, "_printed_train_logits"):
-            print("[SaprotRegressionModel] logits:", logits[:5].detach().cpu().numpy())
-            self._printed_train_logits = True
+        if self.training:
+            count = getattr(self, "_printed_train_logits_count", 0)
+            if count < 5:
+                print(f"[SaprotRegressionModel] logits (step {count + 1}):", logits[:5].detach().cpu().numpy())
+                self._printed_train_logits_count = count + 1
 
         # For ProtBERT
         elif hasattr(self.model, "bert"):
@@ -57,9 +59,11 @@ class SaprotRegressionModel(SaprotBaseModel):
     def loss_func(self, stage, outputs, labels):
         fitness = labels['labels'].to(outputs)
 
-        if self.training and not hasattr(self, "_printed_train_labels"):
-            print("[SaprotRegressionModel] labels:", fitness[:5].detach().cpu().numpy())
-            self._printed_train_labels = True
+        if self.training:
+            count = getattr(self, "_printed_train_labels_count", 0)
+            if count < 5:
+                print(f"[SaprotRegressionModel] labels (step {count + 1}):", fitness[:5].detach().cpu().numpy())
+                self._printed_train_labels_count = count + 1
         loss = torch.nn.functional.mse_loss(outputs, fitness)
 
         # Update metrics
