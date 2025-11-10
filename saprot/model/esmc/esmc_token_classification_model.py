@@ -15,11 +15,30 @@ except ImportError:
 @register_model
 class ESMCTokenClassificationModel(ESMCBaseModel):
     def __init__(self, num_labels: int, **kwargs):
+        """
+        Args:
+            num_labels: number of labels
+            **kwargs: other arguments for ESMCBaseModel
+        """
         self.num_labels = num_labels
+        # For MCC calculation
+        self.preds = []
+        self.targets = []
         super().__init__(task="token_classification", **kwargs)
 
+    def compute_mcc(self, preds, target):
+        preds = preds.float()
+        target = target.float()
+        tp = (preds * target).sum()
+        tn = ((1 - preds) * (1 - target)).sum()
+        fp = (preds * (1 - target)).sum()
+        fn = ((1 - preds) * target).sum()
+        # Square root each denominator respectively to avoid overflow
+        mcc = (tp * tn - fp * fn) / ((tp + fp).sqrt() * (tp + fn).sqrt() * (tn + fp).sqrt() * (tn + fn).sqrt())
+        return tp, tn, fp, fn, mcc
+
     def initialize_metrics(self, stage):
-        return {f"{stage}_acc": torchmetrics.Accuracy(ignore_index=-1)}
+        return {f"{stage}_acc": torchmetrics.Accuracy()}
 
     def forward(self, inputs, coords=None):
         if isinstance(inputs, dict) and 'proteins' in inputs:
@@ -31,44 +50,109 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
             proteins = [proteins]
 
         with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            # Tokenize and pad
             token_ids_list = [self.model.embed(p) for p in proteins]
             token_ids_batch = pad_sequence(token_ids_list, batch_first=True, padding_value=self.model.padding_idx)
-            
-            # Forward pass to get representations
-            model_output = self.model.forward(token_ids_batch, repr_layers=[self.model.num_layers])
-            batch_repr = model_output['representations'][self.model.num_layers]  # [B, L, D]
-            attn = (token_ids_batch != self.model.padding_idx)
 
-        # position-wise classification
+            model_output = self.model.forward(token_ids_batch, repr_layers=[self.model.num_layers])
+            batch_repr = model_output['representations'][self.model.num_layers]
+
         x = self.model.classifier[0](batch_repr)
         x = self.model.classifier[1](x)
         x = self.model.classifier[2](x)
-        logits = self.model.classifier[3](x)  # [B, L, C]
+        logits = self.model.classifier[3](x)
 
-        return {"logits": logits, "attention_mask": attn}
+        return logits
 
-    def loss_func(self, stage, outputs, labels):
-        logits = outputs['logits']  # [B, L, C]
-        # labels: [B, L+2] or [B, L] with -1 for ignored
-        gold = labels['labels'].to(logits.device)
+    def loss_func(self, stage, logits, labels):
+        label = labels['labels'].to(logits.device)
 
-        # align shapes (truncate/pad if needed)
-        min_len = min(gold.shape[1], logits.shape[1])
-        gold = gold[:, :min_len]
+        # Align label/logit lengths (ESMC embed may omit special tokens while labels keep padding)
+        min_len = min(label.shape[1], logits.shape[1])
+        label = label[:, :min_len]
         logits = logits[:, :min_len]
 
-        loss = cross_entropy(logits.reshape(-1, logits.size(-1)), gold.reshape(-1), ignore_index=-1)
+        # Flatten the logits and labels
+        logits = logits.view(-1, self.num_labels)
+        label = label.view(-1)
+        loss = cross_entropy(logits, label, ignore_index=-1)
 
+        # Remove the ignored index
+        mask = label != -1
+        label = label[mask]
+        logits = logits[mask]
+
+        # Add the outputs to the list if not in training mode
+        if stage != "train":
+            preds = logits.argmax(dim=-1)
+            self.preds.append(preds.detach().cpu())
+            self.targets.append(label.detach().cpu())
+
+        # Update metrics
         for metric in self.metrics[stage].values():
-            metric.update(logits.detach().reshape(-1, logits.size(-1)), gold.reshape(-1))
+            metric.update(logits.detach(), label)
 
         if stage == "train":
             log_dict = self.get_log_dict("train")
             log_dict["train_loss"] = loss
             self.log_info(log_dict)
+
+            # Reset train metrics
             self.reset_metrics("train")
 
         return loss
 
+    def on_test_epoch_end(self):
+        log_dict = self.get_log_dict("test")
+        # log_dict["test_loss"] = torch.cat(self.all_gather(self.test_outputs), dim=-1).mean()
+        log_dict["test_loss"] = torch.mean(torch.stack(self.test_outputs))
 
+        preds = torch.cat(self.preds, dim=-1)
+        target = torch.cat(self.targets, dim=-1)
+        tp, tn, fp, fn, _ = self.compute_mcc(preds, target)
+
+        # Gather results
+        # tmp = torch.tensor([tp, tn, fp, fn])
+        # tp, tn, fp, fn = self.all_gather(tmp).sum(dim=0)
+        # Square root each denominator respectively to avoid overflow
+        mcc = (tp * tn - fp * fn) / ((tp + fp).sqrt() * (tp + fn).sqrt() * (tn + fp).sqrt() * (tn + fn).sqrt())
+        log_dict["test_mcc"] = mcc
+
+        # Reset the preds and targets
+        self.preds = []
+        self.targets = []
+
+        # if dist.get_rank() == 0:
+        #     print(log_dict)
+        self.output_test_metrics(log_dict)
+        self.log_info(log_dict)
+        self.reset_metrics("test")
+
+    def on_validation_epoch_end(self):
+        log_dict = self.get_log_dict("valid")
+        # log_dict["valid_loss"] = torch.cat(self.all_gather(self.valid_outputs), dim=-1).mean()
+        log_dict["valid_loss"] = torch.mean(torch.stack(self.valid_outputs))
+
+        preds = torch.cat(self.preds, dim=-1)
+        target = torch.cat(self.targets, dim=-1)
+        tp, tn, fp, fn, _ = self.compute_mcc(preds, target)
+
+        # Gather results
+        # tmp = torch.tensor([tp, tn, fp, fn])
+        # tp, tn, fp, fn = self.all_gather(tmp).sum(dim=0)
+        # Square root each denominator respectively to avoid overflow
+        mcc = (tp * tn - fp * fn) / (
+            (tp + fp).sqrt() * (tp + fn).sqrt() * (tn + fp).sqrt() * (tn + fn).sqrt()
+        )
+        log_dict["valid_mcc"] = mcc
+
+        # Reset the preds and targets
+        self.preds = []
+        self.targets = []
+
+        # if dist.get_rank() == 0:
+        #     print(log_dict)
+        self.log_info(log_dict)
+        self.reset_metrics("valid")
+        self.check_save_condition(log_dict["valid_acc"], mode="max")
+
+        self.plot_valid_metrics_curve(log_dict)
