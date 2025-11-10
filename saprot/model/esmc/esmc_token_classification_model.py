@@ -2,7 +2,6 @@ import torchmetrics
 import torch
 
 from torch.nn.functional import cross_entropy
-from torch.nn.utils.rnn import pad_sequence
 from ..model_interface import register_model
 from .base import ESMCBaseModel
 
@@ -41,25 +40,19 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
         return {f"{stage}_acc": torchmetrics.Accuracy()}
 
     def forward(self, inputs, coords=None):
-        if isinstance(inputs, dict) and 'proteins' in inputs:
-            proteins = inputs['proteins']
-        else:
-            raise ValueError("ESMCTokenClassificationModel.forward expects inputs['proteins'] (list of ESMProtein)")
+        # Parse proteins input
+        proteins = self._parse_proteins_input(inputs)
 
-        if not isinstance(proteins, list):
-            proteins = [proteins]
+        # Tokenize sequences and obtain token ids (with special tokens handled by tokenizer)
+        token_ids_batch, attention_mask, tokenizer = self._tokenize_sequences(proteins)
 
-        with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            token_ids_list = [self.model.embed(p) for p in proteins]
-            token_ids_batch = pad_sequence(token_ids_list, batch_first=True, padding_value=self.model.padding_idx)
+        # Extract sequence representations from the backbone.
+        # _get_representations wraps the forward pass with the appropriate grad context.
+        representations = self._get_representations(token_ids_batch, repr_layers=[self.model.num_layers],)
 
-            model_output = self.model.forward(token_ids_batch, repr_layers=[self.model.num_layers])
-            batch_repr = model_output['representations'][self.model.num_layers]
-
-        x = self.model.classifier[0](batch_repr)
-        x = self.model.classifier[1](x)
-        x = self.model.classifier[2](x)
-        logits = self.model.classifier[3](x)
+        # Head always needs gradients
+        head = self._get_head()
+        logits = head(representations)
 
         return logits
 
