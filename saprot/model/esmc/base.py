@@ -70,7 +70,8 @@ class ESMCBaseModel(AbstractModel):
     
     def _init_lora(self):
         """Initialize LoRA adapters"""
-        from peft import LoraConfig, get_peft_model
+        from peft import LoraConfig, get_peft_model, PeftModel
+        import os
         
         is_trainable = getattr(self.lora_kwargs, "is_trainable", False)
         config_list = getattr(self.lora_kwargs, "config_list", [])
@@ -81,12 +82,34 @@ class ESMCBaseModel(AbstractModel):
             
             # Load pre-trained LoRA weights
             if i < len(config_list):
-                lora_config_path = config_list[i].lora_config_path
+                entry = config_list[i]
+                lora_config_path = getattr(entry, "lora_config_path", entry)
+                
+                if not isinstance(lora_config_path, str):
+                    # Assume a Peft config object was provided directly
+                    if i == 0:
+                        self.model = get_peft_model(self.model, lora_config_path, adapter_name=adapter_name)
+                    else:
+                        self.model.load_adapter(lora_config_path, adapter_name=adapter_name, is_trainable=is_trainable)
+                    continue
+
+                if not os.path.exists(lora_config_path):
+                    raise FileNotFoundError(f"LoRA config path '{lora_config_path}' does not exist.")
+
                 if i == 0:
-                    # If i == 0, initialize a PEFT model
-                    self.model = get_peft_model(self.model, lora_config_path, adapter_name=adapter_name)
+                    # Initialize with pre-trained LoRA weights
+                    self.model = PeftModel.from_pretrained(
+                        self.model,
+                        lora_config_path,
+                        adapter_name=adapter_name,
+                        is_trainable=is_trainable,
+                    )
                 else:
-                    self.model.load_adapter(lora_config_path, adapter_name=adapter_name, is_trainable=is_trainable)
+                    self.model.load_adapter(
+                        lora_config_path,
+                        adapter_name=adapter_name,
+                        is_trainable=is_trainable,
+                    )
             
             # Initialize LoRA model for training
             else:

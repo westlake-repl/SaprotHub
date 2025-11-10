@@ -16,6 +16,12 @@ except ImportError:
 @register_model
 class ESMCPairClassificationModel(ESMCBaseModel):
     def __init__(self, num_labels: int, **kwargs):
+        """
+        Args:
+            num_labels: number of labels
+            
+            **kwargs: other arguments for ESMCBaseModel
+        """
         self.num_labels = num_labels
         super().__init__(task="base", **kwargs)
 
@@ -91,6 +97,7 @@ class ESMCPairClassificationModel(ESMCBaseModel):
         label = labels['labels']
         loss = cross_entropy(logits, label)
 
+        # Update metrics
         for metric in self.metrics[stage].values():
             metric.update(logits.detach(), label)
 
@@ -98,8 +105,33 @@ class ESMCPairClassificationModel(ESMCBaseModel):
             log_dict = self.get_log_dict("train")
             log_dict["train_loss"] = loss
             self.log_info(log_dict)
+
+            # Reset train metrics
             self.reset_metrics("train")
 
         return loss
 
+    def on_test_epoch_end(self):
+        log_dict = self.get_log_dict("test")
+        # log_dict["test_loss"] = torch.cat(self.all_gather(self.test_outputs), dim=-1).mean()
+        log_dict["test_loss"] = torch.mean(torch.stack(self.test_outputs))
 
+        # if dist.get_rank() == 0:
+        #     print(log_dict)
+        self.output_test_metrics(log_dict)
+        self.log_info(log_dict)
+
+        self.reset_metrics("test")
+
+    def on_validation_epoch_end(self):
+        log_dict = self.get_log_dict("valid")
+        # log_dict["valid_loss"] = torch.cat(self.all_gather(self.valid_outputs), dim=-1).mean()
+        log_dict["valid_loss"] = torch.mean(torch.stack(self.valid_outputs))
+
+        # if dist.get_rank() == 0:
+        #     print(log_dict)
+        self.log_info(log_dict)
+        self.reset_metrics("valid")
+        self.check_save_condition(log_dict["valid_acc"], mode="max")
+
+        self.plot_valid_metrics_curve(log_dict)
