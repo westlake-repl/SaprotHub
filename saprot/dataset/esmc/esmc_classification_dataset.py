@@ -19,6 +19,14 @@ class ESMCClassificationDataset(LMDBDataset):
                  max_length: int = 1024,
                  preset_label: int = None,
                  **kwargs):
+        """
+        Args:
+            model_name: name of the model
+            use_bias_feature: if True, structure information will be used
+            max_length: max length of sequence
+            preset_label: if not None, all labels will be set to this value
+            **kwargs:
+        """
         super().__init__(**kwargs)
 
         # Load tokenizer from a temporary model handle
