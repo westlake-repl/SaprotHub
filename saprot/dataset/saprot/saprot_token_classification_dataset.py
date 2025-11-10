@@ -52,7 +52,21 @@ class SaprotTokenClassificationDataset(LMDBDataset):
         encoder_info = self.tokenizer.batch_encode_plus(seqs, return_tensors='pt', padding=True)
         inputs = {"inputs": encoder_info}
 
-        print("batch input length:", encoder_info["input_ids"].shape[-1])
-        print("batch label length:", label_ids.shape[-1])
+        input_len = encoder_info["input_ids"].shape[-1]
+        label_len = label_ids.shape[-1]
+
+        if label_len < input_len:
+            pad_width = input_len - label_len
+            pad_tensor = torch.full(
+                (label_ids.shape[0], pad_width),
+                -1,
+                dtype=label_ids.dtype,
+                device=label_ids.device,
+            )
+            label_ids = torch.cat([label_ids, pad_tensor], dim=-1)
+        elif label_len > input_len:
+            label_ids = label_ids[..., :input_len]
+
+        labels["labels"] = label_ids
  
         return inputs, labels
