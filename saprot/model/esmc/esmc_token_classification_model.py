@@ -46,9 +46,17 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
         # Tokenize sequences and obtain token ids (with special tokens handled by tokenizer)
         token_ids_batch, attention_mask, tokenizer = self._tokenize_sequences(proteins)
 
-        # Extract sequence representations from the backbone.
-        # _get_representations wraps the forward pass with the appropriate grad context.
-        representations = self._get_representations(token_ids_batch, repr_layers=[self.model.num_layers],)
+        # Determine the last layer index from the underlying backbone (handles PEFT wrapping).
+        base_model = self._get_base_model()
+        num_layers = getattr(base_model, "num_layers", None)
+
+        if num_layers is not None:
+            representations = self._get_representations(
+                token_ids_batch,
+                repr_layers=[num_layers],
+            )
+        else:
+            representations = self._get_representations(token_ids_batch)
 
         # Head always needs gradients
         head = self._get_head()
