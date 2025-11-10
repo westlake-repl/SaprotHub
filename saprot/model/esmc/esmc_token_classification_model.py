@@ -72,6 +72,16 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
         label = label[:, :min_len]
         logits = logits[:, :min_len]
 
+        if stage == "train" and getattr(self, "trainer", None) is not None:
+            global_step = getattr(self.trainer, "global_step", 0)
+            if global_step < 3:
+                with torch.no_grad():
+                    print("[DEBUG] logits shape:", logits.shape)
+                    print("[DEBUG] labels shape:", label.shape)
+                    print("[DEBUG] logits stats -> mean:", logits.mean().item(), "std:", logits.std().item())
+                    unique_vals, counts = torch.unique(label, return_counts=True)
+                    print("[DEBUG] label unique:", list(zip(unique_vals.tolist(), counts.tolist())))
+
         # Flatten the logits and labels
         logits = logits.view(-1, self.num_labels)
         label = label.view(-1)
