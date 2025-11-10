@@ -2,6 +2,7 @@ import torchmetrics
 import torch
 
 from torch.nn.functional import cross_entropy
+import torch.nn.functional as F
 from ..model_interface import register_model
 from .base import ESMCBaseModel
 
@@ -58,6 +59,13 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
         else:
             representations = self._get_representations(token_ids_batch)
 
+        # Normalize token representations to stabilize logits
+        representations = F.layer_norm(representations, representations.shape[-1:])
+
+        pad_token_id = getattr(tokenizer, "pad_token_id", getattr(tokenizer, "padding_idx", 0))
+        attention_mask = (token_ids_batch != pad_token_id).unsqueeze(-1)
+        representations = representations * attention_mask
+
         # Head always needs gradients
         head = self._get_head()
         logits = head(representations)
@@ -71,16 +79,6 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
         min_len = min(label.shape[1], logits.shape[1])
         label = label[:, :min_len]
         logits = logits[:, :min_len]
-
-        if stage == "train" and getattr(self, "trainer", None) is not None:
-            global_step = getattr(self.trainer, "global_step", 0)
-            if global_step < 3:
-                with torch.no_grad():
-                    print("[DEBUG] logits shape:", logits.shape)
-                    print("[DEBUG] labels shape:", label.shape)
-                    print("[DEBUG] logits stats -> mean:", logits.mean().item(), "std:", logits.std().item())
-                    unique_vals, counts = torch.unique(label, return_counts=True)
-                    print("[DEBUG] label unique:", list(zip(unique_vals.tolist(), counts.tolist())))
 
         # Flatten the logits and labels
         logits = logits.view(-1, self.num_labels)
