@@ -83,7 +83,6 @@ class SaprotPairClassificationModel(SaprotBaseModel):
         # log_dict["valid_loss"] = torch.cat(self.all_gather(self.valid_outputs), dim=-1).mean()
         log_dict["valid_loss"] = torch.mean(torch.stack(self.valid_outputs))
 
-
         # if dist.get_rank() == 0:
         #     print(log_dict)
         self.log_info(log_dict)
