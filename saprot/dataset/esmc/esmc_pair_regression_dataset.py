@@ -15,6 +15,7 @@ except ImportError:
 class ESMCPairRegressionDataset(LMDBDataset):
     def __init__(self,
             model_name: str = "esmc_300m",
+            tokenizer: str = None,
             max_length: int = 1024,
             **kwargs):
         """
@@ -25,11 +26,13 @@ class ESMCPairRegressionDataset(LMDBDataset):
         """
         super().__init__(**kwargs)
 
-        temp_model = ESMC.from_pretrained(model_name)
+        model_ref = tokenizer or model_name
+        temp_model = ESMC.from_pretrained(model_ref)
         self.tokenizer = temp_model.tokenizer
         del temp_model
 
         self.model_name = model_name
+        self.tokenizer_name = model_ref
         self.max_length = max_length
 
     def __getitem__(self, index):

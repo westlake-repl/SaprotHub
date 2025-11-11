@@ -44,7 +44,7 @@ class ESMCBaseModel(AbstractModel):
 
             **kwargs: Other arguments for AbstractModel
         """
-        assert task in ["classification", "token_classification", "regression", "pair_classification"]
+        assert task in ["classification", "token_classification", "regression", "pair_classification", "pair_regression"]
         self.task = task
         self.model_name = model_name
         self.freeze_backbone = freeze_backbone
@@ -302,6 +302,22 @@ class ESMCBaseModel(AbstractModel):
                         torch.nn.init.zeros_(module.bias)
             setattr(self.model, "classifier", classifier)
             setattr(self.model, "head", classifier)
+
+        elif self.task == 'pair_regression':
+            pair_hidden = hidden_size * 2
+            reg_head = torch.nn.Sequential(
+                torch.nn.Linear(pair_hidden, pair_hidden),
+                torch.nn.ReLU(),
+                torch.nn.Linear(pair_hidden, 1)
+            )
+            for module in reg_head:
+                if isinstance(module, torch.nn.Linear):
+                    torch.nn.init.xavier_uniform_(module.weight)
+                    if module.bias is not None:
+                        torch.nn.init.zeros_(module.bias)
+            setattr(self.model, "reg_head", reg_head)
+            setattr(self.model, "head", reg_head)
+            setattr(self.model, "classifier", reg_head)
 
         # Freeze backbone if required
         if self.freeze_backbone and self.lora_kwargs is None:
