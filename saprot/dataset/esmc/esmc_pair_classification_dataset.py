@@ -14,8 +14,8 @@ except ImportError:
 @register_dataset
 class ESMCPairClassificationDataset(LMDBDataset):
     def __init__(self,
-                 tokenizer: str,
-                 model_name: str = None,
+                 model_name: str = "esmc_300m",
+                 tokenizer: str = None,
                  max_length: int = 1024,
                  plddt_threshold: float = None,
                  **kwargs):
@@ -28,12 +28,13 @@ class ESMCPairClassificationDataset(LMDBDataset):
         """
         super().__init__(**kwargs)
 
-        temp_model = ESMC.from_pretrained(model_name)
+        model_ref = tokenizer or model_name
+        temp_model = ESMC.from_pretrained(model_ref)
         self.tokenizer = temp_model.tokenizer
         del temp_model
 
         self.model_name = model_name
-        self.tokenizer_name = tokenizer
+        self.tokenizer_name = model_ref
         self.max_length = max_length
         self.plddt_threshold = plddt_threshold
 
