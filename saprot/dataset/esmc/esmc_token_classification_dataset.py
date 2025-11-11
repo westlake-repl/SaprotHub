@@ -14,9 +14,9 @@ except ImportError:
 @register_dataset
 class ESMCTokenClassificationDataset(LMDBDataset):
     def __init__(self,
-                 model_name: str = "esmc_300m",
-                 max_length: int = 1024,
-                 **kwargs):
+            model_name: str = "esmc_300m",
+            max_length: int = 1024,
+            **kwargs):
         """
         Args:
             model_name: name of the model

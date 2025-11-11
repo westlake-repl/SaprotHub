@@ -20,25 +20,21 @@ class ESMCRegressionDataset(LMDBDataset):
                  mix_max_norm: [float, float] = None,
                  **kwargs):
         """
-
         Args:
             model_name: name of the model
-
             max_length: maximum length of the sequence
-
             min_clip: [given_value, clip_value]
                       Set the fitness value to a fixed value if it is less than a given value
-
             mix_max_norm: [min_norm, max_norm]
                       Normalize the fitness value to [0, 1] by min-max normalization
-            
             **kwargs:
         """
-
         super().__init__(**kwargs)
+
         temp_model = ESMC.from_pretrained(model_name)
         self.tokenizer = temp_model.tokenizer
         del temp_model
+        
         self.model_name = model_name
         self.max_length = max_length
         self.min_clip = min_clip

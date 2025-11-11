@@ -29,7 +29,6 @@ class ESMCClassificationDataset(LMDBDataset):
         """
         super().__init__(**kwargs)
 
-        # Load tokenizer from a temporary model handle
         temp_model = ESMC.from_pretrained(model_name)
         self.tokenizer = temp_model.tokenizer
         del temp_model

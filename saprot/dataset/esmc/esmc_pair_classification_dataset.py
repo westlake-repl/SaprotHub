@@ -14,18 +14,16 @@ except ImportError:
 @register_dataset
 class ESMCPairClassificationDataset(LMDBDataset):
     def __init__(self,
-            tokenizer: str,
-            max_length: int = 1024,
-            plddt_threshold: float = None,
-            **kwargs):
+                 tokenizer: str,
+                 model_name: str = None,
+                 max_length: int = 1024,
+                 plddt_threshold: float = None,
+                 **kwargs):
         """
         Args:
             model_name: name of the model
-
             max_length: max length of sequence
-
             plddt_threshold: if not None, mask structure tokens with pLDDT < threshold
-            
             **kwargs:
         """
         super().__init__(**kwargs)
@@ -35,6 +33,7 @@ class ESMCPairClassificationDataset(LMDBDataset):
         del temp_model
 
         self.model_name = model_name
+        self.tokenizer_name = tokenizer
         self.max_length = max_length
         self.plddt_threshold = plddt_threshold
 

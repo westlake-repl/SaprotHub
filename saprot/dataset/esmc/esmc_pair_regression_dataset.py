@@ -14,9 +14,15 @@ except ImportError:
 @register_dataset
 class ESMCPairRegressionDataset(LMDBDataset):
     def __init__(self,
-                 model_name: str = "esmc_300m",
-                 max_length: int = 1024,
-                 **kwargs):
+            model_name: str = "esmc_300m",
+            max_length: int = 1024,
+            **kwargs):
+        """
+        Args:
+            model_name: name of the model
+            max_length: max length of sequence
+            **kwargs:
+        """
         super().__init__(**kwargs)
 
         temp_model = ESMC.from_pretrained(model_name)
