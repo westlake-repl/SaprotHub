@@ -1,6 +1,5 @@
 import torch
 import json
-import warnings
 
 from ..lmdb_dataset import LMDBDataset
 from ..data_interface import register_dataset
@@ -19,6 +18,7 @@ class ESMCPairRegressionDataset(LMDBDataset):
             model_name: str = "esmc_300m",
             tokenizer: str = None,
             max_length: int = 1024,
+            sa_debug: bool = False,
             **kwargs):
         """
         Args:
@@ -37,6 +37,7 @@ class ESMCPairRegressionDataset(LMDBDataset):
         self.tokenizer_name = model_ref
         self.max_length = max_length
         self._sa_to_aa_warned = False
+        self._sa_debug = sa_debug
         self._prefetch_sa_warning()
 
     def __getitem__(self, index):
@@ -98,17 +99,18 @@ class ESMCPairRegressionDataset(LMDBDataset):
 
     def _emit_sa_warning(self, orig_1: str, conv_1: str, orig_2: str, conv_2: str):
         if not self._sa_to_aa_warned:
-            preview_len = 30
-            orig_preview_1 = orig_1[:preview_len]
-            conv_preview_1 = conv_1[:preview_len]
-            orig_preview_2 = orig_2[:preview_len]
-            conv_preview_2 = conv_2[:preview_len]
-            warnings.warn(
-                "[ESMCPairRegressionDataset] Detected SA sequences. Converted them to plain amino-acid sequences for ESMC. "
-                f"Sample preview seq1: '{orig_preview_1}' -> '{conv_preview_1}', "
-                f"seq2: '{orig_preview_2}' -> '{conv_preview_2}'.",
-                RuntimeWarning,
-            )
+            if self._sa_debug:
+                preview_len = 120
+                orig_preview_1 = orig_1[:preview_len]
+                conv_preview_1 = conv_1[:preview_len]
+                orig_preview_2 = orig_2[:preview_len]
+                conv_preview_2 = conv_2[:preview_len]
+                print("[ESMCPairRegressionDataset] SA sample detected and converted.",
+                      f"Seq1 original: {orig_preview_1}",
+                      f"Seq1 converted: {conv_preview_1}",
+                      f"Seq2 original: {orig_preview_2}",
+                      f"Seq2 converted: {conv_preview_2}",
+                      sep="\n")
             self._sa_to_aa_warned = True
 
 

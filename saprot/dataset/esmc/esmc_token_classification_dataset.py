@@ -1,6 +1,5 @@
 import json
 import torch
-import warnings
 
 from ..data_interface import register_dataset
 from ..lmdb_dataset import LMDBDataset
@@ -18,6 +17,7 @@ class ESMCTokenClassificationDataset(LMDBDataset):
     def __init__(self,
             model_name: str = "esmc_300m",
             max_length: int = 1024,
+            sa_debug: bool = False,
             **kwargs):
         """
         Args:
@@ -34,6 +34,7 @@ class ESMCTokenClassificationDataset(LMDBDataset):
         self.model_name = model_name
         self.max_length = max_length
         self._sa_to_aa_warned = False
+        self._sa_debug = sa_debug
         self._prefetch_sa_warning()
 
     def __getitem__(self, index):
@@ -89,14 +90,14 @@ class ESMCTokenClassificationDataset(LMDBDataset):
 
     def _emit_sa_warning(self, original_seq: str, converted_seq: str):
         if not self._sa_to_aa_warned:
-            preview_len = 40
-            original_preview = original_seq[:preview_len]
-            converted_preview = converted_seq[:preview_len]
-            warnings.warn(
-                "[ESMCTokenClassificationDataset] Detected SA sequences. Converted them to plain amino-acid sequences for ESMC. "
-                f"Sample preview: '{original_preview}' -> '{converted_preview}'.",
-                RuntimeWarning,
-            )
+            if self._sa_debug:
+                preview_len = 120
+                original_preview = original_seq[:preview_len]
+                converted_preview = converted_seq[:preview_len]
+                print("[ESMCTokenClassificationDataset] SA sample detected and converted.",
+                      f"Original: {original_preview}",
+                      f"Converted: {converted_preview}",
+                      sep="\n")
             self._sa_to_aa_warned = True
 
 

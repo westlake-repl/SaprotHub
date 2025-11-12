@@ -1,7 +1,5 @@
 import torch
 import json
-import warnings
-
 from ..data_interface import register_dataset
 from ..lmdb_dataset import LMDBDataset
 from .sa_utils import normalize_to_amino_acids
@@ -20,6 +18,7 @@ class ESMCClassificationDataset(LMDBDataset):
                  use_bias_feature: bool = False,
                  max_length: int = 1024,
                  preset_label: int = None,
+                 sa_debug: bool = False,
                  **kwargs):
         """
         Args:
@@ -40,6 +39,7 @@ class ESMCClassificationDataset(LMDBDataset):
         self.use_bias_feature = use_bias_feature
         self.preset_label = preset_label
         self._sa_to_aa_warned = False
+        self._sa_debug = sa_debug
         self._prefetch_sa_warning()
 
     def __getitem__(self, index):
@@ -103,14 +103,14 @@ class ESMCClassificationDataset(LMDBDataset):
 
     def _emit_sa_warning(self, original_seq: str, converted_seq: str):
         if not self._sa_to_aa_warned:
-            preview_len = 40
-            original_preview = original_seq[:preview_len]
-            converted_preview = converted_seq[:preview_len]
-            warnings.warn(
-                "[ESMCClassificationDataset] Detected SA sequences. Converted them to plain amino-acid sequences for ESMC. "
-                f"Sample preview: '{original_preview}' -> '{converted_preview}'.",
-                RuntimeWarning,
-            )
+            if self._sa_debug:
+                preview_len = 120
+                original_preview = original_seq[:preview_len]
+                converted_preview = converted_seq[:preview_len]
+                print("[ESMCClassificationDataset] SA sample detected and converted.",
+                      f"Original: {original_preview}",
+                      f"Converted: {converted_preview}",
+                      sep="\n")
             self._sa_to_aa_warned = True
 
 
