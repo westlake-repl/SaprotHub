@@ -3,7 +3,6 @@ import json
 
 from ..lmdb_dataset import LMDBDataset
 from ..data_interface import register_dataset
-from .sa_utils import normalize_to_amino_acids
 
 try:
     from esm.sdk.api import ESMProtein
@@ -18,7 +17,6 @@ class ESMCPairRegressionDataset(LMDBDataset):
             model_name: str = "esmc_300m",
             tokenizer: str = None,
             max_length: int = 1024,
-            sa_debug: bool = True,
             **kwargs):
         """
         Args:
@@ -36,19 +34,10 @@ class ESMCPairRegressionDataset(LMDBDataset):
         self.model_name = model_name
         self.tokenizer_name = model_ref
         self.max_length = max_length
-        self._sa_to_aa_warned = False
-        self._sa_debug = sa_debug
-        self._prefetch_sa_warning()
 
     def __getitem__(self, index):
         entry = json.loads(self._get(index))
-        original_seq_1 = entry['seq_1']
-        original_seq_2 = entry['seq_2']
-        seq_1, conv_1 = normalize_to_amino_acids(original_seq_1)
-        seq_2, conv_2 = normalize_to_amino_acids(original_seq_2)
-
-        if (conv_1 or conv_2) and not self._sa_to_aa_warned:
-            self._emit_sa_warning(original_seq_1, seq_1, original_seq_2, seq_2)
+        seq_1, seq_2 = entry['seq_1'], entry['seq_2']
 
         if len(seq_1) > self.max_length:
             seq_1 = seq_1[:self.max_length]
@@ -75,42 +64,5 @@ class ESMCPairRegressionDataset(LMDBDataset):
         }
 
         return inputs, labels
-
-    def _prefetch_sa_warning(self):
-        if self._sa_to_aa_warned:
-            return
-        try:
-            total = int(self._get("length"))
-        except Exception:
-            total = 0
-
-        for idx in range(min(total, 10)):
-            try:
-                entry = json.loads(self._get(idx))
-            except Exception:
-                continue
-            original_seq_1 = entry.get("seq_1", "")
-            original_seq_2 = entry.get("seq_2", "")
-            converted_1, conv_1 = normalize_to_amino_acids(original_seq_1)
-            converted_2, conv_2 = normalize_to_amino_acids(original_seq_2)
-            if conv_1 or conv_2:
-                self._emit_sa_warning(original_seq_1, converted_1, original_seq_2, converted_2)
-                break
-
-    def _emit_sa_warning(self, orig_1: str, conv_1: str, orig_2: str, conv_2: str):
-        if not self._sa_to_aa_warned:
-            if self._sa_debug:
-                preview_len = 120
-                orig_preview_1 = orig_1[:preview_len]
-                conv_preview_1 = conv_1[:preview_len]
-                orig_preview_2 = orig_2[:preview_len]
-                conv_preview_2 = conv_2[:preview_len]
-                print("[ESMCPairRegressionDataset] SA sample detected and converted.",
-                      f"Seq1 original: {orig_preview_1}",
-                      f"Seq1 converted: {conv_preview_1}",
-                      f"Seq2 original: {orig_preview_2}",
-                      f"Seq2 converted: {conv_preview_2}",
-                      sep="\n")
-            self._sa_to_aa_warned = True
 
 
