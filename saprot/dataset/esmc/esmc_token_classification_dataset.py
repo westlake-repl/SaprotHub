@@ -38,9 +38,10 @@ class ESMCTokenClassificationDataset(LMDBDataset):
 
     def __getitem__(self, index):
         entry = json.loads(self._get(index))
-        seq, converted = normalize_to_amino_acids(entry['seq'])
+        original_seq = entry['seq']
+        seq, converted = normalize_to_amino_acids(original_seq)
         if converted and not self._sa_to_aa_warned:
-            self._emit_sa_warning()
+            self._emit_sa_warning(original_seq, seq)
 
         if len(seq) > self.max_length:
             seq = seq[:self.max_length]
@@ -75,20 +76,25 @@ class ESMCTokenClassificationDataset(LMDBDataset):
         except Exception:
             total = 0
 
-        for idx in range(min(total, 3)):
+        for idx in range(min(total, 10)):
             try:
                 entry = json.loads(self._get(idx))
             except Exception:
                 continue
-            _, converted = normalize_to_amino_acids(entry.get("seq", ""))
+            original_seq = entry.get("seq", "")
+            converted_seq, converted = normalize_to_amino_acids(original_seq)
             if converted:
-                self._emit_sa_warning()
+                self._emit_sa_warning(original_seq, converted_seq)
                 break
 
-    def _emit_sa_warning(self):
+    def _emit_sa_warning(self, original_seq: str, converted_seq: str):
         if not self._sa_to_aa_warned:
+            preview_len = 40
+            original_preview = original_seq[:preview_len]
+            converted_preview = converted_seq[:preview_len]
             warnings.warn(
-                "[ESMCTokenClassificationDataset] Detected SA sequences. Converted them to plain amino-acid sequences for ESMC.",
+                "[ESMCTokenClassificationDataset] Detected SA sequences. Converted them to plain amino-acid sequences for ESMC. "
+                f"Sample preview: '{original_preview}' -> '{converted_preview}'.",
                 RuntimeWarning,
             )
             self._sa_to_aa_warned = True

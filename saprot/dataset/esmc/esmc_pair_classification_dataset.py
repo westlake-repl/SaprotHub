@@ -44,11 +44,13 @@ class ESMCPairClassificationDataset(LMDBDataset):
 
     def __getitem__(self, index):
         entry = json.loads(self._get(index))
-        seq_1, conv_1 = normalize_to_amino_acids(entry['seq_1'])
-        seq_2, conv_2 = normalize_to_amino_acids(entry['seq_2'])
+        original_seq_1 = entry['seq_1']
+        original_seq_2 = entry['seq_2']
+        seq_1, conv_1 = normalize_to_amino_acids(original_seq_1)
+        seq_2, conv_2 = normalize_to_amino_acids(original_seq_2)
 
         if (conv_1 or conv_2) and not self._sa_to_aa_warned:
-            self._emit_sa_warning()
+            self._emit_sa_warning(original_seq_1, seq_1, original_seq_2, seq_2)
 
         if len(seq_1) > self.max_length:
             seq_1 = seq_1[:self.max_length]
@@ -84,20 +86,30 @@ class ESMCPairClassificationDataset(LMDBDataset):
         except Exception:
             total = 0
 
-        for idx in range(min(total, 3)):
+        for idx in range(min(total, 10)):
             try:
                 entry = json.loads(self._get(idx))
             except Exception:
                 continue
-            seqs = [entry.get("seq_1", ""), entry.get("seq_2", "")]
-            if any(normalize_to_amino_acids(s)[1] for s in seqs):
-                self._emit_sa_warning()
+            original_seq_1 = entry.get("seq_1", "")
+            original_seq_2 = entry.get("seq_2", "")
+            converted_1, conv_1 = normalize_to_amino_acids(original_seq_1)
+            converted_2, conv_2 = normalize_to_amino_acids(original_seq_2)
+            if conv_1 or conv_2:
+                self._emit_sa_warning(original_seq_1, converted_1, original_seq_2, converted_2)
                 break
 
-    def _emit_sa_warning(self):
+    def _emit_sa_warning(self, orig_1: str, conv_1: str, orig_2: str, conv_2: str):
         if not self._sa_to_aa_warned:
+            preview_len = 30
+            orig_preview_1 = orig_1[:preview_len]
+            conv_preview_1 = conv_1[:preview_len]
+            orig_preview_2 = orig_2[:preview_len]
+            conv_preview_2 = conv_2[:preview_len]
             warnings.warn(
-                "[ESMCPairClassificationDataset] Detected SA sequences. Converted them to plain amino-acid sequences for ESMC.",
+                "[ESMCPairClassificationDataset] Detected SA sequences. Converted them to plain amino-acid sequences for ESMC. "
+                f"Sample preview seq1: '{orig_preview_1}' -> '{conv_preview_1}', "
+                f"seq2: '{orig_preview_2}' -> '{conv_preview_2}'.",
                 RuntimeWarning,
             )
             self._sa_to_aa_warned = True
