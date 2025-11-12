@@ -40,16 +40,13 @@ class ESMCClassificationDataset(LMDBDataset):
         self.use_bias_feature = use_bias_feature
         self.preset_label = preset_label
         self._sa_to_aa_warned = False
+        self._prefetch_sa_warning()
 
     def __getitem__(self, index):
         entry = json.loads(self._get(index))
         seq, converted = normalize_to_amino_acids(entry['seq'])
         if converted and not self._sa_to_aa_warned:
-            warnings.warn(
-                "[ESMCClassificationDataset] Detected SA sequences. Converted them to plain amino-acid sequences for ESMC.",
-                RuntimeWarning,
-            )
-            self._sa_to_aa_warned = True
+            self._emit_sa_warning()
 
         # Truncate plain sequence for ESMC
         if len(seq) > self.max_length:
@@ -83,5 +80,31 @@ class ESMCClassificationDataset(LMDBDataset):
             inputs["coords"] = coords
 
         return inputs, labels
+
+    def _prefetch_sa_warning(self):
+        if self._sa_to_aa_warned:
+            return
+        try:
+            total = int(self._get("length"))
+        except Exception:
+            total = 0
+
+        for idx in range(min(total, 3)):
+            try:
+                entry = json.loads(self._get(idx))
+            except Exception:
+                continue
+            _, converted = normalize_to_amino_acids(entry.get("seq", ""))
+            if converted:
+                self._emit_sa_warning()
+                break
+
+    def _emit_sa_warning(self):
+        if not self._sa_to_aa_warned:
+            warnings.warn(
+                "[ESMCClassificationDataset] Detected SA sequences. Converted them to plain amino-acid sequences for ESMC.",
+                RuntimeWarning,
+            )
+            self._sa_to_aa_warned = True
 
 

@@ -40,6 +40,7 @@ class ESMCPairClassificationDataset(LMDBDataset):
         self.max_length = max_length
         self.plddt_threshold = plddt_threshold
         self._sa_to_aa_warned = False
+        self._prefetch_sa_warning()
 
     def __getitem__(self, index):
         entry = json.loads(self._get(index))
@@ -47,11 +48,7 @@ class ESMCPairClassificationDataset(LMDBDataset):
         seq_2, conv_2 = normalize_to_amino_acids(entry['seq_2'])
 
         if (conv_1 or conv_2) and not self._sa_to_aa_warned:
-            warnings.warn(
-                "[ESMCPairClassificationDataset] Detected SA sequences. Converted them to plain amino-acid sequences for ESMC.",
-                RuntimeWarning,
-            )
-            self._sa_to_aa_warned = True
+            self._emit_sa_warning()
 
         if len(seq_1) > self.max_length:
             seq_1 = seq_1[:self.max_length]
@@ -78,5 +75,31 @@ class ESMCPairClassificationDataset(LMDBDataset):
         }
 
         return inputs, labels
+
+    def _prefetch_sa_warning(self):
+        if self._sa_to_aa_warned:
+            return
+        try:
+            total = int(self._get("length"))
+        except Exception:
+            total = 0
+
+        for idx in range(min(total, 3)):
+            try:
+                entry = json.loads(self._get(idx))
+            except Exception:
+                continue
+            seqs = [entry.get("seq_1", ""), entry.get("seq_2", "")]
+            if any(normalize_to_amino_acids(s)[1] for s in seqs):
+                self._emit_sa_warning()
+                break
+
+    def _emit_sa_warning(self):
+        if not self._sa_to_aa_warned:
+            warnings.warn(
+                "[ESMCPairClassificationDataset] Detected SA sequences. Converted them to plain amino-acid sequences for ESMC.",
+                RuntimeWarning,
+            )
+            self._sa_to_aa_warned = True
 
 
