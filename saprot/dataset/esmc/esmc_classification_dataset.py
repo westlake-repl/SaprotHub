@@ -18,7 +18,7 @@ class ESMCClassificationDataset(LMDBDataset):
                  use_bias_feature: bool = False,
                  max_length: int = 1024,
                  preset_label: int = None,
-                 sa_debug: bool = False,
+                 sa_debug: bool = True,
                  **kwargs):
         """
         Args:

@@ -18,7 +18,7 @@ class ESMCRegressionDataset(LMDBDataset):
                  max_length: int = 1024,
                  min_clip: [float, float] = None,
                  mix_max_norm: [float, float] = None,
-                 sa_debug: bool = False,
+                 sa_debug: bool = True,
                  **kwargs):
         """
         Args:

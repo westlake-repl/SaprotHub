@@ -19,7 +19,7 @@ class ESMCPairClassificationDataset(LMDBDataset):
                  tokenizer: str = None,
                  max_length: int = 1024,
                  plddt_threshold: float = None,
-                 sa_debug: bool = False,
+                 sa_debug: bool = True,
                  **kwargs):
         """
         Args:

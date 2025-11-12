@@ -18,7 +18,7 @@ class ESMCPairRegressionDataset(LMDBDataset):
             model_name: str = "esmc_300m",
             tokenizer: str = None,
             max_length: int = 1024,
-            sa_debug: bool = False,
+            sa_debug: bool = True,
             **kwargs):
         """
         Args:
