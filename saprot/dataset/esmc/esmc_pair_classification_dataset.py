@@ -3,6 +3,7 @@ import json
 
 from ..lmdb_dataset import LMDBDataset
 from ..data_interface import register_dataset
+from .sa_utils import normalize_to_amino_acids
 
 try:
     from esm.sdk.api import ESMProtein
@@ -37,10 +38,17 @@ class ESMCPairClassificationDataset(LMDBDataset):
         self.tokenizer_name = model_ref
         self.max_length = max_length
         self.plddt_threshold = plddt_threshold
+        self._sa_to_aa_warned = False
 
     def __getitem__(self, index):
         entry = json.loads(self._get(index))
-        seq_1, seq_2 = entry['seq_1'], entry['seq_2']
+        seq_1, conv_1 = normalize_to_amino_acids(entry['seq_1'])
+        seq_2, conv_2 = normalize_to_amino_acids(entry['seq_2'])
+
+        if (conv_1 or conv_2) and not self._sa_to_aa_warned:
+            print("[ESMCPairClassificationDataset] Detected SA sequences. "
+                  "Converted them to plain amino-acid sequences for ESMC.")
+            self._sa_to_aa_warned = True
 
         if len(seq_1) > self.max_length:
             seq_1 = seq_1[:self.max_length]

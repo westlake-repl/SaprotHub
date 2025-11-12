@@ -3,6 +3,7 @@ import torch
 
 from ..data_interface import register_dataset
 from ..lmdb_dataset import LMDBDataset
+from .sa_utils import normalize_to_amino_acids
 
 try:
     from esm.sdk.api import ESMProtein
@@ -31,16 +32,22 @@ class ESMCTokenClassificationDataset(LMDBDataset):
 
         self.model_name = model_name
         self.max_length = max_length
+        self._sa_to_aa_warned = False
 
     def __getitem__(self, index):
         entry = json.loads(self._get(index))
-        seq = entry['seq']
+        seq, converted = normalize_to_amino_acids(entry['seq'])
+        if converted and not self._sa_to_aa_warned:
+            print("[ESMCTokenClassificationDataset] Detected SA sequences. "
+                  "Converted them to plain amino-acid sequences for ESMC.")
+            self._sa_to_aa_warned = True
 
         if len(seq) > self.max_length:
             seq = seq[:self.max_length]
 
+        label_core = entry["label"][:len(seq)]
         # Add -1 to match special tokens convention if needed; we will align length in loss
-        label = [-1] + entry["label"][:self.max_length] + [-1]
+        label = [-1] + label_core + [-1]
         label = torch.tensor(label, dtype=torch.long)
 
         return seq, label
