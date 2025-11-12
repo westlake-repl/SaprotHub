@@ -1,5 +1,6 @@
 import torch
 import json
+import warnings
 
 from ..lmdb_dataset import LMDBDataset
 from ..data_interface import register_dataset
@@ -46,8 +47,10 @@ class ESMCPairClassificationDataset(LMDBDataset):
         seq_2, conv_2 = normalize_to_amino_acids(entry['seq_2'])
 
         if (conv_1 or conv_2) and not self._sa_to_aa_warned:
-            print("[ESMCPairClassificationDataset] Detected SA sequences. "
-                  "Converted them to plain amino-acid sequences for ESMC.")
+            warnings.warn(
+                "[ESMCPairClassificationDataset] Detected SA sequences. Converted them to plain amino-acid sequences for ESMC.",
+                RuntimeWarning,
+            )
             self._sa_to_aa_warned = True
 
         if len(seq_1) > self.max_length:

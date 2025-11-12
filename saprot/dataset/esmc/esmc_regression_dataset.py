@@ -1,5 +1,6 @@
 import torch
 import json
+import warnings
 
 from ..data_interface import register_dataset
 from ..lmdb_dataset import LMDBDataset
@@ -46,8 +47,10 @@ class ESMCRegressionDataset(LMDBDataset):
         entry = json.loads(self._get(index))
         seq, converted = normalize_to_amino_acids(entry['seq'])
         if converted and not self._sa_to_aa_warned:
-            print("[ESMCRegressionDataset] Detected SA sequences. "
-                  "Converted them to plain amino-acid sequences for ESMC.")
+            warnings.warn(
+                "[ESMCRegressionDataset] Detected SA sequences. Converted them to plain amino-acid sequences for ESMC.",
+                RuntimeWarning,
+            )
             self._sa_to_aa_warned = True
 
         if len(seq) > self.max_length:
