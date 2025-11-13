@@ -221,8 +221,7 @@ class ESMCBaseModel(AbstractModel):
                 return forward
             
             self.forward = lora_forward(self.forward)
-        
-        print(f"Now active LoRA model: {self.model.active_adapter}")
+            
         self.model.print_trainable_parameters()
         
         # After LoRA model is initialized, add trainable parameters to optimizer)
