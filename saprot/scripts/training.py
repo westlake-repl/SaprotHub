@@ -43,6 +43,12 @@ def finetune(config):
     trainer.fit(model=model, datamodule=data_module)
     # Load best model and test performance
     if model.save_path is not None:
+        best_value = getattr(model, "best_value", None)
+        print(f"\n{'='*70}")
+        print(f"[Training Summary] Best validation accuracy: {best_value:.4f if best_value is not None else 'N/A'}")
+        print(f"[Training Summary] Loading best model from: {model.save_path}")
+        print(f"{'='*70}\n")
+        
         if config.model.kwargs.get("lora_kwargs", None):
             # Load LoRA model
             if len(getattr(config.model.kwargs.lora_kwargs, "config_list", [])) <= 1:

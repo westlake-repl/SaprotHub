@@ -91,6 +91,13 @@ class ESMCClassificationModel(ESMCBaseModel):
         #     print(log_dict)
         self.log_info(log_dict)
         self.reset_metrics("valid")
+        
+        # Check if this is the best model and save
+        best_value = getattr(self, "best_value", None)
+        is_best = best_value is None or log_dict["valid_acc"] > best_value
+        if is_best:
+            print(f"[ESMC] Saving best model: valid_acc = {log_dict['valid_acc']:.4f} (epoch {self.epoch})")
+        
         self.check_save_condition(log_dict["valid_acc"], mode="max")
 
         self.plot_valid_metrics_curve(log_dict)
