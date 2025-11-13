@@ -113,17 +113,69 @@ class ESMCBaseModel(AbstractModel):
             
             # Initialize LoRA model for training
             else:
-                # Use the same LoRA target_modules as SaProt for consistency
-                # SaProt uses: ["query", "key", "value", "intermediate.dense", "output.dense"]
-                target_modules = getattr(
-                    self.lora_kwargs,
-                    "target_modules",
-                    [
-                        "query", "key", "value",  # Attention Q, K, V projections
-                        "intermediate.dense",      # FFN intermediate layer
-                        "output.dense",            # FFN output layer
-                    ],
-                )
+                # Get user-specified target_modules, or auto-detect ESMC equivalents of SaProt's modules
+                target_modules = getattr(self.lora_kwargs, "target_modules", None)
+                
+                if target_modules is None:
+                    # Cache the found target_modules to avoid re-computation
+                    if not hasattr(self, '_cached_target_modules'):
+                        # Find all linear layers in ESMC model
+                        all_linear_layers = []
+                        for name, module in self.model.named_modules():
+                            if isinstance(module, torch.nn.Linear) and 'embed' not in name.lower():
+                                all_linear_layers.append(name)
+                        
+                        # SaProt uses: ["query", "key", "value", "intermediate.dense", "output.dense"]
+                        # Find ESMC equivalents by searching for similar patterns
+                        saprot_targets = ["query", "key", "value", "intermediate.dense", "output.dense"]
+                        found_targets = []
+                        
+                        print("\n" + "=" * 70)
+                        print("Auto-detecting ESMC equivalents of SaProt's LoRA target_modules")
+                        print("=" * 70)
+                        print("SaProt targets: ['query', 'key', 'value', 'intermediate.dense', 'output.dense']")
+                        print("\nSearching in ESMC model...")
+                        
+                        # Search for each SaProt target
+                        for saprot_target in saprot_targets:
+                            # Try exact match first
+                            exact_matches = [name for name in all_linear_layers if name.endswith(saprot_target) or name == saprot_target]
+                            if exact_matches:
+                                found_targets.append(exact_matches[0])
+                                print(f"  ✓ Found '{saprot_target}' -> '{exact_matches[0]}'")
+                            else:
+                                # Try partial match (e.g., "query" in "layers.0.attention.query")
+                                partial_matches = [name for name in all_linear_layers if saprot_target in name.lower()]
+                                if partial_matches:
+                                    # Prefer shorter, more specific matches
+                                    best_match = min(partial_matches, key=len)
+                                    found_targets.append(best_match)
+                                    print(f"  ✓ Found '{saprot_target}' -> '{best_match}' (partial match)")
+                                else:
+                                    print(f"  ✗ Not found: '{saprot_target}'")
+                        
+                        # If we found at least 4 targets, use them; otherwise use ESMC defaults
+                        if len(found_targets) >= 4:
+                            self._cached_target_modules = found_targets[:5] if len(found_targets) >= 5 else found_targets
+                            print(f"\n✓ Using {len(self._cached_target_modules)} target_modules: {self._cached_target_modules}")
+                        else:
+                            # Fallback to ESMC-specific names that we know work
+                            self._cached_target_modules = [
+                                "layernorm_qkv.1", 
+                                "out_proj",
+                                "ffn.1",
+                                "ffn.3",
+                            ]
+                            print(f"\n⚠ Could not find SaProt-style layers. Using ESMC fallback: {self._cached_target_modules}")
+                            print("\nAvailable linear layers in ESMC model (first 30):")
+                            for name in all_linear_layers[:30]:
+                                print(f"  {name}")
+                            if len(all_linear_layers) > 30:
+                                print(f"  ... and {len(all_linear_layers) - 30} more layers")
+                        
+                        print("=" * 70 + "\n")
+                    
+                    target_modules = self._cached_target_modules
                 lora_config = {
                     "task_type": "FEATURE_EXTRACTION",
                     "target_modules": target_modules,
