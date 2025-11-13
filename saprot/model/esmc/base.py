@@ -113,57 +113,48 @@ class ESMCBaseModel(AbstractModel):
             
             # Initialize LoRA model for training
             else:
-                # Get user-specified target_modules, or find by keywords (similar to SaProt approach)
+                # Get user-specified target_modules, or use default + find additional layers
                 target_modules = getattr(self.lora_kwargs, "target_modules", None)
                 
                 if target_modules is None:
                     # Cache the found target_modules to avoid re-computation
                     if not hasattr(self, '_cached_target_modules'):
-                        # Find all linear layers in ESMC model
+                        # Base ESMC patterns (equivalent to SaProt's 5 modules)
+                        base_targets = ["layernorm_qkv.1", "out_proj", "ffn.1", "ffn.3"]
+                        
+                        # Find all linear layers to discover additional layers
                         all_linear_layers = []
                         for name, module in self.model.named_modules():
                             if isinstance(module, torch.nn.Linear) and 'embed' not in name.lower():
                                 all_linear_layers.append(name)
                         
-                        # Keywords to match (similar to SaProt's query, key, value, intermediate.dense, output.dense)
-                        keywords = ["q_proj", "k_proj", "v_proj", "o_proj", "out_proj", "proj_out", "attention", "mlp", "fc"]
+                        # Start with base targets
+                        matched_layers = set(base_targets)
                         
-                        # Find layers matching keywords
-                        matched_layers = set()
+                        # Find additional FFN layers (ffn.0, ffn.2, etc.) if they exist
                         for layer_name in all_linear_layers:
-                            layer_name_lower = layer_name.lower()
-                            for keyword in keywords:
-                                if keyword in layer_name_lower:
-                                    # Extract the module name pattern (e.g., "out_proj" from "transformer.blocks.0.attn.out_proj")
-                                    # Use the last part that contains the keyword
-                                    parts = layer_name.split('.')
-                                    for part in reversed(parts):  # Check from end to start
-                                        if keyword in part.lower():
+                            parts = layer_name.split('.')
+                            for part in parts:
+                                # Match any ffn.X pattern
+                                if 'ffn.' in part:
+                                    # Extract ffn.X pattern
+                                    if part.startswith('ffn.') and part[4:].replace('.', '').isdigit():
+                                        matched_layers.add(part)
+                        
+                        # Try to find additional attention components
+                        keywords = ["q_proj", "k_proj", "v_proj", "o_proj", "proj", "gate", "up", "down"]
+                        for layer_name in all_linear_layers:
+                            parts = layer_name.split('.')
+                            for part in parts:
+                                for keyword in keywords:
+                                    if keyword in part.lower() and part not in matched_layers:
+                                        # Only add if it's a meaningful layer (not already covered)
+                                        if 'attn' in layer_name.lower() or 'ffn' in layer_name.lower():
                                             matched_layers.add(part)
                                             break
-                                    break
-                        
-                        # Also include known ESMC patterns (these are the actual layer names in ESMC)
-                        esmc_patterns = ["layernorm_qkv.1", "out_proj", "ffn.1", "ffn.3"]
-                        for pattern in esmc_patterns:
-                            for layer_name in all_linear_layers:
-                                if pattern in layer_name:
-                                    parts = layer_name.split('.')
-                                    for part in reversed(parts):  # Check from end to start
-                                        if pattern in part:
-                                            matched_layers.add(part)
-                                            break
-                                    break
-                        
-                        # If no matches found, fallback to known ESMC patterns
-                        if not matched_layers:
-                            matched_layers = set(esmc_patterns)
                         
                         # Convert to sorted list for consistency
                         self._cached_target_modules = sorted(list(matched_layers))
-                        
-                        # Debug: Print matched modules (can be removed later)
-                        print(f"\n[ESMC LoRA] Matched target_modules: {self._cached_target_modules}")
                     
                     target_modules = self._cached_target_modules
                 lora_config = {
