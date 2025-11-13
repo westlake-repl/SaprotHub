@@ -113,15 +113,15 @@ class ESMCBaseModel(AbstractModel):
             
             # Initialize LoRA model for training
             else:
-                # ESMC-specific default targets
+                # Use the same LoRA target_modules as SaProt for consistency
+                # SaProt uses: ["query", "key", "value", "intermediate.dense", "output.dense"]
                 target_modules = getattr(
                     self.lora_kwargs,
                     "target_modules",
                     [
-                        "layernorm_qkv.1", 
-                        "out_proj",
-                        "ffn.1",
-                        "ffn.3",
+                        "query", "key", "value",  # Attention Q, K, V projections
+                        "intermediate.dense",      # FFN intermediate layer
+                        "output.dense",            # FFN output layer
                     ],
                 )
                 lora_config = {
