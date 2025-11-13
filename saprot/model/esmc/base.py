@@ -135,27 +135,35 @@ class ESMCBaseModel(AbstractModel):
                             for keyword in keywords:
                                 if keyword in layer_name_lower:
                                     # Extract the module name pattern (e.g., "out_proj" from "transformer.blocks.0.attn.out_proj")
+                                    # Use the last part that contains the keyword
                                     parts = layer_name.split('.')
-                                    for part in parts:
+                                    for part in reversed(parts):  # Check from end to start
                                         if keyword in part.lower():
                                             matched_layers.add(part)
                                             break
                                     break
                         
-                        # Also include known ESMC patterns
+                        # Also include known ESMC patterns (these are the actual layer names in ESMC)
                         esmc_patterns = ["layernorm_qkv.1", "out_proj", "ffn.1", "ffn.3"]
                         for pattern in esmc_patterns:
                             for layer_name in all_linear_layers:
                                 if pattern in layer_name:
                                     parts = layer_name.split('.')
-                                    for part in parts:
+                                    for part in reversed(parts):  # Check from end to start
                                         if pattern in part:
                                             matched_layers.add(part)
                                             break
                                     break
                         
+                        # If no matches found, fallback to known ESMC patterns
+                        if not matched_layers:
+                            matched_layers = set(esmc_patterns)
+                        
                         # Convert to sorted list for consistency
                         self._cached_target_modules = sorted(list(matched_layers))
+                        
+                        # Debug: Print matched modules (can be removed later)
+                        print(f"\n[ESMC LoRA] Matched target_modules: {self._cached_target_modules}")
                     
                     target_modules = self._cached_target_modules
                 lora_config = {
