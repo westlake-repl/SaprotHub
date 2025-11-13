@@ -113,17 +113,51 @@ class ESMCBaseModel(AbstractModel):
             
             # Initialize LoRA model for training
             else:
-                # ESMC-specific default targets
-                target_modules = getattr(
-                    self.lora_kwargs,
-                    "target_modules",
-                    [
-                        "layernorm_qkv.1", 
-                        "out_proj",
-                        "ffn.1",
-                        "ffn.3",
-                    ],
-                )
+                # Get user-specified target_modules, or find by keywords (similar to SaProt approach)
+                target_modules = getattr(self.lora_kwargs, "target_modules", None)
+                
+                if target_modules is None:
+                    # Cache the found target_modules to avoid re-computation
+                    if not hasattr(self, '_cached_target_modules'):
+                        # Find all linear layers in ESMC model
+                        all_linear_layers = []
+                        for name, module in self.model.named_modules():
+                            if isinstance(module, torch.nn.Linear) and 'embed' not in name.lower():
+                                all_linear_layers.append(name)
+                        
+                        # Keywords to match (similar to SaProt's query, key, value, intermediate.dense, output.dense)
+                        keywords = ["q_proj", "k_proj", "v_proj", "o_proj", "out_proj", "proj_out", "attention", "mlp", "fc"]
+                        
+                        # Find layers matching keywords
+                        matched_layers = set()
+                        for layer_name in all_linear_layers:
+                            layer_name_lower = layer_name.lower()
+                            for keyword in keywords:
+                                if keyword in layer_name_lower:
+                                    # Extract the module name pattern (e.g., "out_proj" from "transformer.blocks.0.attn.out_proj")
+                                    parts = layer_name.split('.')
+                                    for part in parts:
+                                        if keyword in part.lower():
+                                            matched_layers.add(part)
+                                            break
+                                    break
+                        
+                        # Also include known ESMC patterns
+                        esmc_patterns = ["layernorm_qkv.1", "out_proj", "ffn.1", "ffn.3"]
+                        for pattern in esmc_patterns:
+                            for layer_name in all_linear_layers:
+                                if pattern in layer_name:
+                                    parts = layer_name.split('.')
+                                    for part in parts:
+                                        if pattern in part:
+                                            matched_layers.add(part)
+                                            break
+                                    break
+                        
+                        # Convert to sorted list for consistency
+                        self._cached_target_modules = sorted(list(matched_layers))
+                    
+                    target_modules = self._cached_target_modules
                 lora_config = {
                     "task_type": "FEATURE_EXTRACTION",
                     "target_modules": target_modules,
