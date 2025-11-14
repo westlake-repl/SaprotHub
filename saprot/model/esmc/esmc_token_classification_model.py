@@ -275,8 +275,20 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
             self._optimizer_step_count = 0
         self._optimizer_step_count += 1
         
-        # Get classifier weight before optimizer step
-        head = self._get_head()
+        # CRITICAL FIX: Directly use modules_to_save.default (same as forward)
+        # This ensures we check the same weight object that's actually being trained
+        base_model = self._get_base_model()
+        head = None
+        
+        # First, try to get modules_to_save.default directly
+        if hasattr(base_model, 'classifier') and hasattr(base_model.classifier, 'modules_to_save'):
+            if hasattr(base_model.classifier.modules_to_save, 'default'):
+                head = base_model.classifier.modules_to_save.default
+        
+        # Fallback to _get_head() if modules_to_save.default not found
+        if head is None:
+            head = self._get_head()
+        
         if hasattr(head, 'weight'):
             weight_before = head.weight.data.clone()
             # Check gradient before optimizer step (should exist after backward)
