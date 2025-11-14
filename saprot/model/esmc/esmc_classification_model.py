@@ -32,36 +32,15 @@ class ESMCClassificationModel(ESMCBaseModel):
         # Tokenization & Padding
         token_ids_batch, attention_mask, tokenizer = self._tokenize_sequences(proteins)
 
-        # # Forward through backbone and get representations
-        # representations = self._get_representations(token_ids_batch)
+        # Forward through backbone and get representations
+        representations = self._get_representations(token_ids_batch)
         
-        with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            # ESMC model only accepts positional args (token_ids_batch), not keyword args
-            # Note: ESMC doesn't accept attention_mask parameter, we'll handle padding in pooling
-            model_output = self.model(token_ids_batch)
-            representations = model_output.last_hidden_state
-        
-        # Pooling
+        # Pooling - always needs gradients for head training
         pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
-
-        # Normalize pooled representation to prevent extreme values
-        pooled_repr = self._normalize_pooled_repr(pooled_repr)
-
-        # with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-        #     # Pooling
-        #     pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
-        #     # Normalize pooled representation to prevent extreme values
-        #     pooled_repr = self._normalize_pooled_repr(pooled_repr)
 
         # Head always needs gradients
         head = self._get_head()
         logits = head(pooled_repr)
-        
-        # Convert to float32 for numerical stability
-        logits = logits.float()
-        
-        # Clamp logits to prevent extreme values
-        logits = torch.clamp(logits, min=-20.0, max=20.0)
 
         return logits
     

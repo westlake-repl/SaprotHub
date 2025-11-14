@@ -36,17 +36,11 @@ class ESMCRegressionModel(ESMCBaseModel):
         # Tokenization & Padding
         token_ids_batch, attention_mask, tokenizer = self._tokenize_sequences(proteins)
 
-        # Forward through model (will automatically use LoRA if PEFT is applied)
-        with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            # ESMC model only accepts positional args (token_ids_batch), not keyword args
-            # Note: ESMC doesn't accept attention_mask parameter, we'll handle padding in pooling
-            model_output = self.model(token_ids_batch)
-            representations = model_output.last_hidden_state
-        
-        # Pooling
+        # Backbone representations
+        representations = self._get_representations(token_ids_batch)
+
+        # Pooling - always needs gradients for head training
         pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
-        # Normalize pooled representation to prevent extreme values
-        pooled_repr = self._normalize_pooled_repr(pooled_repr)
 
         head = self._get_head()
         logits = head(pooled_repr).squeeze(dim=-1)

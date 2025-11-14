@@ -30,15 +30,15 @@ class ESMCPairRegressionModel(ESMCBaseModel):
         token_ids_1, attention_mask_1, tokenizer = self._tokenize_sequences(proteins_1)
         token_ids_2, attention_mask_2, _ = self._tokenize_sequences(proteins_2)
 
-        # Forward through model (will automatically use LoRA if PEFT is applied)
-        with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            # ESMC model only accepts positional args (token_ids), not keyword args
-            # Note: ESMC doesn't accept attention_mask parameter, we'll handle padding manually
-            model_output_1 = self.model(token_ids_1)
-            reps_1 = model_output_1.last_hidden_state
-            
-            model_output_2 = self.model(token_ids_2)
-            reps_2 = model_output_2.last_hidden_state
+        base_model = self._get_base_model()
+        num_layers = getattr(base_model, "num_layers", None)
+
+        if num_layers is not None:
+            reps_1 = self._get_representations(token_ids_1, repr_layers=[num_layers])
+            reps_2 = self._get_representations(token_ids_2, repr_layers=[num_layers])
+        else:
+            reps_1 = self._get_representations(token_ids_1)
+            reps_2 = self._get_representations(token_ids_2)
 
         reps_1 = F.layer_norm(reps_1, reps_1.shape[-1:])
         reps_2 = F.layer_norm(reps_2, reps_2.shape[-1:])

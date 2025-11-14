@@ -274,14 +274,11 @@ class ESMCBaseModel(AbstractModel):
                 torch.nn.Dropout(0.1),
                 torch.nn.Linear(hidden_size, self.num_labels)
             )
-            # Initialize classifier weights with smaller scale to prevent extreme logits
-            # Using smaller initialization helps when input (pooled_repr) is normalized
+            # Initialize classifier weights properly (standard initialization)
             for module in classifier:
                 if isinstance(module, torch.nn.Linear):
-                    # Use Kaiming normal with smaller gain for better stability
+                    # Use Kaiming normal for ReLU activation
                     torch.nn.init.kaiming_normal_(module.weight, mode='fan_in', nonlinearity='relu')
-                    # Scale down weights to prevent extreme outputs
-                    module.weight.data *= 0.1
                     if module.bias is not None:
                         torch.nn.init.zeros_(module.bias)
             setattr(self.model, "classifier", classifier)

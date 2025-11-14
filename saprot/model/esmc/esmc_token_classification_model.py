@@ -2,7 +2,6 @@ import torchmetrics
 import torch
 
 from torch.nn.functional import cross_entropy
-import torch.nn.functional as F
 from ..model_interface import register_model
 from .base import ESMCBaseModel
 
@@ -47,19 +46,21 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
         # Tokenize sequences and obtain token ids (with special tokens handled by tokenizer)
         token_ids_batch, attention_mask, tokenizer = self._tokenize_sequences(proteins)
 
-        # Forward through model (will automatically use LoRA if PEFT is applied)
-        with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            # ESMC model only accepts positional args (token_ids_batch), not keyword args
-            # Note: ESMC doesn't accept attention_mask parameter, we'll handle padding manually
-            model_output = self.model(token_ids_batch)
-            representations = model_output.last_hidden_state
+        # Determine the last layer index from the underlying backbone (handles PEFT wrapping).
+        base_model = self._get_base_model()
+        num_layers = getattr(base_model, "num_layers", None)
 
-        # Normalize token representations to stabilize logits
-        representations = F.layer_norm(representations, representations.shape[-1:])
+        if num_layers is not None:
+            representations = self._get_representations(
+                token_ids_batch,
+                repr_layers=[num_layers],
+            )
+        else:
+            representations = self._get_representations(token_ids_batch)
 
         pad_token_id = getattr(tokenizer, "pad_token_id", getattr(tokenizer, "padding_idx", 0))
-        attention_mask_expanded = (token_ids_batch != pad_token_id).unsqueeze(-1)
-        representations = representations * attention_mask_expanded
+        attention_mask = (token_ids_batch != pad_token_id).unsqueeze(-1)
+        representations = representations * attention_mask
 
         # Head always needs gradients
         head = self._get_head()
