@@ -360,11 +360,29 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
             # Verify this weight is in the optimizer
             if hasattr(self, 'optimizer') and classifier_weight is not None:
                 in_optimizer = False
+                optimizer_lr = None
                 for group in self.optimizer.param_groups:
-                    if classifier_weight in group['params']:
+                    # Use 'is' to check object identity, not 'in' which causes tensor comparison
+                    if any(classifier_weight is p for p in group['params']):
                         in_optimizer = True
+                        optimizer_lr = group.get('lr', None)
                         break
                 print(f"[ESMC] Weight in optimizer: {in_optimizer}")
+                if optimizer_lr is not None:
+                    print(f"[ESMC] Optimizer learning rate for this weight: {optimizer_lr}")
+            
+            # Check if there's a sequence_head that might be interfering
+            if hasattr(base_model, 'sequence_head'):
+                print(f"[ESMC] Found sequence_head in base_model: {type(base_model.sequence_head)}")
+                # Check if sequence_head parameters are in optimizer
+                if hasattr(self, 'optimizer'):
+                    seq_head_params = list(base_model.sequence_head.parameters())
+                    seq_head_in_opt_count = 0
+                    for group in self.optimizer.param_groups:
+                        for p in group['params']:
+                            if any(p is sp for sp in seq_head_params):
+                                seq_head_in_opt_count += 1
+                    print(f"[ESMC] sequence_head parameters in optimizer: {seq_head_in_opt_count}/{len(seq_head_params)}")
             
             print(f"[ESMC] ================================================================\n")
         else:
