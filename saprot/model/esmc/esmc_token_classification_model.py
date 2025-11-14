@@ -342,40 +342,25 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
         """Print classifier weight changes at the end of each training epoch"""
         super().on_train_epoch_end()
         
-        # Get the classifier head - this should return modules_to_save.default if LoRA is used
+        # CRITICAL: _get_head() already returns modules_to_save.default if LoRA is used
+        # This is the EXACT same weight object that optimizer updates
+        # We MUST use this directly, not search again which might find a different object
         head = self._get_head()
-        
-        # CRITICAL: When LoRA is used with modules_to_save, _get_head() should return
-        # modules_to_save.default, but we need to verify we're checking the right weight.
-        # Also check the base model structure to find the actual classifier being used.
-        base_model = self._get_base_model()
         actual_classifier = None
         classifier_weight = None
         
-        # Try to find the actual classifier weight that's being updated
-        if hasattr(base_model, 'classifier'):
-            classifier = base_model.classifier
-            # If LoRA wrapped, check modules_to_save.default
-            if hasattr(classifier, 'modules_to_save') and hasattr(classifier.modules_to_save, 'default'):
-                actual_classifier = classifier.modules_to_save.default
-                if hasattr(actual_classifier, 'weight'):
-                    classifier_weight = actual_classifier.weight
-            # If not wrapped or if it's a Linear directly
-            elif hasattr(classifier, 'weight'):
-                actual_classifier = classifier
-                classifier_weight = classifier.weight
-            # If it's a Sequential, find the last Linear layer
-            elif hasattr(classifier, '__getitem__'):
-                for i in range(len(classifier) - 1, -1, -1):
-                    if hasattr(classifier[i], 'weight'):
-                        actual_classifier = classifier[i]
-                        classifier_weight = classifier[i].weight
-                        break
-        
-        # Fallback to head if we couldn't find it above
-        if classifier_weight is None and hasattr(head, 'weight'):
+        # Directly use the head returned by _get_head() (which is modules_to_save.default)
+        if hasattr(head, 'weight'):
+            # Direct Linear layer
             actual_classifier = head
             classifier_weight = head.weight
+        elif hasattr(head, '__getitem__'):
+            # Sequential - find the last Linear layer
+            for i in range(len(head) - 1, -1, -1):
+                if hasattr(head[i], 'weight'):
+                    actual_classifier = head[i]
+                    classifier_weight = head[i].weight
+                    break
         
         # Store initial weights if not already stored
         if not hasattr(self, '_initial_weight_std') and classifier_weight is not None:
