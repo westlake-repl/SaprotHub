@@ -224,6 +224,14 @@ class ESMCBaseModel(AbstractModel):
             
         self.model.print_trainable_parameters()
         
+        # Ensure classifier is trainable after LoRA initialization
+        # This is critical: modules_to_save should make classifier trainable, but we verify it
+        if self.lora_kwargs is not None:
+            # Ensure classifier parameters are trainable
+            for name, param in self.model.named_parameters():
+                if 'classifier' in name or 'head' in name:
+                    param.requires_grad = True
+        
         # After LoRA model is initialized, add trainable parameters to optimizer)
         self.init_optimizers()
     
@@ -292,10 +300,15 @@ class ESMCBaseModel(AbstractModel):
             # Match HuggingFace AutoModelForTokenClassification structure:
             # Simple Linear layer (no intermediate layers, no dropout, no activation)
             classifier = torch.nn.Linear(hidden_size, self.num_labels)
-            # Initialize classifier weights properly (match HuggingFace initialization)
-            # HuggingFace uses very small initialization for classifier (typically 0.002-0.005)
-            # This ensures initial logits are close to zero, resulting in low initial loss
-            torch.nn.init.normal_(classifier.weight, mean=0.0, std=0.002)
+            # Initialize classifier weights properly
+            # ESMC representations have large scale (std ~100), so we need much smaller weights
+            # to get reasonable logits. Use std that accounts for representation scale.
+            # Target: logits std ~0.1-0.2 (similar to Saprot)
+            # If repr_std ~100 and we want logit_std ~0.1, then weight_std ~0.1/100 = 0.001
+            import math
+            # Use very small initialization to compensate for large representation scale
+            std = 0.001  # Much smaller than before to account for large repr scale
+            torch.nn.init.normal_(classifier.weight, mean=0.0, std=std)
             if classifier.bias is not None:
                 torch.nn.init.zeros_(classifier.bias)
             setattr(self.model, "classifier", classifier)
