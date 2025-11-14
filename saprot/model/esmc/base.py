@@ -270,15 +270,15 @@ class ESMCBaseModel(AbstractModel):
         if self.task == 'classification':
             classifier = torch.nn.Sequential(
                 torch.nn.Linear(hidden_size, hidden_size),
-                torch.nn.ReLU(),
+                torch.nn.Tanh(),  # Use Tanh to match Saprot's classifier structure
                 torch.nn.Dropout(0.1),
                 torch.nn.Linear(hidden_size, self.num_labels)
             )
-            # Initialize classifier weights properly (standard initialization)
+            # Initialize classifier weights properly (Xavier for Tanh activation)
             for module in classifier:
                 if isinstance(module, torch.nn.Linear):
-                    # Use Kaiming normal for ReLU activation
-                    torch.nn.init.kaiming_normal_(module.weight, mode='fan_in', nonlinearity='relu')
+                    # Use Xavier uniform for Tanh activation (matches HuggingFace ESM models)
+                    torch.nn.init.xavier_uniform_(module.weight)
                     if module.bias is not None:
                         torch.nn.init.zeros_(module.bias)
             setattr(self.model, "classifier", classifier)
@@ -304,11 +304,11 @@ class ESMCBaseModel(AbstractModel):
         elif self.task == 'regression':
             classifier = torch.nn.Sequential(
                 torch.nn.Linear(hidden_size, hidden_size),
-                torch.nn.ReLU(),
+                torch.nn.Tanh(),  # Use Tanh to match Saprot's classifier structure
                 torch.nn.Dropout(0.1),
                 torch.nn.Linear(hidden_size, 1)
             )
-            # Initialize classifier weights properly
+            # Initialize classifier weights properly (Xavier for Tanh activation)
             for module in classifier:
                 if isinstance(module, torch.nn.Linear):
                     torch.nn.init.xavier_uniform_(module.weight)
