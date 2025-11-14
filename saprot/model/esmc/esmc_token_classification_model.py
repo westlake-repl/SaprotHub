@@ -278,7 +278,11 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
         # Debug print for first few optimizer steps
         debug_print = (self._optimizer_step_count <= 3)
         if debug_print and weight_before is not None:
+            weight_id = id(head.weight)
             print(f"\n[ESMC] ========== Before optimizer_step (optimizer call #{self._optimizer_step_count}, batch_idx={batch_idx}) ==========")
+            print(f"[ESMC]   Weight object id: {weight_id}")
+            if hasattr(self, '_initial_weight_id'):
+                print(f"[ESMC]   Same weight object as initial? {weight_id == self._initial_weight_id}")
             print(f"[ESMC]   Weight mean: {weight_before.mean().item():.6f}, std: {weight_before.std().item():.6f}")
             if grad_before is not None:
                 grad_mean = grad_before.abs().mean().item()
@@ -378,15 +382,31 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
             self._initial_weight_std = classifier_weight.std().item()
             self._initial_weight_mean = classifier_weight.mean().item()
             self._initial_weight = classifier_weight.data.clone()
+            # Store weight object id to verify we're checking the same weight
+            self._initial_weight_id = id(classifier_weight)
+            print(f"[ESMC] Storing initial weight for tracking:")
+            print(f"[ESMC]   - Weight object id: {self._initial_weight_id}")
+            print(f"[ESMC]   - Weight mean: {self._initial_weight_mean:.6f}, std: {self._initial_weight_std:.6f}")
+            print(f"[ESMC]   - Classifier type: {type(actual_classifier)}")
+            # Also check what _get_head() returns
+            head_from_get = self._get_head()
+            if hasattr(head_from_get, 'weight'):
+                head_weight_id = id(head_from_get.weight)
+                print(f"[ESMC]   - _get_head() weight id: {head_weight_id}")
+                print(f"[ESMC]   - Same weight object? {head_weight_id == self._initial_weight_id}")
         
         # Print current weight stats
         if classifier_weight is not None:
             current_mean = classifier_weight.mean().item()
             current_std = classifier_weight.std().item()
             epoch = getattr(self, 'epoch', 0)
+            current_weight_id = id(classifier_weight)
             
             print(f"\n[ESMC] ========== Epoch {epoch} End - Classifier Weight Stats ==========")
             print(f"[ESMC] Classifier type: {type(actual_classifier)}")
+            print(f"[ESMC] Weight object id: {current_weight_id}")
+            if hasattr(self, '_initial_weight_id'):
+                print(f"[ESMC] Same weight object as initial? {current_weight_id == self._initial_weight_id}")
             print(f"[ESMC] Current weight - mean: {current_mean:.6f}, std: {current_std:.6f}")
             
             if hasattr(self, '_initial_weight_std'):

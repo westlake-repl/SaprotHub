@@ -178,8 +178,156 @@ class SaprotTokenClassificationModel(SaprotBaseModel):
 
             # Reset train metrics
             self.reset_metrics("train")
+            
+            # Check classifier weight gradients after loss computation (before backward)
+            if debug_print:
+                if hasattr(self.model, 'classifier'):
+                    if hasattr(self.model.classifier, 'weight'):
+                        print(f"[SAPROT] Classifier weight requires_grad: {self.model.classifier.weight.requires_grad}")
+                        # Check if this weight is in optimizer
+                        if hasattr(self, 'optimizer'):
+                            in_optimizer = any(self.model.classifier.weight is p for group in self.optimizer.param_groups for p in group['params'])
+                            print(f"[SAPROT] Classifier weight in optimizer: {in_optimizer}")
+                    elif hasattr(self.model.classifier, 'out_proj') and hasattr(self.model.classifier.out_proj, 'weight'):
+                        print(f"[SAPROT] Classifier out_proj weight requires_grad: {self.model.classifier.out_proj.weight.requires_grad}")
+                        if hasattr(self, 'optimizer'):
+                            in_optimizer = any(self.model.classifier.out_proj.weight is p for group in self.optimizer.param_groups for p in group['params'])
+                            print(f"[SAPROT] Classifier out_proj weight in optimizer: {in_optimizer}")
         
         return loss
+    
+    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure=None):
+        """Override to check if classifier weights are being updated"""
+        # Track optimizer step calls separately (since accumulate_grad_batches may delay calls)
+        if not hasattr(self, '_optimizer_step_count'):
+            self._optimizer_step_count = 0
+        self._optimizer_step_count += 1
+        
+        # Get classifier weight before optimizer step
+        classifier_weight = None
+        if hasattr(self.model, 'classifier'):
+            if hasattr(self.model.classifier, 'weight'):
+                classifier_weight = self.model.classifier.weight
+            elif hasattr(self.model.classifier, 'out_proj') and hasattr(self.model.classifier.out_proj, 'weight'):
+                classifier_weight = self.model.classifier.out_proj.weight
+        
+        if classifier_weight is not None:
+            weight_before = classifier_weight.data.clone()
+            # Check gradient before optimizer step (should exist after backward)
+            grad_before = classifier_weight.grad.clone() if classifier_weight.grad is not None else None
+        else:
+            weight_before = None
+            grad_before = None
+        
+        # Debug print for first few optimizer steps
+        debug_print = (self._optimizer_step_count <= 3)
+        if debug_print and weight_before is not None:
+            weight_id = id(classifier_weight)
+            print(f"\n[SAPROT] ========== Before optimizer_step (optimizer call #{self._optimizer_step_count}, batch_idx={batch_idx}) ==========")
+            print(f"[SAPROT]   Weight object id: {weight_id}")
+            if hasattr(self, '_initial_weight_id'):
+                print(f"[SAPROT]   Same weight object as initial? {weight_id == self._initial_weight_id}")
+            print(f"[SAPROT]   Weight mean: {weight_before.mean().item():.6f}, std: {weight_before.std().item():.6f}")
+            if grad_before is not None:
+                grad_mean = grad_before.abs().mean().item()
+                grad_max = grad_before.abs().max().item()
+                print(f"[SAPROT]   Gradient - mean: {grad_mean:.10f}, max: {grad_max:.10f}")
+            else:
+                print(f"[SAPROT]   WARNING: No gradient before optimizer step!")
+        
+        # Call parent optimizer_step
+        super().optimizer_step(epoch, batch_idx, optimizer, optimizer_closure)
+        
+        # Check if weight changed after optimizer step (only for first few steps)
+        if weight_before is not None and debug_print:
+            weight_after = classifier_weight.data
+            weight_diff = (weight_after - weight_before).abs().mean().item()
+            weight_max_diff = (weight_after - weight_before).abs().max().item()
+            print(f"[SAPROT] ========== After optimizer_step (optimizer call #{self._optimizer_step_count}) ==========")
+            print(f"[SAPROT]   Weight change - mean: {weight_diff:.10f}, max: {weight_max_diff:.10f}")
+            if weight_diff < 1e-10:
+                print(f"[SAPROT]   WARNING: Weight did NOT change after optimizer step!")
+                # Check if gradient was cleared (should be None after optimizer step)
+                if classifier_weight.grad is not None:
+                    print(f"[SAPROT]   WARNING: Gradient still exists after optimizer step (should be None)")
+                else:
+                    print(f"[SAPROT]   Gradient cleared (normal after optimizer step)")
+            else:
+                print(f"[SAPROT]   ✓ Weight updated successfully")
+                print(f"[SAPROT]   New weight mean: {weight_after.mean().item():.6f}, std: {weight_after.std().item():.6f}")
+    
+    def on_train_epoch_end(self):
+        """Print classifier weight changes at the end of each training epoch"""
+        super().on_train_epoch_end()
+        
+        # Get classifier weight
+        classifier_weight = None
+        actual_classifier = None
+        if hasattr(self.model, 'classifier'):
+            if hasattr(self.model.classifier, 'weight'):
+                actual_classifier = self.model.classifier
+                classifier_weight = self.model.classifier.weight
+            elif hasattr(self.model.classifier, 'out_proj') and hasattr(self.model.classifier.out_proj, 'weight'):
+                actual_classifier = self.model.classifier.out_proj
+                classifier_weight = self.model.classifier.out_proj.weight
+        
+        # Store initial weights if not already stored
+        if not hasattr(self, '_initial_weight_std') and classifier_weight is not None:
+            self._initial_weight_std = classifier_weight.std().item()
+            self._initial_weight_mean = classifier_weight.mean().item()
+            self._initial_weight = classifier_weight.data.clone()
+            # Store weight object id to verify we're checking the same weight
+            self._initial_weight_id = id(classifier_weight)
+            print(f"[SAPROT] Storing initial weight for tracking:")
+            print(f"[SAPROT]   - Weight object id: {self._initial_weight_id}")
+            print(f"[SAPROT]   - Weight mean: {self._initial_weight_mean:.6f}, std: {self._initial_weight_std:.6f}")
+            print(f"[SAPROT]   - Classifier type: {type(actual_classifier)}")
+        
+        # Print current weight stats
+        if classifier_weight is not None:
+            current_mean = classifier_weight.mean().item()
+            current_std = classifier_weight.std().item()
+            epoch = getattr(self, 'epoch', 0)
+            current_weight_id = id(classifier_weight)
+            
+            print(f"\n[SAPROT] ========== Epoch {epoch} End - Classifier Weight Stats ==========")
+            print(f"[SAPROT] Classifier type: {type(actual_classifier)}")
+            print(f"[SAPROT] Weight object id: {current_weight_id}")
+            if hasattr(self, '_initial_weight_id'):
+                print(f"[SAPROT] Same weight object as initial? {current_weight_id == self._initial_weight_id}")
+            print(f"[SAPROT] Current weight - mean: {current_mean:.6f}, std: {current_std:.6f}")
+            
+            if hasattr(self, '_initial_weight_std'):
+                mean_change = current_mean - self._initial_weight_mean
+                std_change = current_std - self._initial_weight_std
+                std_change_pct = (std_change / self._initial_weight_std) * 100 if self._initial_weight_std > 0 else 0
+                print(f"[SAPROT] Change from initial - mean: {mean_change:+.6f}, std: {std_change:+.6f} ({std_change_pct:+.2f}%)")
+                
+                # Check actual weight difference (more reliable than mean/std)
+                if hasattr(self, '_initial_weight'):
+                    weight_diff = (classifier_weight.data - self._initial_weight).abs().mean().item()
+                    weight_max_diff = (classifier_weight.data - self._initial_weight).abs().max().item()
+                    print(f"[SAPROT] Weight absolute difference - mean: {weight_diff:.8f}, max: {weight_max_diff:.8f}")
+            
+            # Verify this weight is in the optimizer
+            if hasattr(self, 'optimizer') and classifier_weight is not None:
+                in_optimizer = False
+                optimizer_lr = None
+                for group in self.optimizer.param_groups:
+                    if any(classifier_weight is p for p in group['params']):
+                        in_optimizer = True
+                        optimizer_lr = group.get('lr', None)
+                        break
+                print(f"[SAPROT] Weight in optimizer: {in_optimizer}")
+                if optimizer_lr is not None:
+                    print(f"[SAPROT] Optimizer learning rate for this weight: {optimizer_lr}")
+            
+            print(f"[SAPROT] ================================================================\n")
+        else:
+            epoch = getattr(self, 'epoch', 0)
+            print(f"\n[SAPROT] ========== Epoch {epoch} End - Classifier Weight Stats ==========")
+            print(f"[SAPROT] WARNING: Could not find classifier weight to check!")
+            print(f"[SAPROT] ================================================================\n")
     
     def on_test_epoch_end(self):
         log_dict = self.get_log_dict("test")
