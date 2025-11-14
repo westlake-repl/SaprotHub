@@ -289,18 +289,14 @@ class ESMCBaseModel(AbstractModel):
             setattr(self.model, "head", classifier)
 
         elif self.task == 'token_classification':
-            classifier = torch.nn.Sequential(
-                torch.nn.Linear(hidden_size, hidden_size),
-                torch.nn.ReLU(),
-                torch.nn.Dropout(0.1),
-                torch.nn.Linear(hidden_size, self.num_labels)
-            )
-            # Initialize classifier weights properly
-            for module in classifier:
-                if isinstance(module, torch.nn.Linear):
-                    torch.nn.init.xavier_uniform_(module.weight)
-                    if module.bias is not None:
-                        torch.nn.init.zeros_(module.bias)
+            # Match HuggingFace AutoModelForTokenClassification structure:
+            # Simple Linear layer (no intermediate layers, no dropout, no activation)
+            classifier = torch.nn.Linear(hidden_size, self.num_labels)
+            # Initialize classifier weights properly (match HuggingFace initialization)
+            # HuggingFace typically uses smaller std (0.01-0.02) for better initial stability
+            torch.nn.init.normal_(classifier.weight, mean=0.0, std=0.01)
+            if classifier.bias is not None:
+                torch.nn.init.zeros_(classifier.bias)
             setattr(self.model, "classifier", classifier)
             setattr(self.model, "head", classifier)
 
