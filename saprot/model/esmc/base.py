@@ -350,17 +350,12 @@ class ESMCBaseModel(AbstractModel):
             # Match HuggingFace AutoModelForTokenClassification structure:
             # Simple Linear layer (no intermediate layers, no dropout, no activation)
             classifier = torch.nn.Linear(hidden_size, self.num_labels)
-            # Initialize classifier weights properly
-            # ESMC representations have large scale (std ~100), so we need much smaller weights
-            # to get reasonable logits. Use std that accounts for representation scale.
-            # Target: logits std ~0.1-0.2 (similar to Saprot)
-            # Calculation: if logit_std ≈ repr_std * weight_std * sqrt(hidden_size)
-            # Then: 0.12 = 100 * weight_std * sqrt(960) => weight_std ≈ 0.00004
-            # But we use a slightly larger value (0.0001) for better gradient flow
-            import math
-            # Use extremely small initialization to compensate for large representation scale
-            std = 0.0001  # Even smaller: target logit_std ~0.12 when repr_std ~100
-            torch.nn.init.normal_(classifier.weight, mean=0.0, std=std)
+            # Initialize classifier weights to match HuggingFace default initialization
+            # HuggingFace uses std=0.02 for classifier weights (as seen in Saprot: std=0.020512)
+            # This ensures classifier has sufficient capacity for learning
+            # NOTE: Even though ESMC representations have large scale (std ~100), we use std=0.02
+            # to match HuggingFace. The classifier will learn to adapt during training.
+            torch.nn.init.normal_(classifier.weight, mean=0.0, std=0.02)
             if classifier.bias is not None:
                 torch.nn.init.zeros_(classifier.bias)
             setattr(self.model, "classifier", classifier)
