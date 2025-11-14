@@ -268,11 +268,14 @@ class ESMCBaseModel(AbstractModel):
 
         # Task-specific classifier initialization
         if self.task == 'classification':
+            # Match HuggingFace AutoModelForSequenceClassification structure:
+            # Dropout -> Dense -> Tanh -> Dropout -> OutProj
             classifier = torch.nn.Sequential(
-                torch.nn.Linear(hidden_size, hidden_size),
-                torch.nn.Tanh(),  # Use Tanh to match Saprot's classifier structure
-                torch.nn.Dropout(0.1),
-                torch.nn.Linear(hidden_size, self.num_labels)
+                torch.nn.Dropout(0.1),  # First dropout (before dense)
+                torch.nn.Linear(hidden_size, hidden_size),  # Dense layer
+                torch.nn.Tanh(),  # Tanh activation
+                torch.nn.Dropout(0.1),  # Second dropout (after tanh)
+                torch.nn.Linear(hidden_size, self.num_labels)  # Output projection
             )
             # Initialize classifier weights properly (Xavier for Tanh activation)
             for module in classifier:
@@ -302,11 +305,14 @@ class ESMCBaseModel(AbstractModel):
             setattr(self.model, "head", classifier)
 
         elif self.task == 'regression':
+            # Match HuggingFace AutoModelForSequenceClassification structure:
+            # Dropout -> Dense -> Tanh -> Dropout -> OutProj
             classifier = torch.nn.Sequential(
-                torch.nn.Linear(hidden_size, hidden_size),
-                torch.nn.Tanh(),  # Use Tanh to match Saprot's classifier structure
-                torch.nn.Dropout(0.1),
-                torch.nn.Linear(hidden_size, 1)
+                torch.nn.Dropout(0.1),  # First dropout (before dense)
+                torch.nn.Linear(hidden_size, hidden_size),  # Dense layer
+                torch.nn.Tanh(),  # Tanh activation
+                torch.nn.Dropout(0.1),  # Second dropout (after tanh)
+                torch.nn.Linear(hidden_size, 1)  # Output projection
             )
             # Initialize classifier weights properly (Xavier for Tanh activation)
             for module in classifier:
