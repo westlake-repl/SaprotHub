@@ -40,15 +40,33 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
         return {f"{stage}_acc": torchmetrics.Accuracy()}
 
     def forward(self, inputs, coords=None):
+        # ========== ESMC DEBUG: Forward Start ==========
+        if not hasattr(self, '_debug_step'):
+            self._debug_step = 0
+        self._debug_step += 1
+        debug_print = (self._debug_step <= 3)  # Only print first 3 steps
+        
         # Parse proteins input
         proteins = self._parse_proteins_input(inputs)
+        if debug_print:
+            print(f"\n[ESMC DEBUG Step {self._debug_step}] ========== Forward ==========")
+            print(f"[ESMC] Number of proteins: {len(proteins)}")
+            if len(proteins) > 0:
+                print(f"[ESMC] First protein sequence length: {len(proteins[0].sequence)}")
 
         # Tokenize sequences and obtain token ids (with special tokens handled by tokenizer)
         token_ids_batch, attention_mask, tokenizer = self._tokenize_sequences(proteins)
+        if debug_print:
+            print(f"[ESMC] token_ids_batch shape: {token_ids_batch.shape}")
+            print(f"[ESMC] attention_mask shape: {attention_mask.shape}")
+            print(f"[ESMC] token_ids_batch sample (first 10): {token_ids_batch[0, :10].tolist() if token_ids_batch.shape[0] > 0 else 'N/A'}")
 
         # Determine the last layer index from the underlying backbone (handles PEFT wrapping).
         base_model = self._get_base_model()
         num_layers = getattr(base_model, "num_layers", None)
+        if debug_print:
+            print(f"[ESMC] freeze_backbone: {self.freeze_backbone}")
+            print(f"[ESMC] num_layers: {num_layers}")
 
         if num_layers is not None:
             representations = self._get_representations(
@@ -57,44 +75,121 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
             )
         else:
             representations = self._get_representations(token_ids_batch)
+        
+        if debug_print:
+            print(f"[ESMC] representations shape: {representations.shape}")
+            print(f"[ESMC] representations mean: {representations.mean().item():.6f}")
+            print(f"[ESMC] representations std: {representations.std().item():.6f}")
+            print(f"[ESMC] representations min: {representations.min().item():.6f}")
+            print(f"[ESMC] representations max: {representations.max().item():.6f}")
+            print(f"[ESMC] representations requires_grad: {representations.requires_grad}")
 
         pad_token_id = getattr(tokenizer, "pad_token_id", getattr(tokenizer, "padding_idx", 0))
         attention_mask = (token_ids_batch != pad_token_id).unsqueeze(-1)
         representations = representations * attention_mask
+        
+        if debug_print:
+            print(f"[ESMC] After masking - representations mean: {representations.mean().item():.6f}")
+            print(f"[ESMC] After masking - representations std: {representations.std().item():.6f}")
 
         # Head always needs gradients
         head = self._get_head()
+        if debug_print:
+            # Check classifier weights
+            if hasattr(head, 'weight'):
+                print(f"[ESMC] Classifier weight shape: {head.weight.shape}")
+                print(f"[ESMC] Classifier weight mean: {head.weight.mean().item():.6f}")
+                print(f"[ESMC] Classifier weight std: {head.weight.std().item():.6f}")
+                print(f"[ESMC] Classifier weight requires_grad: {head.weight.requires_grad}")
+            elif hasattr(head, '0'):  # Sequential
+                for i, module in enumerate(head):
+                    if hasattr(module, 'weight'):
+                        print(f"[ESMC] Classifier[{i}] weight mean: {module.weight.mean().item():.6f}, std: {module.weight.std().item():.6f}")
+        
         logits = head(representations)
+        
+        if debug_print:
+            print(f"[ESMC] logits shape: {logits.shape}")
+            print(f"[ESMC] logits mean: {logits.mean().item():.6f}")
+            print(f"[ESMC] logits std: {logits.std().item():.6f}")
+            print(f"[ESMC] logits min: {logits.min().item():.6f}")
+            print(f"[ESMC] logits max: {logits.max().item():.6f}")
+            print(f"[ESMC] logits sample (first token, all classes): {logits[0, 0, :].tolist() if logits.shape[0] > 0 and logits.shape[1] > 0 else 'N/A'}")
+            print(f"[ESMC] ========== Forward End ==========\n")
 
         return logits
 
     def loss_func(self, stage, logits, labels):
+        debug_print = (hasattr(self, '_debug_step') and self._debug_step <= 3)
+        
         label = labels['labels'].to(logits.device)
+        
+        if debug_print:
+            print(f"\n[ESMC DEBUG Step {self._debug_step}] ========== Loss Function ==========")
+            print(f"[ESMC] stage: {stage}")
+            print(f"[ESMC] Original label shape: {label.shape}")
+            print(f"[ESMC] Original logits shape: {logits.shape}")
+            print(f"[ESMC] Label unique values: {torch.unique(label).tolist()}")
+            print(f"[ESMC] Label distribution: {torch.bincount(label[label >= 0].long() + 1).tolist() if (label >= 0).any() else 'N/A'}")
 
         # Align label/logit lengths (ESMC embed may omit special tokens while labels keep padding)
         min_len = min(label.shape[1], logits.shape[1])
         label = label[:, :min_len]
         logits = logits[:, :min_len]
+        
+        if debug_print:
+            print(f"[ESMC] After alignment - label shape: {label.shape}, logits shape: {logits.shape}")
 
         # Flatten the logits and labels
-        logits = logits.view(-1, self.num_labels)
-        label = label.view(-1)
-        loss = cross_entropy(logits, label, ignore_index=-1)
+        logits_flat = logits.view(-1, self.num_labels)
+        label_flat = label.view(-1)
+        
+        if debug_print:
+            print(f"[ESMC] Flattened - label_flat shape: {label_flat.shape}, logits_flat shape: {logits_flat.shape}")
+            print(f"[ESMC] logits_flat mean: {logits_flat.mean().item():.6f}, std: {logits_flat.std().item():.6f}")
+        
+        loss = cross_entropy(logits_flat, label_flat, ignore_index=-1)
+        
+        if debug_print:
+            print(f"[ESMC] Loss (before mask): {loss.item():.6f}")
 
         # Remove the ignored index
-        mask = label != -1
-        label = label[mask]
-        logits = logits[mask]
+        mask = label_flat != -1
+        label_masked = label_flat[mask]
+        logits_masked = logits_flat[mask]
+        
+        if debug_print:
+            print(f"[ESMC] After removing ignore_index - valid samples: {mask.sum().item()}/{len(mask)}")
+            print(f"[ESMC] label_masked unique values: {torch.unique(label_masked).tolist() if len(label_masked) > 0 else 'N/A'}")
+            print(f"[ESMC] label_masked distribution: {torch.bincount(label_masked.long()).tolist() if len(label_masked) > 0 else 'N/A'}")
+            print(f"[ESMC] logits_masked mean: {logits_masked.mean().item():.6f}, std: {logits_masked.std().item():.6f}")
+            # Check predictions
+            preds_masked = logits_masked.argmax(dim=-1)
+            print(f"[ESMC] preds_masked unique values: {torch.unique(preds_masked).tolist() if len(preds_masked) > 0 else 'N/A'}")
+            print(f"[ESMC] preds_masked distribution: {torch.bincount(preds_masked).tolist() if len(preds_masked) > 0 else 'N/A'}")
+            # Check accuracy
+            if len(label_masked) > 0:
+                acc = (preds_masked == label_masked).float().mean().item()
+                print(f"[ESMC] Accuracy (on this batch): {acc:.6f}")
+            print(f"[ESMC] Final loss: {loss.item():.6f}")
+            # Check gradients
+            if logits.requires_grad:
+                print(f"[ESMC] logits requires_grad: True")
+                if logits.grad is not None:
+                    print(f"[ESMC] logits.grad mean: {logits.grad.mean().item():.6f}")
+            else:
+                print(f"[ESMC] logits requires_grad: False")
+            print(f"[ESMC] ========== Loss Function End ==========\n")
 
         # Add the outputs to the list if not in training mode
         if stage != "train":
-            preds = logits.argmax(dim=-1)
+            preds = logits_masked.argmax(dim=-1)
             self.preds.append(preds.detach().cpu())
-            self.targets.append(label.detach().cpu())
+            self.targets.append(label_masked.detach().cpu())
 
         # Update metrics
         for metric in self.metrics[stage].values():
-            metric.update(logits.detach(), label)
+            metric.update(logits_masked.detach(), label_masked)
 
         if stage == "train":
             log_dict = self.get_log_dict("train")

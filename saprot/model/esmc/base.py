@@ -293,8 +293,9 @@ class ESMCBaseModel(AbstractModel):
             # Simple Linear layer (no intermediate layers, no dropout, no activation)
             classifier = torch.nn.Linear(hidden_size, self.num_labels)
             # Initialize classifier weights properly (match HuggingFace initialization)
-            # HuggingFace typically uses smaller std (0.01-0.02) for better initial stability
-            torch.nn.init.normal_(classifier.weight, mean=0.0, std=0.01)
+            # HuggingFace uses very small initialization for classifier (typically 0.002-0.005)
+            # This ensures initial logits are close to zero, resulting in low initial loss
+            torch.nn.init.normal_(classifier.weight, mean=0.0, std=0.002)
             if classifier.bias is not None:
                 torch.nn.init.zeros_(classifier.bias)
             setattr(self.model, "classifier", classifier)
@@ -502,18 +503,36 @@ class ESMCBaseModel(AbstractModel):
         Returns:
             representations: Hidden states tensor [B, L, D]
         """
+        # Debug print
+        debug_print = (hasattr(self, '_debug_step') and self._debug_step <= 3)
+        if debug_print:
+            print(f"[ESMC] _get_representations: freeze_backbone={self.freeze_backbone}")
+            print(f"[ESMC] _get_representations: torch.is_grad_enabled()={torch.is_grad_enabled()}")
+        
         # Wrap backbone forward in no_grad context when freeze_backbone=True
         # This saves memory and computation when backbone is frozen
-        with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            model_output = self._forward_backbone(token_ids_batch, repr_layers=repr_layers)
+        if self.freeze_backbone:
+            if debug_print:
+                print(f"[ESMC] _get_representations: Using torch.no_grad()")
+            with torch.no_grad():
+                model_output = self._forward_backbone(token_ids_batch, repr_layers=repr_layers)
+        else:
+            if debug_print:
+                print(f"[ESMC] _get_representations: Using torch.enable_grad()")
+            with torch.enable_grad():
+                model_output = self._forward_backbone(token_ids_batch, repr_layers=repr_layers)
             
-            # Extract representations based on output format
-            if repr_layers is not None:
-                # Model returns dict with 'representations' key
-                representations = model_output['representations'][repr_layers[0]]
-            else:
-                # Model returns object with hidden_states attribute
-                representations = model_output.hidden_states[layer_idx]
+        # Extract representations based on output format
+        if repr_layers is not None:
+            # Model returns dict with 'representations' key
+            representations = model_output['representations'][repr_layers[0]]
+        else:
+            # Model returns object with hidden_states attribute
+            representations = model_output.hidden_states[layer_idx]
+        
+        if debug_print:
+            print(f"[ESMC] _get_representations: representations.requires_grad={representations.requires_grad}")
+            print(f"[ESMC] _get_representations: After context, torch.is_grad_enabled()={torch.is_grad_enabled()}")
         
         return representations
     
