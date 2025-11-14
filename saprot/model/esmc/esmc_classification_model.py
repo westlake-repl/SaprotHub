@@ -36,8 +36,9 @@ class ESMCClassificationModel(ESMCBaseModel):
         # representations = self._get_representations(token_ids_batch)
         
         with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            # ESMC model accepts positional args, not keyword args
-            model_output = self.model(token_ids_batch, attention_mask=attention_mask)
+            # ESMC model only accepts positional args (token_ids_batch), not keyword args
+            # Note: ESMC doesn't accept attention_mask parameter, we'll handle padding in pooling
+            model_output = self.model(token_ids_batch)
             representations = model_output.last_hidden_state
         
         # Pooling

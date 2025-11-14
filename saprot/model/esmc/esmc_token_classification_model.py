@@ -49,8 +49,9 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
 
         # Forward through model (will automatically use LoRA if PEFT is applied)
         with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            # ESMC model accepts positional args, not keyword args
-            model_output = self.model(token_ids_batch, attention_mask=attention_mask)
+            # ESMC model only accepts positional args (token_ids_batch), not keyword args
+            # Note: ESMC doesn't accept attention_mask parameter, we'll handle padding manually
+            model_output = self.model(token_ids_batch)
             representations = model_output.last_hidden_state
 
         # Normalize token representations to stabilize logits

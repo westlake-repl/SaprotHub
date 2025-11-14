@@ -32,11 +32,12 @@ class ESMCPairRegressionModel(ESMCBaseModel):
 
         # Forward through model (will automatically use LoRA if PEFT is applied)
         with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            # ESMC model accepts positional args, not keyword args
-            model_output_1 = self.model(token_ids_1, attention_mask=attention_mask_1)
+            # ESMC model only accepts positional args (token_ids), not keyword args
+            # Note: ESMC doesn't accept attention_mask parameter, we'll handle padding manually
+            model_output_1 = self.model(token_ids_1)
             reps_1 = model_output_1.last_hidden_state
             
-            model_output_2 = self.model(token_ids_2, attention_mask=attention_mask_2)
+            model_output_2 = self.model(token_ids_2)
             reps_2 = model_output_2.last_hidden_state
 
         reps_1 = F.layer_norm(reps_1, reps_1.shape[-1:])
