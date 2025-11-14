@@ -88,19 +88,50 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
         attention_mask = (token_ids_batch != pad_token_id).unsqueeze(-1)
         representations = representations * attention_mask
         
+        # Normalize representations to match HuggingFace's scale
+        # HuggingFace models typically have normalized hidden states before classifier
+        # This allows us to use std=0.02 for classifier weights (matching HuggingFace)
+        # and get reasonable logits scale (std ~0.1-0.2 like Saprot)
+        import torch.nn.functional as F
+        representations = F.layer_norm(representations, representations.shape[-1:])
+        
         if debug_print:
             print(f"[ESMC] After masking - representations mean: {representations.mean().item():.6f}")
             print(f"[ESMC] After masking - representations std: {representations.std().item():.6f}")
+            print(f"[ESMC] After LayerNorm - representations mean: {representations.mean().item():.6f}")
+            print(f"[ESMC] After LayerNorm - representations std: {representations.std().item():.6f}")
 
         # Head always needs gradients
         head = self._get_head()
         if debug_print:
+            # Check which classifier is actually being used
+            print(f"[ESMC] Head type: {type(head)}")
+            print(f"[ESMC] Head module path: {head}")
+            # Check if it's a LoRA-wrapped classifier
+            if hasattr(head, 'original_module'):
+                print(f"[ESMC] Using LoRA-wrapped classifier (original_module)")
+                actual_head = head.original_module
+            elif hasattr(head, 'modules_to_save'):
+                print(f"[ESMC] Using classifier with modules_to_save")
+                # Check if we should use modules_to_save.default instead
+                if hasattr(head, 'modules_to_save') and hasattr(head.modules_to_save, 'default'):
+                    print(f"[ESMC] Found modules_to_save.default, checking which one is used...")
+            else:
+                actual_head = head
+            
             # Check classifier weights
             if hasattr(head, 'weight'):
                 print(f"[ESMC] Classifier weight shape: {head.weight.shape}")
                 print(f"[ESMC] Classifier weight mean: {head.weight.mean().item():.6f}")
                 print(f"[ESMC] Classifier weight std: {head.weight.std().item():.6f}")
                 print(f"[ESMC] Classifier weight requires_grad: {head.weight.requires_grad}")
+                # Check if this is the actual weight being used
+                if hasattr(head, 'original_module'):
+                    orig_weight = head.original_module.weight
+                    print(f"[ESMC] Original module weight mean: {orig_weight.mean().item():.6f}, std: {orig_weight.std().item():.6f}")
+            elif hasattr(head, 'original_module') and hasattr(head.original_module, 'weight'):
+                orig_weight = head.original_module.weight
+                print(f"[ESMC] Using original_module.weight - mean: {orig_weight.mean().item():.6f}, std: {orig_weight.std().item():.6f}")
             elif hasattr(head, '0'):  # Sequential
                 for i, module in enumerate(head):
                     if hasattr(module, 'weight'):

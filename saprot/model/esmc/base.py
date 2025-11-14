@@ -464,9 +464,27 @@ class ESMCBaseModel(AbstractModel):
         if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model'):
             base = self.model.base_model.model
             if hasattr(base, 'head'):
-                return base.head
-            if hasattr(base, 'classifier'):
-                return base.classifier
+                head = base.head
+            elif hasattr(base, 'classifier'):
+                head = base.classifier
+            else:
+                raise AttributeError("Cannot find task head (head/classifier) in base model")
+            
+            # CRITICAL: If LoRA's modules_to_save created a duplicate classifier,
+            # we need to use the trainable one (modules_to_save.default), not original_module
+            # LoRA's modules_to_save mechanism:
+            # - original_module: frozen copy (not updated)
+            # - modules_to_save.default: trainable copy (updated by optimizer)
+            # During forward, LoRA hooks should use modules_to_save.default, but we verify here
+            if hasattr(head, 'modules_to_save') and hasattr(head.modules_to_save, 'default'):
+                # Use the trainable copy that's actually updated by optimizer
+                return head.modules_to_save.default
+            elif hasattr(head, 'original_module'):
+                # If only original_module exists, check if there's a modules_to_save
+                # This shouldn't happen, but handle it gracefully
+                return head.original_module
+            else:
+                return head
         # Non-PEFT
         if hasattr(self.model, 'head'):
             return self.model.head
