@@ -47,24 +47,20 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
         # Tokenize sequences and obtain token ids (with special tokens handled by tokenizer)
         token_ids_batch, attention_mask, tokenizer = self._tokenize_sequences(proteins)
 
-        # Determine the last layer index from the underlying backbone (handles PEFT wrapping).
-        base_model = self._get_base_model()
-        num_layers = getattr(base_model, "num_layers", None)
-
-        if num_layers is not None:
-            representations = self._get_representations(
-                token_ids_batch,
-                repr_layers=[num_layers],
+        # Forward through model (will automatically use LoRA if PEFT is applied)
+        with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
+            model_output = self.model(
+                input_ids=token_ids_batch,
+                attention_mask=attention_mask
             )
-        else:
-            representations = self._get_representations(token_ids_batch)
+            representations = model_output.last_hidden_state
 
         # Normalize token representations to stabilize logits
         representations = F.layer_norm(representations, representations.shape[-1:])
 
         pad_token_id = getattr(tokenizer, "pad_token_id", getattr(tokenizer, "padding_idx", 0))
-        attention_mask = (token_ids_batch != pad_token_id).unsqueeze(-1)
-        representations = representations * attention_mask
+        attention_mask_expanded = (token_ids_batch != pad_token_id).unsqueeze(-1)
+        representations = representations * attention_mask_expanded
 
         # Head always needs gradients
         head = self._get_head()
