@@ -244,8 +244,64 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
 
             # Reset train metrics
             self.reset_metrics("train")
+            
+            # Check classifier weight gradients after loss computation (before backward)
+            if debug_print:
+                head = self._get_head()
+                if hasattr(head, 'weight'):
+                    # Note: grad will be None before backward(), but we can check requires_grad
+                    print(f"[ESMC] Classifier weight requires_grad: {head.weight.requires_grad}")
+                    # Check if this weight is in optimizer
+                    if hasattr(self, 'optimizer'):
+                        in_optimizer = any(head.weight is p for group in self.optimizer.param_groups for p in group['params'])
+                        print(f"[ESMC] Classifier weight in optimizer: {in_optimizer}")
 
         return loss
+
+    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure=None):
+        """Override to check if classifier weights are being updated"""
+        # Get classifier weight before optimizer step
+        head = self._get_head()
+        if hasattr(head, 'weight'):
+            weight_before = head.weight.data.clone()
+            # Check gradient before optimizer step (should exist after backward)
+            grad_before = head.weight.grad.clone() if head.weight.grad is not None else None
+        else:
+            weight_before = None
+            grad_before = None
+        
+        # Debug print for first few steps
+        debug_print = (hasattr(self, '_debug_step') and self._debug_step <= 3)
+        if debug_print and weight_before is not None:
+            print(f"\n[ESMC] Before optimizer_step (step {self._debug_step}):")
+            print(f"[ESMC]   Weight mean: {weight_before.mean().item():.6f}, std: {weight_before.std().item():.6f}")
+            if grad_before is not None:
+                grad_mean = grad_before.abs().mean().item()
+                grad_max = grad_before.abs().max().item()
+                print(f"[ESMC]   Gradient - mean: {grad_mean:.10f}, max: {grad_max:.10f}")
+            else:
+                print(f"[ESMC]   WARNING: No gradient before optimizer step!")
+        
+        # Call parent optimizer_step
+        super().optimizer_step(epoch, batch_idx, optimizer, optimizer_closure)
+        
+        # Check if weight changed after optimizer step (only for first few steps)
+        if weight_before is not None and debug_print:
+            weight_after = head.weight.data
+            weight_diff = (weight_after - weight_before).abs().mean().item()
+            weight_max_diff = (weight_after - weight_before).abs().max().item()
+            print(f"[ESMC] After optimizer_step (step {self._debug_step}):")
+            print(f"[ESMC]   Weight change - mean: {weight_diff:.10f}, max: {weight_max_diff:.10f}")
+            if weight_diff < 1e-10:
+                print(f"[ESMC]   WARNING: Weight did NOT change after optimizer step!")
+                # Check if gradient was cleared (should be None after optimizer step)
+                if head.weight.grad is not None:
+                    print(f"[ESMC]   WARNING: Gradient still exists after optimizer step (should be None)")
+                else:
+                    print(f"[ESMC]   Gradient cleared (normal after optimizer step)")
+            else:
+                print(f"[ESMC]   ✓ Weight updated successfully")
+                print(f"[ESMC]   New weight mean: {weight_after.mean().item():.6f}, std: {weight_after.std().item():.6f}")
 
     def on_test_epoch_end(self):
         log_dict = self.get_log_dict("test")
