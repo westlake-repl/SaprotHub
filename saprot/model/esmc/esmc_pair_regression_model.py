@@ -50,7 +50,26 @@ class ESMCPairRegressionModel(ESMCBaseModel):
         h2 = (reps_2 * mask_2).sum(dim=1) / mask_2.sum(dim=1).clamp(min=1)
 
         hidden_concat = torch.cat([h1, h2], dim=-1)
-        head = self._get_head()
+        
+        # CRITICAL FIX: Directly use modules_to_save.default if it exists
+        # This ensures we use the same weight object that's being trained
+        head = None
+        
+        # First, try to get modules_to_save.default directly
+        if hasattr(base_model, 'reg_head') and hasattr(base_model.reg_head, 'modules_to_save'):
+            if hasattr(base_model.reg_head.modules_to_save, 'default'):
+                head = base_model.reg_head.modules_to_save.default
+        elif hasattr(base_model, 'classifier') and hasattr(base_model.classifier, 'modules_to_save'):
+            if hasattr(base_model.classifier.modules_to_save, 'default'):
+                head = base_model.classifier.modules_to_save.default
+        elif hasattr(base_model, 'head') and hasattr(base_model.head, 'modules_to_save'):
+            if hasattr(base_model.head.modules_to_save, 'default'):
+                head = base_model.head.modules_to_save.default
+        
+        # Fallback to _get_head() if modules_to_save.default not found
+        if head is None:
+            head = self._get_head()
+        
         return head(hidden_concat).squeeze(-1)
 
     def loss_func(self, stage, logits, labels):

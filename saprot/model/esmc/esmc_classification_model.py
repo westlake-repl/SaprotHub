@@ -38,8 +38,23 @@ class ESMCClassificationModel(ESMCBaseModel):
         # Pooling - always needs gradients for head training
         pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
 
-        # Head always needs gradients
-        head = self._get_head()
+        # CRITICAL FIX: Directly use modules_to_save.default if it exists
+        # This ensures we use the same weight object that's being trained
+        base_model = self._get_base_model()
+        head = None
+        
+        # First, try to get modules_to_save.default directly
+        if hasattr(base_model, 'classifier') and hasattr(base_model.classifier, 'modules_to_save'):
+            if hasattr(base_model.classifier.modules_to_save, 'default'):
+                head = base_model.classifier.modules_to_save.default
+        elif hasattr(base_model, 'head') and hasattr(base_model.head, 'modules_to_save'):
+            if hasattr(base_model.head.modules_to_save, 'default'):
+                head = base_model.head.modules_to_save.default
+        
+        # Fallback to _get_head() if modules_to_save.default not found
+        if head is None:
+            head = self._get_head()
+        
         logits = head(pooled_repr)
 
         return logits
