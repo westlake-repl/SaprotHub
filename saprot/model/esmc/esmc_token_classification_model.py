@@ -101,33 +101,47 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
             print(f"[ESMC] After LayerNorm - representations mean: {representations.mean().item():.6f}")
             print(f"[ESMC] After LayerNorm - representations std: {representations.std().item():.6f}")
 
-        # Head always needs gradients
-        head = self._get_head()
+        # CRITICAL FIX: Directly use modules_to_save.default if it exists
+        # This ensures we use the same weight object that's being trained
+        base_model = self._get_base_model()
+        head = None
+        
+        # First, try to get modules_to_save.default directly
+        if hasattr(base_model, 'classifier') and hasattr(base_model.classifier, 'modules_to_save'):
+            if hasattr(base_model.classifier.modules_to_save, 'default'):
+                head = base_model.classifier.modules_to_save.default
+                if debug_print:
+                    print(f"[ESMC] ✓ Using modules_to_save.default directly (CORRECT)")
+        
+        # Fallback to _get_head() if modules_to_save.default not found
+        if head is None:
+            head = self._get_head()
+            if debug_print:
+                print(f"[ESMC] Using _get_head() fallback")
+        
         if debug_print:
             # Check which classifier is actually being used
             print(f"[ESMC] Head type: {type(head)}")
             print(f"[ESMC] Head module path: {head}")
             
             # Also check base model structure
-            base_model = self._get_base_model()
             if hasattr(base_model, 'classifier'):
                 print(f"[ESMC] Base model has classifier: {type(base_model.classifier)}")
                 if hasattr(base_model.classifier, 'modules_to_save'):
                     print(f"[ESMC] Base classifier has modules_to_save")
                     if hasattr(base_model.classifier.modules_to_save, 'default'):
-                        print(f"[ESMC] Base classifier.modules_to_save.default: {type(base_model.classifier.modules_to_save.default)}")
-            
-            # Check if it's a LoRA-wrapped classifier
-            if hasattr(head, 'original_module'):
-                print(f"[ESMC] Using LoRA-wrapped classifier (original_module)")
-                actual_head = head.original_module
-            elif hasattr(head, 'modules_to_save'):
-                print(f"[ESMC] Using classifier with modules_to_save")
-                # Check if we should use modules_to_save.default instead
-                if hasattr(head, 'modules_to_save') and hasattr(head.modules_to_save, 'default'):
-                    print(f"[ESMC] Found modules_to_save.default, checking which one is used...")
-            else:
-                actual_head = head
+                        mtos_default = base_model.classifier.modules_to_save.default
+                        print(f"[ESMC] Base classifier.modules_to_save.default: {type(mtos_default)}")
+                        # Verify we're using the correct object
+                        if hasattr(head, 'weight') and hasattr(mtos_default, 'weight'):
+                            head_weight_id = id(head.weight)
+                            mtos_weight_id = id(mtos_default.weight)
+                            print(f"[ESMC] Head weight id: {head_weight_id}")
+                            print(f"[ESMC] modules_to_save.default weight id: {mtos_weight_id}")
+                            if head_weight_id == mtos_weight_id:
+                                print(f"[ESMC] ✓ Using correct weight object (modules_to_save.default)")
+                            else:
+                                print(f"[ESMC] ✗ WARNING: Using wrong weight object!")
             
             # Check classifier weights
             if hasattr(head, 'weight'):
@@ -139,10 +153,6 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
                 if hasattr(self, 'optimizer'):
                     in_optimizer = any(head.weight is p for group in self.optimizer.param_groups for p in group['params'])
                     print(f"[ESMC] Classifier weight in optimizer: {in_optimizer}")
-                # Check if this is the actual weight being used
-                if hasattr(head, 'original_module'):
-                    orig_weight = head.original_module.weight
-                    print(f"[ESMC] Original module weight mean: {orig_weight.mean().item():.6f}, std: {orig_weight.std().item():.6f}")
             elif hasattr(head, 'original_module') and hasattr(head.original_module, 'weight'):
                 orig_weight = head.original_module.weight
                 print(f"[ESMC] Using original_module.weight - mean: {orig_weight.mean().item():.6f}, std: {orig_weight.std().item():.6f}")
