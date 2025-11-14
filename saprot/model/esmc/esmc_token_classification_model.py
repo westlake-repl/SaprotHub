@@ -313,6 +313,33 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
                 print(f"[ESMC]   New weight mean: {weight_after.mean().item():.6f}, std: {weight_after.std().item():.6f}")
 
     def on_test_epoch_end(self):
+        # Debug: Check which classifier weight is being used during test
+        head = self._get_head()
+        if hasattr(head, 'weight'):
+            test_weight_id = id(head.weight)
+            test_weight_mean = head.weight.mean().item()
+            test_weight_std = head.weight.std().item()
+            print(f"\n[ESMC] ========== Test Epoch End - Classifier Weight Check ==========")
+            print(f"[ESMC] Classifier weight id: {test_weight_id}")
+            print(f"[ESMC] Classifier weight mean: {test_weight_mean:.6f}, std: {test_weight_std:.6f}")
+            if hasattr(self, '_initial_weight_id'):
+                print(f"[ESMC] Same weight object as initial? {test_weight_id == self._initial_weight_id}")
+                if test_weight_id != self._initial_weight_id:
+                    print(f"[ESMC] WARNING: Test is using a different weight object than initial!")
+                    print(f"[ESMC] This might explain poor test performance if the wrong weight is being used.")
+            # Check if this is modules_to_save.default
+            base_model = self._get_base_model()
+            if hasattr(base_model, 'classifier') and hasattr(base_model.classifier, 'modules_to_save'):
+                if hasattr(base_model.classifier.modules_to_save, 'default'):
+                    mtos_weight_id = id(base_model.classifier.modules_to_save.default.weight)
+                    print(f"[ESMC] modules_to_save.default weight id: {mtos_weight_id}")
+                    if test_weight_id == mtos_weight_id:
+                        print(f"[ESMC] ✓ Test is using modules_to_save.default (correct)")
+                    else:
+                        print(f"[ESMC] ✗ Test is NOT using modules_to_save.default (WRONG!)")
+                        print(f"[ESMC] This is the bug! Test should use modules_to_save.default but it's using a different weight.")
+            print(f"[ESMC] ================================================================\n")
+        
         log_dict = self.get_log_dict("test")
         # log_dict["test_loss"] = torch.cat(self.all_gather(self.test_outputs), dim=-1).mean()
         log_dict["test_loss"] = torch.mean(torch.stack(self.test_outputs))
@@ -413,15 +440,20 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
                     print(f"[ESMC] Weight requires_grad: True (should be trainable)")
             
             # Also check if there's a modules_to_save version for comparison
+            base_model = self._get_base_model()
             if hasattr(base_model, 'classifier') and hasattr(base_model.classifier, 'modules_to_save'):
                 if hasattr(base_model.classifier.modules_to_save, 'default'):
                     mtos_head = base_model.classifier.modules_to_save.default
                     if hasattr(mtos_head, 'weight'):
                         mtos_mean = mtos_head.weight.mean().item()
                         mtos_std = mtos_head.weight.std().item()
-                        print(f"[ESMC] modules_to_save.default - mean: {mtos_mean:.6f}, std: {mtos_std:.6f}")
+                        mtos_weight_id = id(mtos_head.weight)
+                        print(f"[ESMC] modules_to_save.default - mean: {mtos_mean:.6f}, std: {mtos_std:.6f}, id: {mtos_weight_id}")
                         if actual_classifier is not mtos_head:
                             print(f"[ESMC] WARNING: Checking different classifier than modules_to_save.default!")
+                        if classifier_weight is not None and mtos_weight_id != id(classifier_weight):
+                            print(f"[ESMC] CRITICAL ERROR: Weight being checked (id: {id(classifier_weight)}) != modules_to_save.default weight (id: {mtos_weight_id})!")
+                            print(f"[ESMC] This means we're tracking the wrong weight! The trained weight won't be saved/loaded correctly!")
             
             # Verify this weight is in the optimizer
             if hasattr(self, 'optimizer') and classifier_weight is not None:
