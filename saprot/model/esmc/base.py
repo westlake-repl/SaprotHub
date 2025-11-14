@@ -228,12 +228,62 @@ class ESMCBaseModel(AbstractModel):
         # This is critical: modules_to_save should make classifier trainable, but we verify it
         if self.lora_kwargs is not None:
             # Ensure classifier parameters are trainable
+            classifier_params = []
             for name, param in self.model.named_parameters():
                 if 'classifier' in name or 'head' in name:
                     param.requires_grad = True
+                    classifier_params.append((name, param))
+            
+            # Debug: Print classifier parameters to verify they exist
+            if len(classifier_params) > 0:
+                print(f"[ESMC] Found {len(classifier_params)} classifier parameters:")
+                for name, param in classifier_params:
+                    print(f"  - {name}: shape={param.shape}, requires_grad={param.requires_grad}")
+            else:
+                print("[ESMC] WARNING: No classifier parameters found in model.named_parameters()!")
+                # Try to find classifier in base_model
+                if hasattr(self.model, 'base_model'):
+                    base = self.model.base_model.model if hasattr(self.model.base_model, 'model') else self.model.base_model
+                    if hasattr(base, 'classifier'):
+                        print(f"[ESMC] Found classifier in base_model: {type(base.classifier)}")
+                        for name, param in base.classifier.named_parameters():
+                            param.requires_grad = True
+                            print(f"  - base_model.classifier.{name}: shape={param.shape}, requires_grad={param.requires_grad}")
         
-        # After LoRA model is initialized, add trainable parameters to optimizer)
+        # After LoRA model is initialized, REINITIALIZE optimizer to include classifier
+        # NOTE: AbstractModel.__init__ already called init_optimizers() before LoRA,
+        # so we need to call it again to include LoRA adapters and classifier
         self.init_optimizers()
+        
+        # Verify classifier parameters are in optimizer
+        if self.lora_kwargs is not None:
+            # Get all parameter names from model
+            all_param_names = {name: p for name, p in self.model.named_parameters()}
+            
+            # Check optimizer parameters
+            optimizer_param_names = set()
+            total_optimizer_params = 0
+            for group in self.optimizer.param_groups:
+                for param in group['params']:
+                    total_optimizer_params += 1
+                    # Try to find the parameter name
+                    for name, p in all_param_names.items():
+                        if p is param:
+                            optimizer_param_names.add(name)
+                            break
+            
+            classifier_in_optimizer = [name for name in optimizer_param_names if 'classifier' in name or 'head' in name]
+            if len(classifier_in_optimizer) > 0:
+                print(f"[ESMC] ✓ Classifier parameters in optimizer: {len(classifier_in_optimizer)}")
+                for name in classifier_in_optimizer[:3]:  # Print first 3
+                    print(f"  - {name}")
+            else:
+                print(f"[ESMC] ✗ WARNING: No classifier parameters found in optimizer!")
+                print(f"[ESMC] Total optimizer parameters: {total_optimizer_params}")
+                print(f"[ESMC] All classifier parameters in model:")
+                for name, param in all_param_names.items():
+                    if 'classifier' in name or 'head' in name:
+                        print(f"  - {name}: requires_grad={param.requires_grad}, in_optimizer={name in optimizer_param_names}")
     
     def initialize_model(self):
         """Initialize ESMC model and task-specific classifiers"""
@@ -304,10 +354,12 @@ class ESMCBaseModel(AbstractModel):
             # ESMC representations have large scale (std ~100), so we need much smaller weights
             # to get reasonable logits. Use std that accounts for representation scale.
             # Target: logits std ~0.1-0.2 (similar to Saprot)
-            # If repr_std ~100 and we want logit_std ~0.1, then weight_std ~0.1/100 = 0.001
+            # Calculation: if logit_std ≈ repr_std * weight_std * sqrt(hidden_size)
+            # Then: 0.12 = 100 * weight_std * sqrt(960) => weight_std ≈ 0.00004
+            # But we use a slightly larger value (0.0001) for better gradient flow
             import math
-            # Use very small initialization to compensate for large representation scale
-            std = 0.001  # Much smaller than before to account for large repr scale
+            # Use extremely small initialization to compensate for large representation scale
+            std = 0.0001  # Even smaller: target logit_std ~0.12 when repr_std ~100
             torch.nn.init.normal_(classifier.weight, mean=0.0, std=std)
             if classifier.bias is not None:
                 torch.nn.init.zeros_(classifier.bias)
