@@ -260,6 +260,11 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
 
     def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure=None):
         """Override to check if classifier weights are being updated"""
+        # Track optimizer step calls separately (since accumulate_grad_batches may delay calls)
+        if not hasattr(self, '_optimizer_step_count'):
+            self._optimizer_step_count = 0
+        self._optimizer_step_count += 1
+        
         # Get classifier weight before optimizer step
         head = self._get_head()
         if hasattr(head, 'weight'):
@@ -270,10 +275,10 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
             weight_before = None
             grad_before = None
         
-        # Debug print for first few steps
-        debug_print = (hasattr(self, '_debug_step') and self._debug_step <= 3)
+        # Debug print for first few optimizer steps
+        debug_print = (self._optimizer_step_count <= 3)
         if debug_print and weight_before is not None:
-            print(f"\n[ESMC] Before optimizer_step (step {self._debug_step}):")
+            print(f"\n[ESMC] ========== Before optimizer_step (optimizer call #{self._optimizer_step_count}, batch_idx={batch_idx}) ==========")
             print(f"[ESMC]   Weight mean: {weight_before.mean().item():.6f}, std: {weight_before.std().item():.6f}")
             if grad_before is not None:
                 grad_mean = grad_before.abs().mean().item()
@@ -290,7 +295,7 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
             weight_after = head.weight.data
             weight_diff = (weight_after - weight_before).abs().mean().item()
             weight_max_diff = (weight_after - weight_before).abs().max().item()
-            print(f"[ESMC] After optimizer_step (step {self._debug_step}):")
+            print(f"[ESMC] ========== After optimizer_step (optimizer call #{self._optimizer_step_count}) ==========")
             print(f"[ESMC]   Weight change - mean: {weight_diff:.10f}, max: {weight_max_diff:.10f}")
             if weight_diff < 1e-10:
                 print(f"[ESMC]   WARNING: Weight did NOT change after optimizer step!")
