@@ -258,6 +258,44 @@ class ESMCTokenClassificationModel(ESMCBaseModel):
         self.log_info(log_dict)
         self.reset_metrics("test")
 
+    def on_train_epoch_end(self):
+        """Print classifier weight changes at the end of each training epoch"""
+        super().on_train_epoch_end()
+        
+        # Get the classifier head
+        head = self._get_head()
+        
+        # Store initial weights if not already stored
+        if not hasattr(self, '_initial_weight_std'):
+            if hasattr(head, 'weight'):
+                self._initial_weight_std = head.weight.std().item()
+                self._initial_weight_mean = head.weight.mean().item()
+        
+        # Print current weight stats
+        if hasattr(head, 'weight'):
+            current_mean = head.weight.mean().item()
+            current_std = head.weight.std().item()
+            epoch = getattr(self, 'epoch', 0)
+            
+            print(f"\n[ESMC] ========== Epoch {epoch} End - Classifier Weight Stats ==========")
+            print(f"[ESMC] Current weight - mean: {current_mean:.6f}, std: {current_std:.6f}")
+            
+            if hasattr(self, '_initial_weight_std'):
+                mean_change = current_mean - self._initial_weight_mean
+                std_change = current_std - self._initial_weight_std
+                std_change_pct = (std_change / self._initial_weight_std) * 100 if self._initial_weight_std > 0 else 0
+                print(f"[ESMC] Change from initial - mean: {mean_change:+.6f}, std: {std_change:+.6f} ({std_change_pct:+.2f}%)")
+            
+            # Also check if there's a modules_to_save version
+            if hasattr(head, 'modules_to_save') and hasattr(head.modules_to_save, 'default'):
+                modules_to_save_head = head.modules_to_save.default
+                if hasattr(modules_to_save_head, 'weight'):
+                    mtos_mean = modules_to_save_head.weight.mean().item()
+                    mtos_std = modules_to_save_head.weight.std().item()
+                    print(f"[ESMC] modules_to_save.default - mean: {mtos_mean:.6f}, std: {mtos_std:.6f}")
+            
+            print(f"[ESMC] ================================================================\n")
+
     def on_validation_epoch_end(self):
         log_dict = self.get_log_dict("valid")
         # log_dict["valid_loss"] = torch.cat(self.all_gather(self.valid_outputs), dim=-1).mean()
