@@ -38,10 +38,8 @@ class ESMCRegressionModel(ESMCBaseModel):
 
         # Forward through model (will automatically use LoRA if PEFT is applied)
         with (torch.no_grad() if self.freeze_backbone else torch.enable_grad()):
-            model_output = self.model(
-                input_ids=token_ids_batch,
-                attention_mask=attention_mask
-            )
+            # ESMC model accepts positional args, not keyword args
+            model_output = self.model(token_ids_batch, attention_mask=attention_mask)
             representations = model_output.last_hidden_state
         
         # Pooling
