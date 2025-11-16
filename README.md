@@ -7,7 +7,7 @@
 
 The repository is an official implementation of [Democratizing Protein Language Model Training, Sharing and Collaboration (Nature Biotechnology)](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v7). Making protein language models fine-tuning and sharing accessible to all - no coding or advanced machine learning expertise required!
 
-**Access via  [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (35M,650M) and  [ColabSeprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabSeprot.ipynb?hl=en) (including ColabESM1b (650M), ColabESM2 (35M, 150M, 650M), ColabProTrek (35M, 650M), ColabProtBERT (420M))！**
+**Access via  [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (35M,650M) and  [ColabSeprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabSeprot.ipynb?hl=en) (including ColabESM1b (650M), ColabESM2 (35M, 150M, 650M), ColabProTrek (35M, 650M), ColabProtBERT (420M))！** Note that ColabSaprot also supports training and prediction using amino acid sequences.
 
 Watch [the ColabSaprot video tutorial](https://www.youtube.com/watch?v=nmLtjlCI_7M&t=716s).
 
