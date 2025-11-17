@@ -50,7 +50,7 @@ class ESMCBaseModel(AbstractModel):
         self.freeze_backbone = freeze_backbone
         self.gradient_checkpointing = gradient_checkpointing
         self.lora_kwargs = lora_kwargs
-        self.extra_config = extra_config  # Store for compatibility, though ESMC doesn't use it
+        self.extra_config = extra_config
         if device is None:
             self.device_str = "cuda" if torch.cuda.is_available() else "cpu"
         else:
@@ -59,7 +59,6 @@ class ESMCBaseModel(AbstractModel):
 
         # After all initialization done, lora technique is applied if needed
         if self.lora_kwargs is not None:
-            # No need to freeze backbone if LoRA is used
             self.freeze_backbone = False
             
             self.lora_kwargs = EasyDict(self.lora_kwargs)
@@ -135,9 +134,7 @@ class ESMCBaseModel(AbstractModel):
                         for layer_name in all_linear_layers:
                             parts = layer_name.split('.')
                             for part in parts:
-                                # Match any ffn.X pattern
                                 if 'ffn.' in part:
-                                    # Extract ffn.X pattern
                                     if part.startswith('ffn.') and part[4:].replace('.', '').isdigit():
                                         matched_layers.add(part)
                         
@@ -242,9 +239,6 @@ class ESMCBaseModel(AbstractModel):
                         for name, param in base.classifier.named_parameters():
                             param.requires_grad = True
         
-        # After LoRA model is initialized, REINITIALIZE optimizer to include classifier
-        # NOTE: AbstractModel.__init__ already called init_optimizers() before LoRA,
-        # so we need to call it again to include LoRA adapters and classifier
         self.init_optimizers()
         
         # Verify classifier parameters are in optimizer
@@ -307,35 +301,23 @@ class ESMCBaseModel(AbstractModel):
 
         # Task-specific classifier initialization
         if self.task == 'classification':
-            # Match HuggingFace AutoModelForSequenceClassification structure:
-            # Dropout -> Dense -> Tanh -> Dropout -> OutProj
             classifier = torch.nn.Sequential(
-                torch.nn.Dropout(0.1),  # First dropout (before dense)
-                torch.nn.Linear(hidden_size, hidden_size),  # Dense layer
-                torch.nn.Tanh(),  # Tanh activation
-                torch.nn.Dropout(0.1),  # Second dropout (after tanh)
-                torch.nn.Linear(hidden_size, self.num_labels)  # Output projection
+                torch.nn.Dropout(0.1),
+                torch.nn.Linear(hidden_size, hidden_size),
+                torch.nn.Tanh(),
+                torch.nn.Dropout(0.1),
+                torch.nn.Linear(hidden_size, self.num_labels)
             )
-            # Initialize classifier weights properly (Xavier for Tanh activation)
             for module in classifier:
                 if isinstance(module, torch.nn.Linear):
-                    # Use Xavier uniform for Tanh activation (matches HuggingFace ESM models)
                     torch.nn.init.xavier_uniform_(module.weight)
                     if module.bias is not None:
                         torch.nn.init.zeros_(module.bias)
             setattr(self.model, "classifier", classifier)
-            # Also expose as a generic head for naming consistency
             setattr(self.model, "head", classifier)
 
         elif self.task == 'token_classification':
-            # Match HuggingFace AutoModelForTokenClassification structure:
-            # Simple Linear layer (no intermediate layers, no dropout, no activation)
             classifier = torch.nn.Linear(hidden_size, self.num_labels)
-            # Initialize classifier weights to match HuggingFace default initialization
-            # HuggingFace uses std=0.02 for classifier weights (as seen in Saprot: std=0.020512)
-            # This ensures classifier has sufficient capacity for learning
-            # NOTE: Even though ESMC representations have large scale (std ~100), we use std=0.02
-            # to match HuggingFace. The classifier will learn to adapt during training.
             torch.nn.init.normal_(classifier.weight, mean=0.0, std=0.02)
             if classifier.bias is not None:
                 torch.nn.init.zeros_(classifier.bias)
@@ -343,14 +325,12 @@ class ESMCBaseModel(AbstractModel):
             setattr(self.model, "head", classifier)
 
         elif self.task == 'regression':
-            # Match HuggingFace AutoModelForSequenceClassification structure:
-            # Dropout -> Dense -> Tanh -> Dropout -> OutProj
             classifier = torch.nn.Sequential(
-                torch.nn.Dropout(0.1),  # First dropout (before dense)
-                torch.nn.Linear(hidden_size, hidden_size),  # Dense layer
-                torch.nn.Tanh(),  # Tanh activation
-                torch.nn.Dropout(0.1),  # Second dropout (after tanh)
-                torch.nn.Linear(hidden_size, 1)  # Output projection
+                torch.nn.Dropout(0.1),
+                torch.nn.Linear(hidden_size, hidden_size),
+                torch.nn.Tanh(),
+                torch.nn.Dropout(0.1),
+                torch.nn.Linear(hidden_size, 1)
             )
             # Initialize classifier weights properly (Xavier for Tanh activation)
             for module in classifier:
@@ -451,18 +431,9 @@ class ESMCBaseModel(AbstractModel):
             else:
                 raise AttributeError("Cannot find task head (head/classifier) in base model")
             
-            # CRITICAL: If LoRA's modules_to_save created a duplicate classifier,
-            # we need to use the trainable one (modules_to_save.default), not original_module
-            # LoRA's modules_to_save mechanism:
-            # - original_module: frozen copy (not updated)
-            # - modules_to_save.default: trainable copy (updated by optimizer)
-            # During forward, LoRA hooks should use modules_to_save.default, but we verify here
             if hasattr(head, 'modules_to_save') and hasattr(head.modules_to_save, 'default'):
-                # Use the trainable copy that's actually updated by optimizer
                 return head.modules_to_save.default
             elif hasattr(head, 'original_module'):
-                # If only original_module exists, check if there's a modules_to_save
-                # This shouldn't happen, but handle it gracefully
                 return head.original_module
             else:
                 return head
