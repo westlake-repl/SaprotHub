@@ -1,6 +1,7 @@
 import torchmetrics
 import torch.distributed as dist
 import torch
+import torch.nn.functional as F
 
 from torch.nn.utils.rnn import pad_sequence
 from ..model_interface import register_model
@@ -46,7 +47,17 @@ class ESMCRegressionModel(ESMCBaseModel):
             rank = 0
         
         if rank == 0 and hasattr(self, '_debug_step') and self._debug_step % 100 == 0:
-            print(f"[DEBUG] representations: shape={representations.shape}, dtype={representations.dtype}, "
+            print(f"[DEBUG] representations (before norm): shape={representations.shape}, dtype={representations.dtype}, "
+                  f"requires_grad={representations.requires_grad}, mean={representations.mean().item():.4f}, "
+                  f"std={representations.std().item():.4f}, min={representations.min().item():.4f}, "
+                  f"max={representations.max().item():.4f}")
+
+        # CRITICAL FIX: Normalize representations before pooling (same as pair_regression)
+        # ESMC representations can have very large values, normalization is essential for numerical stability
+        representations = F.layer_norm(representations, representations.shape[-1:])
+        
+        if rank == 0 and hasattr(self, '_debug_step') and self._debug_step % 100 == 0:
+            print(f"[DEBUG] representations (after norm): shape={representations.shape}, dtype={representations.dtype}, "
                   f"requires_grad={representations.requires_grad}, mean={representations.mean().item():.4f}, "
                   f"std={representations.std().item():.4f}, min={representations.min().item():.4f}, "
                   f"max={representations.max().item():.4f}")
