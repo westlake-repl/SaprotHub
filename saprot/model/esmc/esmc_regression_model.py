@@ -39,38 +39,12 @@ class ESMCRegressionModel(ESMCBaseModel):
 
         # Backbone representations
         representations = self._get_representations(token_ids_batch)
-        
-        # DEBUG: Check representations
-        if torch.distributed.is_available() and torch.distributed.is_initialized():
-            rank = torch.distributed.get_rank()
-        else:
-            rank = 0
-        
-        if rank == 0 and hasattr(self, '_debug_step') and self._debug_step % 100 == 0:
-            print(f"[DEBUG] representations (before norm): shape={representations.shape}, dtype={representations.dtype}, "
-                  f"requires_grad={representations.requires_grad}, mean={representations.mean().item():.4f}, "
-                  f"std={representations.std().item():.4f}, min={representations.min().item():.4f}, "
-                  f"max={representations.max().item():.4f}")
 
-        # CRITICAL FIX: Normalize representations before pooling (same as pair_regression)
-        # ESMC representations can have very large values, normalization is essential for numerical stability
+        # Normalize representations before pooling (mirrors pair_regression behaviour)
         representations = F.layer_norm(representations, representations.shape[-1:])
-        
-        if rank == 0 and hasattr(self, '_debug_step') and self._debug_step % 100 == 0:
-            print(f"[DEBUG] representations (after norm): shape={representations.shape}, dtype={representations.dtype}, "
-                  f"requires_grad={representations.requires_grad}, mean={representations.mean().item():.4f}, "
-                  f"std={representations.std().item():.4f}, min={representations.min().item():.4f}, "
-                  f"max={representations.max().item():.4f}")
 
         # Pooling - always needs gradients for head training
         pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
-        
-        # DEBUG: Check pooled_repr
-        if rank == 0 and hasattr(self, '_debug_step') and self._debug_step % 100 == 0:
-            print(f"[DEBUG] pooled_repr: shape={pooled_repr.shape}, dtype={pooled_repr.dtype}, "
-                  f"requires_grad={pooled_repr.requires_grad}, mean={pooled_repr.mean().item():.4f}, "
-                  f"std={pooled_repr.std().item():.4f}, min={pooled_repr.min().item():.4f}, "
-                  f"max={pooled_repr.max().item():.4f}")
 
         # CRITICAL FIX: Directly use modules_to_save.default if it exists
         # This ensures we use the same weight object that's being trained
@@ -90,75 +64,19 @@ class ESMCRegressionModel(ESMCBaseModel):
             head = self._get_head()
         
         logits = head(pooled_repr).squeeze(dim=-1)
-        
-        # DEBUG: Check head output
-        if rank == 0 and hasattr(self, '_debug_step') and self._debug_step % 100 == 0:
-            print(f"[DEBUG] logits: shape={logits.shape}, dtype={logits.dtype}, "
-                  f"requires_grad={logits.requires_grad}, mean={logits.mean().item():.4f}, "
-                  f"std={logits.std().item():.4f}, min={logits.min().item():.4f}, "
-                  f"max={logits.max().item():.4f}")
-        
+        logits = torch.sigmoid(logits)
+
         return logits
 
     def loss_func(self, stage, outputs, labels):
         fitness = labels['labels'].to(outputs)
         loss = torch.nn.functional.mse_loss(outputs, fitness)
-        
-        # DEBUG: Print diagnostic information
-        if torch.distributed.is_available() and torch.distributed.is_initialized():
-            rank = torch.distributed.get_rank()
-        else:
-            rank = 0
-        
-        if not hasattr(self, '_debug_step'):
-            self._debug_step = 0
-        
-        if rank == 0 and self._debug_step % 100 == 0:
-            print(f"\n[DEBUG {stage}] Step {self._debug_step}")
-            print(f"  outputs: shape={outputs.shape}, dtype={outputs.dtype}, "
-                  f"mean={outputs.mean().item():.6f}, std={outputs.std().item():.6f}, "
-                  f"min={outputs.min().item():.6f}, max={outputs.max().item():.6f}")
-            print(f"  fitness: shape={fitness.shape}, dtype={fitness.dtype}, "
-                  f"mean={fitness.mean().item():.6f}, std={fitness.std().item():.6f}, "
-                  f"min={fitness.min().item():.6f}, max={fitness.max().item():.6f}")
-            print(f"  loss: {loss.item():.6f}")
-            
-            # Check if outputs and fitness are in similar ranges
-            outputs_float = outputs.detach().float()
-            fitness_float = fitness.float()
-            print(f"  outputs (float32): mean={outputs_float.mean().item():.6f}, std={outputs_float.std().item():.6f}")
-            print(f"  fitness (float32): mean={fitness_float.mean().item():.6f}, std={fitness_float.std().item():.6f}")
-            
-            # Check gradient flow
-            if outputs.requires_grad:
-                print(f"  outputs.requires_grad: True")
-                if outputs.grad is not None:
-                    print(f"  outputs.grad: mean={outputs.grad.mean().item():.6f}, std={outputs.grad.std().item():.6f}")
-                else:
-                    print(f"  outputs.grad: None (will be computed in backward)")
-            else:
-                print(f"  outputs.requires_grad: False (WARNING: no gradients!)")
-        
-        self._debug_step += 1
 
         # Update metrics
         for metric in self.metrics[stage].values():
             # Training is on half precision, but metrics expect float to compute correctly.
             metric.set_dtype(torch.float32)
             metric.update(outputs.detach(), fitness)
-            
-            # DEBUG: Check metric values periodically
-            if rank == 0 and (self._debug_step - 1) % 100 == 0 and stage == "valid":
-                metric_name = [k for k, v in self.metrics[stage].items() if v is metric][0]
-                try:
-                    # Try to compute current metric value
-                    if hasattr(metric, 'compute'):
-                        metric_value = metric.compute()
-                        if isinstance(metric_value, torch.Tensor):
-                            metric_value = metric_value.item()
-                        print(f"  {metric_name}: {metric_value:.6f}")
-                except Exception as e:
-                    print(f"  {metric_name}: Could not compute ({e})")
 
         if stage == "train":
             log_dict = {"train_loss": loss.item()}
