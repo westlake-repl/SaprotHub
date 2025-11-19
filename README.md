@@ -13,7 +13,7 @@ Watch [the ColabSaprot video tutorial](https://www.youtube.com/watch?v=nmLtjlCI_
 
 Go to [the OPMC website](https://theopmc.github.io/).
 
-More successful [wet-lab results](https://drive.google.com/file/d/1ZcDl0XYksTcUEaCfPI0tuEVo5CA031dg/view) by ColabSaprot.
+Successful [wet-lab results](https://drive.google.com/file/d/1ZcDl0XYksTcUEaCfPI0tuEVo5CA031dg/view) by ColabSaprot from community.
 
 Finding models through [SaprotHub Search](https://huggingface.co/spaces/SaProtHub/SaprotHub-search), sharing your models via ColabSaprot to boost visibility and citations.
 
