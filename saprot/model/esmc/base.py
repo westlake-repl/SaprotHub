@@ -154,10 +154,18 @@ class ESMCBaseModel(AbstractModel):
                         self._cached_target_modules = sorted(list(matched_layers))
                     
                     target_modules = self._cached_target_modules
+                
+                # Determine modules_to_save based on task
+                modules_to_save = ["classifier"]
+                if self.task == "pair_regression":
+                    modules_to_save = ["classifier", "reg_head"]
+                elif self.task == "pair_classification":
+                    modules_to_save = ["classifier"]
+                
                 lora_config = {
                     "task_type": "FEATURE_EXTRACTION",
                     "target_modules": target_modules,
-                    "modules_to_save": ["classifier"],
+                    "modules_to_save": modules_to_save,
                     "inference_mode": False,
                     "r": getattr(self.lora_kwargs, "r", 8),
                     "lora_dropout": getattr(self.lora_kwargs, "lora_dropout", 0.0),
@@ -416,7 +424,7 @@ class ESMCBaseModel(AbstractModel):
     
     def _get_head(self):
         """
-        Get task head module (prefer `head`, fallback to `classifier`), handling PEFT wrapping
+        Get task head module (prefer `classifier` when LoRA is used, since that's what LoRA wraps), handling PEFT wrapping
         
         Returns:
             head: The task head module
@@ -424,12 +432,19 @@ class ESMCBaseModel(AbstractModel):
         # PEFT-wrapped path first
         if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model'):
             base = self.model.base_model.model
-            if hasattr(base, 'head'):
-                head = base.head
-            elif hasattr(base, 'classifier'):
+            # When using LoRA, classifier is wrapped by default, so prioritize it
+            # For pair_regression, check classifier first (what LoRA wraps), then reg_head
+            if hasattr(base, 'classifier'):
                 head = base.classifier
+            elif self.task == "pair_regression" and hasattr(base, 'reg_head'):
+                head = base.reg_head
+            elif hasattr(base, 'head'):
+                head = base.head
+            elif self.task == "pair_regression" and hasattr(base, 'reg_head'):
+                # Final fallback: try reg_head if classifier not found
+                head = base.reg_head
             else:
-                raise AttributeError("Cannot find task head (head/classifier) in base model")
+                raise AttributeError("Cannot find task head (classifier/reg_head/head) in base model")
             
             if hasattr(head, 'modules_to_save') and hasattr(head.modules_to_save, 'default'):
                 return head.modules_to_save.default
@@ -437,12 +452,14 @@ class ESMCBaseModel(AbstractModel):
                 return head.original_module
             else:
                 return head
-        # Non-PEFT
+        # Non-PEFT: check in standard order
+        if self.task == "pair_regression" and hasattr(self.model, 'reg_head'):
+            return self.model.reg_head
         if hasattr(self.model, 'head'):
             return self.model.head
         if hasattr(self.model, 'classifier'):
             return self.model.classifier
-        raise AttributeError("Cannot find task head (head/classifier) in model")
+        raise AttributeError("Cannot find task head (head/classifier/reg_head) in model")
 
     # Backward-compatible alias
     def _get_classifier(self):
