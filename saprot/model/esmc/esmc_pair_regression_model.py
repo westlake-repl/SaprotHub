@@ -47,6 +47,10 @@ class ESMCPairRegressionModel(ESMCBaseModel):
         h1 = (reps_1 * mask_1).sum(dim=1) / mask_1.sum(dim=1).clamp(min=1)
         h2 = (reps_2 * mask_2).sum(dim=1) / mask_2.sum(dim=1).clamp(min=1)
 
+        # Normalize pooled representations for numerical stability
+        h1 = self._normalize_pooled_repr(h1)
+        h2 = self._normalize_pooled_repr(h2)
+
         hidden_concat = torch.cat([h1, h2], dim=-1)
         
         # CRITICAL FIX: Directly use modules_to_save.default if it exists
