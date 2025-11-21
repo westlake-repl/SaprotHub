@@ -71,6 +71,7 @@ class SaprotPairClassificationModel(SaprotBaseModel):
         # log_dict["test_loss"] = torch.cat(self.all_gather(self.test_outputs), dim=-1).mean()
         log_dict["test_loss"] = torch.mean(torch.stack(self.test_outputs))
 
+
         # if dist.get_rank() == 0:
         #     print(log_dict)
         self.output_test_metrics(log_dict)
@@ -82,6 +83,7 @@ class SaprotPairClassificationModel(SaprotBaseModel):
         log_dict = self.get_log_dict("valid")
         # log_dict["valid_loss"] = torch.cat(self.all_gather(self.valid_outputs), dim=-1).mean()
         log_dict["valid_loss"] = torch.mean(torch.stack(self.valid_outputs))
+
 
         # if dist.get_rank() == 0:
         #     print(log_dict)

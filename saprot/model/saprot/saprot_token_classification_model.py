@@ -45,6 +45,7 @@ class SaprotTokenClassificationModel(SaprotBaseModel):
             x = torch.tanh(x)
             x = self.model.classifier.dropout(x)
             logits = self.model.classifier.out_proj(x)
+        
         else:
             logits = self.model(**inputs).logits
         
@@ -52,27 +53,25 @@ class SaprotTokenClassificationModel(SaprotBaseModel):
     
     def loss_func(self, stage, logits, labels):
         label = labels['labels']
-        
         # Flatten the logits and labels
-        logits_flat = logits.view(-1, self.num_labels)
-        label_flat = label.view(-1)
-        
-        loss = cross_entropy(logits_flat, label_flat, ignore_index=-1)
+        logits = logits.view(-1, self.num_labels)
+        label = label.view(-1)
+        loss = cross_entropy(logits, label, ignore_index=-1)
         
         # Remove the ignored index
-        mask = label_flat != -1
-        label_masked = label_flat[mask]
-        logits_masked = logits_flat[mask]
+        mask = label != -1
+        label = label[mask]
+        logits = logits[mask]
         
         # Add the outputs to the list if not in training mode
         if stage != "train":
-            preds = logits_masked.argmax(dim=-1)
+            preds = logits.argmax(dim=-1)
             self.preds.append(preds)
-            self.targets.append(label_masked)
+            self.targets.append(label)
         
         # Update metrics
         for metric in self.metrics[stage].values():
-            metric.update(logits_masked.detach(), label_masked)
+            metric.update(logits.detach(), label)
         
         if stage == "train":
             log_dict = self.get_log_dict("train")
@@ -84,16 +83,11 @@ class SaprotTokenClassificationModel(SaprotBaseModel):
         
         return loss
     
-    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure=None):
-        super().optimizer_step(epoch, batch_idx, optimizer, optimizer_closure)
-    
-    def on_train_epoch_end(self):
-        super().on_train_epoch_end()
-    
     def on_test_epoch_end(self):
         log_dict = self.get_log_dict("test")
         # log_dict["test_loss"] = torch.cat(self.all_gather(self.test_outputs), dim=-1).mean()
         log_dict["test_loss"] = torch.mean(torch.stack(self.test_outputs))
+
         
         preds = torch.cat(self.preds, dim=-1)
         target = torch.cat(self.targets, dim=-1)
