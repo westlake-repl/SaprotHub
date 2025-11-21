@@ -36,12 +36,19 @@ class ESMCRegressionModel(ESMCBaseModel):
 
         # Tokenization & Padding
         token_ids_batch, attention_mask, tokenizer = self._tokenize_sequences(proteins)
+        print(f"[DEBUG][ESMC::tokenize] token_ids_shape={token_ids_batch.shape}, attention_mask_shape={attention_mask.shape}, device={token_ids_batch.device}")
 
         # Backbone representations
         representations = self._get_representations(token_ids_batch)
+        print(f"[DEBUG][ESMC::representations] reps_shape={representations.shape}, dtype={representations.dtype}, "
+              f"mean={representations.mean().item():.6f}, std={representations.std().item():.6f}, "
+              f"min={representations.min().item():.6f}, max={representations.max().item():.6f}")
 
         # Use mean pooling like ESMC classification does
         pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
+        print(f"[DEBUG][ESMC::pooled] pooled_shape={pooled_repr.shape}, "
+              f"mean={pooled_repr.mean().item():.6f}, std={pooled_repr.std().item():.6f}, "
+              f"min={pooled_repr.min().item():.6f}, max={pooled_repr.max().item():.6f}")
 
         # CRITICAL FIX: Directly use modules_to_save.default if it exists
         # This ensures we use the same weight object that's being trained
@@ -52,21 +59,52 @@ class ESMCRegressionModel(ESMCBaseModel):
         if hasattr(base_model, 'classifier') and hasattr(base_model.classifier, 'modules_to_save'):
             if hasattr(base_model.classifier.modules_to_save, 'default'):
                 head = base_model.classifier.modules_to_save.default
+                print(f"[DEBUG][ESMC::head] Found head from base_model.classifier.modules_to_save.default")
         elif hasattr(base_model, 'head') and hasattr(base_model.head, 'modules_to_save'):
             if hasattr(base_model.head.modules_to_save, 'default'):
                 head = base_model.head.modules_to_save.default
+                print(f"[DEBUG][ESMC::head] Found head from base_model.head.modules_to_save.default")
         
         # Fallback to _get_head() if modules_to_save.default not found
         if head is None:
             head = self._get_head()
+            print(f"[DEBUG][ESMC::head] Using _get_head() fallback")
         
-        logits = head(pooled_repr).squeeze(dim=-1)
+        # Pass through classifier layers step by step for debugging
+        if isinstance(head, torch.nn.Sequential):
+            x = head[0](pooled_repr)  # Dropout
+            print(f"[DEBUG][ESMC::classifier] After Dropout: shape={x.shape}, mean={x.mean().item():.6f}, std={x.std().item():.6f}")
+            
+            x = head[1](x)  # Linear
+            print(f"[DEBUG][ESMC::classifier] After Linear1: shape={x.shape}, mean={x.mean().item():.6f}, std={x.std().item():.6f}, "
+                  f"min={x.min().item():.6f}, max={x.max().item():.6f}")
+            
+            x = head[2](x)  # Tanh
+            print(f"[DEBUG][ESMC::classifier] After Tanh: shape={x.shape}, mean={x.mean().item():.6f}, std={x.std().item():.6f}, "
+                  f"min={x.min().item():.6f}, max={x.max().item():.6f}")
+            
+            x = head[3](x)  # Dropout
+            print(f"[DEBUG][ESMC::classifier] After Dropout2: shape={x.shape}, mean={x.mean().item():.6f}, std={x.std().item():.6f}")
+            
+            logits = head[4](x).squeeze(dim=-1)  # Linear
+        else:
+            # If head is not Sequential, just call it directly
+            logits = head(pooled_repr).squeeze(dim=-1)
+        
+        print(f"[DEBUG][ESMC::forward:end] logits_shape={logits.shape}, "
+              f"mean={logits.mean().item():.6f}, std={logits.std().item():.6f}, "
+              f"min={logits.min().item():.6f}, max={logits.max().item():.6f}")
 
         return logits
 
     def loss_func(self, stage, outputs, labels):
         fitness = labels['labels'].to(outputs)
+        print(f"[DEBUG][ESMC::loss:{stage}] outputs_mean={outputs.mean().item():.6f}, outputs_std={outputs.std().item():.6f}, "
+              f"outputs_min={outputs.min().item():.6f}, outputs_max={outputs.max().item():.6f}, "
+              f"labels_mean={fitness.mean().item():.6f}, labels_std={fitness.std().item():.6f}, "
+              f"labels_min={fitness.min().item():.6f}, labels_max={fitness.max().item():.6f}")
         loss = torch.nn.functional.mse_loss(outputs, fitness)
+        print(f"[DEBUG][ESMC::loss:{stage}] loss={loss.item():.6f}")
 
         # Update metrics
         for metric in self.metrics[stage].values():
