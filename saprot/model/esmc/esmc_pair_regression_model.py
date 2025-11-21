@@ -40,9 +40,6 @@ class ESMCPairRegressionModel(ESMCBaseModel):
             reps_1 = self._get_representations(token_ids_1)
             reps_2 = self._get_representations(token_ids_2)
 
-        reps_1 = F.layer_norm(reps_1, reps_1.shape[-1:])
-        reps_2 = F.layer_norm(reps_2, reps_2.shape[-1:])
-
         mask_1 = attention_mask_1.unsqueeze(-1)
         mask_2 = attention_mask_2.unsqueeze(-1)
 

@@ -40,9 +40,6 @@ class ESMCRegressionModel(ESMCBaseModel):
         # Backbone representations
         representations = self._get_representations(token_ids_batch)
 
-        # Normalize representations before pooling (mirrors pair_regression behaviour)
-        representations = F.layer_norm(representations, representations.shape[-1:])
-
         # Pooling - always needs gradients for head training
         pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
 
@@ -64,7 +61,6 @@ class ESMCRegressionModel(ESMCBaseModel):
             head = self._get_head()
         
         logits = head(pooled_repr).squeeze(dim=-1)
-        logits = torch.sigmoid(logits)
 
         return logits
 
