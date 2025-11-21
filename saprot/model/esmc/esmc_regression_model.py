@@ -40,8 +40,9 @@ class ESMCRegressionModel(ESMCBaseModel):
         # Backbone representations
         representations = self._get_representations(token_ids_batch)
 
-        # Pooling - always needs gradients for head training
-        pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
+        # Use CLS token (first token) like Saprot does, instead of mean pooling
+        # This matches Saprot's behavior: backbone(**inputs)[0][:, 0, :]
+        pooled_repr = representations[:, 0, :]
 
         # CRITICAL FIX: Directly use modules_to_save.default if it exists
         # This ensures we use the same weight object that's being trained
