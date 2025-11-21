@@ -40,10 +40,12 @@ class ESMCPairRegressionModel(ESMCBaseModel):
             reps_1 = self._get_representations(token_ids_1)
             reps_2 = self._get_representations(token_ids_2)
 
-        # Use CLS token (first token) like Saprot does, instead of mean pooling
-        # This matches Saprot's behavior: backbone(**inputs_1)[0][:, 0, :]
-        h1 = reps_1[:, 0, :]
-        h2 = reps_2[:, 0, :]
+        # Use mean pooling like ESMC classification does
+        mask_1 = attention_mask_1.unsqueeze(-1)
+        mask_2 = attention_mask_2.unsqueeze(-1)
+
+        h1 = (reps_1 * mask_1).sum(dim=1) / mask_1.sum(dim=1).clamp(min=1)
+        h2 = (reps_2 * mask_2).sum(dim=1) / mask_2.sum(dim=1).clamp(min=1)
 
         hidden_concat = torch.cat([h1, h2], dim=-1)
         
