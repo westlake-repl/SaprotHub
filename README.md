@@ -7,11 +7,15 @@
 
 The repository is an official implementation of [Democratizing Protein Language Model Training, Sharing and Collaboration (Nature Biotechnology)](https://www.biorxiv.org/content/10.1101/2024.05.24.595648v7). Making protein language models fine-tuning and sharing accessible to all - no coding or advanced machine learning expertise required!
 
-**Access via  [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (35M,650M) and  [ColabSeprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabSeprot.ipynb?hl=en) (including ColabESM1b (650M), ColabESM2 (35M, 150M, 650M), ColabProTrek (35M, 650M), ColabProtBERT (420M))！**
+**Access via  [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (35M,650M) and  [ColabSeprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabSeprot.ipynb?hl=en) (including ColabESM1b (650M), ColabESM2 (35M, 150M, 650M), ColabProTrek (35M, 650M), ColabProtBERT (420M))！** Note that ColabSaprot also supports training and prediction using only amino acid sequences.
 
 Watch [the ColabSaprot video tutorial](https://www.youtube.com/watch?v=nmLtjlCI_7M&t=716s).
 
 Go to [the OPMC website](https://theopmc.github.io/).
+
+Successful [wet-lab results](https://drive.google.com/file/d/1ZcDl0XYksTcUEaCfPI0tuEVo5CA031dg/view) by ColabSaprot from community.
+
+Finding models through [SaprotHub Search](https://huggingface.co/spaces/SaProtHub/SaprotHub-search), sharing your models via ColabSaprot to boost visibility and citations.
 
 ## News
 - **2025/10/24:**: ColabSaprot and SaprotHub are published in Nature Biotechnology, see [here](https://www.nature.com/articles/s41587-025-02859-7).
@@ -26,9 +30,9 @@ Go to [the OPMC website](https://theopmc.github.io/).
 2025/03/21: We’ve just set up a slack group for discussing ColabSaprot or asking any questions, you can join [here](https://westlakeai.slack.com/archives/C08JNBN40P7)!
 
 ### WeChat
-2024/12/01: You can scan the QR code to join our wechat groups （We currently host two active weichat groups with a total membership of over 500 researchers and practitioners）:
+2024/12/01: You can scan the QR code to join our wechat groups （We currently host 4 active weichat groups with a total membership of nearly 1000 researchers and practitioners）:
 
-<img src="https://github.com/user-attachments/assets/46d31f20-4616-43eb-850f-295eba99ac06" width="50%">
+<img src="https://github.com/user-attachments/assets/a72b1265-f327-45ad-a804-c86896859ab1" width="50%">
 
 > We have 2 PhD positions for international students at Westlake University! see [here](https://x.com/duguyuan/status/1897101692665258245).
 
