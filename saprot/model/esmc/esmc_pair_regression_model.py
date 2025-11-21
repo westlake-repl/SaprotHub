@@ -8,11 +8,14 @@ from .base import ESMCBaseModel
 
 @register_model
 class ESMCPairRegressionModel(ESMCBaseModel):
-    def __init__(self, **kwargs):
+    def __init__(self, target_mean: float = 0.0, target_std: float = 1.0, **kwargs):
         """
         Args:
             **kwargs: other arguments for ESMCBaseModel
         """
+        self.target_mean = float(target_mean)
+        self.target_std = max(float(target_std), 1e-6)
+        self._last_logits_norm = None
         super().__init__(task="pair_regression", **kwargs)
 
     def initialize_metrics(self, stage):
@@ -72,13 +75,17 @@ class ESMCPairRegressionModel(ESMCBaseModel):
         if head is None:
             head = self._get_head()
         
-        logits = head(hidden_concat).squeeze(-1)
+        logits_norm = head(hidden_concat).squeeze(-1)
+        self._last_logits_norm = logits_norm
+        logits = logits_norm * self.target_std + self.target_mean
         
         return logits
 
     def loss_func(self, stage, logits, labels):
         fitness = labels['labels'].to(logits)
-        loss = torch.nn.functional.mse_loss(logits, fitness)
+        fitness_norm = (fitness - self.target_mean) / self.target_std
+        logits_norm = self._last_logits_norm if self._last_logits_norm is not None else (logits - self.target_mean) / self.target_std
+        loss = torch.nn.functional.mse_loss(logits_norm, fitness_norm)
 
         # Update metrics
         for metric in self.metrics[stage].values():
