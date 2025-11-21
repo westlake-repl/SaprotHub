@@ -50,6 +50,12 @@ class ESMCRegressionModel(ESMCBaseModel):
               f"mean={pooled_repr.mean().item():.6f}, std={pooled_repr.std().item():.6f}, "
               f"min={pooled_repr.min().item():.6f}, max={pooled_repr.max().item():.6f}")
 
+        # Normalize pooled representations to stabilize the regression head
+        normalized_pooled_repr = self._normalize_pooled_repr(pooled_repr)
+        print(f"[DEBUG][ESMC::pooled_norm] shape={normalized_pooled_repr.shape}, "
+              f"mean={normalized_pooled_repr.mean().item():.6f}, std={normalized_pooled_repr.std(unbiased=False).item():.6f}, "
+              f"min={normalized_pooled_repr.min().item():.6f}, max={normalized_pooled_repr.max().item():.6f}")
+
         # CRITICAL FIX: Directly use modules_to_save.default if it exists
         # This ensures we use the same weight object that's being trained
         base_model = self._get_base_model()
@@ -71,8 +77,10 @@ class ESMCRegressionModel(ESMCBaseModel):
             print(f"[DEBUG][ESMC::head] Using _get_head() fallback")
         
         # Pass through classifier layers step by step for debugging
+        head_input = normalized_pooled_repr
+
         if isinstance(head, torch.nn.Sequential):
-            x = head[0](pooled_repr)  # Dropout
+            x = head[0](head_input)  # Dropout
             print(f"[DEBUG][ESMC::classifier] After Dropout: shape={x.shape}, mean={x.mean().item():.6f}, std={x.std().item():.6f}")
             
             x = head[1](x)  # Linear
@@ -89,19 +97,19 @@ class ESMCRegressionModel(ESMCBaseModel):
             logits = head[4](x).squeeze(dim=-1)  # Linear
         else:
             # If head is not Sequential, just call it directly
-            logits = head(pooled_repr).squeeze(dim=-1)
+            logits = head(head_input).squeeze(dim=-1)
         
         print(f"[DEBUG][ESMC::forward:end] logits_shape={logits.shape}, "
-              f"mean={logits.mean().item():.6f}, std={logits.std().item():.6f}, "
+              f"mean={logits.mean().item():.6f}, std={logits.std(unbiased=False).item():.6f}, "
               f"min={logits.min().item():.6f}, max={logits.max().item():.6f}")
 
         return logits
 
     def loss_func(self, stage, outputs, labels):
         fitness = labels['labels'].to(outputs)
-        print(f"[DEBUG][ESMC::loss:{stage}] outputs_mean={outputs.mean().item():.6f}, outputs_std={outputs.std().item():.6f}, "
+        print(f"[DEBUG][ESMC::loss:{stage}] outputs_mean={outputs.mean().item():.6f}, outputs_std={outputs.std(unbiased=False).item():.6f}, "
               f"outputs_min={outputs.min().item():.6f}, outputs_max={outputs.max().item():.6f}, "
-              f"labels_mean={fitness.mean().item():.6f}, labels_std={fitness.std().item():.6f}, "
+              f"labels_mean={fitness.mean().item():.6f}, labels_std={fitness.std(unbiased=False).item():.6f}, "
               f"labels_min={fitness.min().item():.6f}, labels_max={fitness.max().item():.6f}")
         loss = torch.nn.functional.mse_loss(outputs, fitness)
         print(f"[DEBUG][ESMC::loss:{stage}] loss={loss.item():.6f}")
