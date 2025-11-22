@@ -31,7 +31,7 @@ class ESMCRegressionModel(ESMCBaseModel):
         self._train_step_counter = 0
 
     # =========================================================================
-    # <<< 核心修正点 1: 精准定位并裁剪 LoRA 框架下的可训练参数 >>>
+    # <<< 核心修正点: 在梯度裁剪函数中增加日志，确认其有效性 >>>
     # =========================================================================
     def on_before_optimizer_step(self, optimizer, optimizer_idx=0):
         """
@@ -42,23 +42,44 @@ class ESMCRegressionModel(ESMCBaseModel):
         
         head = self._get_head()
 
-        # 根据日志和 Base 模型的 LoRA 设置，我们知道真正被训练的参数
-        # 在 head.modules_to_save.default 中。我们必须对这部分参数进行裁剪。
-        params_to_clip = None
+        params_to_clip = []
+        is_lora = False
         if hasattr(head, 'modules_to_save') and hasattr(head.modules_to_save, 'default'):
             # 精确找到 peft 库暴露出来的可训练参数
-            params_to_clip = head.modules_to_save.default.parameters()
-            # 增加一个日志，确认我们找到了正确的参数
-            if self._train_step_counter == 1:
-                 print("\n[INFO] LoRA detected. Gradient clipping will be applied to 'head.modules_to_save.default' parameters.\n")
+            params_to_clip = list(head.modules_to_save.default.parameters())
+            is_lora = True
         else:
-            # 如果没有使用 LoRA (例如 lora_kwargs=None)，则回退到裁剪整个 head
-            params_to_clip = head.parameters()
-            if self._train_step_counter == 1:
-                 print("\n[INFO] No LoRA detected. Applying gradient clipping to all 'head' parameters.\n")
+            # 如果没有使用 LoRA，则回退到裁剪整个 head
+            params_to_clip = list(head.parameters())
+
+        # 过滤掉没有梯度的参数
+        params_with_grad = [p for p in params_to_clip if p.grad is not None]
+        
+        if not params_with_grad:
+            # 如果没有参数有梯度，直接返回，避免错误
+            return
+
+        # 计算裁剪前的总梯度范数
+        total_norm_before = torch.norm(torch.stack([torch.norm(p.grad.detach(), 2.0) for p in params_with_grad]), 2.0)
 
         # 对找到的参数执行梯度裁剪
-        clip_grad_norm_(params_to_clip, max_norm=grad_clip_val)
+        clip_grad_norm_(params_with_grad, max_norm=grad_clip_val)
+        
+        # 计算裁剪后的总梯度范数
+        total_norm_after = torch.norm(torch.stack([torch.norm(p.grad.detach(), 2.0) for p in params_with_grad]), 2.0)
+
+        # 仅在主进程和特定步骤打印，避免日志刷屏
+        should_print = (not dist.is_initialized() or dist.get_rank() == 0)
+        if should_print and (self._train_step_counter == 1 or self._train_step_counter % 100 == 0):
+            print("\n" + "-"*20 + " GRADIENT CLIPPING REPORT " + "-"*20)
+            print(f"Train Step: {self._train_step_counter}")
+            if is_lora:
+                print("Mode: LoRA (clipping 'head.modules_to_save.default')")
+            else:
+                print("Mode: Standard (clipping 'head')")
+            print(f"Gradient Norm BEFORE clipping: {total_norm_before.item():.4f}")
+            print(f"Gradient Norm AFTER clipping:  {total_norm_after.item():.4f} (Target max: {grad_clip_val})")
+            print("-" * (40 + len(" GRADIENT CLIPPING REPORT ")) + "\n")
     # =========================================================================
 
     def _print_debug_report(self, stage, labels, pooled_repr, outputs, loss, step_count):
@@ -88,10 +109,9 @@ class ESMCRegressionModel(ESMCBaseModel):
             print(f"  - Final Logits Dtype: {outputs.dtype}")
             print(f"  - Calculated Loss: {loss.item():.6f}")
 
-            print("\n--- [4] GRADIENT CHECK (FOR TRAINABLE HEAD PARAMETERS) ---")
+            print("\n--- [4] GRADIENT CHECK (RAW, UNCLIPPED) ---")
             head = self._get_head()
             has_trainable_params = False
-            # 我们现在检查所有参数，以确认梯度流向
             for name, param in head.named_parameters():
                 if param.requires_grad:
                     has_trainable_params = True
@@ -120,34 +140,25 @@ class ESMCRegressionModel(ESMCBaseModel):
                 f"{stage}_R2": torchmetrics.R2Score(),
                 f"{stage}_pearson": torchmetrics.PearsonCorrCoef()}
 
-    # =========================================================================
-    # <<< 核心修正点 2: 稳定回归头的输入 >>>
-    # =========================================================================
     def forward(self, inputs, coords=None):
         proteins = self._parse_proteins_input(inputs)
         token_ids_batch, attention_mask, tokenizer = self._tokenize_sequences(proteins)
         representations = self._get_representations(token_ids_batch)
         pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
         
-        # 对池化后的表征进行 Layer Normalization
-        # 这一步是防止梯度爆炸的第一道防线，确保回归头的输入总是处于一个稳定的数值范围。
         if not hasattr(self, 'pool_norm'):
-            # 动态创建 LayerNorm 层，并确保它在正确的设备上
             self.pool_norm = torch.nn.LayerNorm(pooled_repr.size(-1)).to(pooled_repr.device)
         
         pooled_repr_norm = self.pool_norm(pooled_repr)
 
         head = self._get_head()
         
-        # 使用标准化后的表征输入回归头
         logits = head(pooled_repr_norm).squeeze(dim=-1).float()
 
-        # 在训练期间，保存未经标准化的 pooled_repr 以便在调试报告中查看其原始范围
         if self.training:
             self._last_pooled_repr = pooled_repr
 
         return logits
-    # =========================================================================
 
     def loss_func(self, stage, outputs, labels):
         fitness = labels['labels'].to(outputs)
@@ -156,7 +167,6 @@ class ESMCRegressionModel(ESMCBaseModel):
         if stage == "train":
             self._train_step_counter += 1
             
-            # 在第1步和之后每100步打印一次诊断报告
             if self._train_step_counter == 1 or self._train_step_counter % 100 == 0:
                 try:
                     if hasattr(self, '_last_pooled_repr'):
