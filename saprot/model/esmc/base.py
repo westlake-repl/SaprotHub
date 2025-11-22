@@ -424,42 +424,26 @@ class ESMCBaseModel(AbstractModel):
     
     def _get_head(self):
         """
-        Get task head module (prefer `classifier` when LoRA is used, since that's what LoRA wraps), handling PEFT wrapping
+        Get task head module. This version is corrected to always interact with the top-level
+        self.model, allowing PEFT wrappers to function as intended.
         
         Returns:
-            head: The task head module
+            head: The task head module (potentially wrapped by PEFT).
         """
-        # PEFT-wrapped path first
-        if hasattr(self.model, 'base_model') and hasattr(self.model.base_model, 'model'):
-            base = self.model.base_model.model
-            # When using LoRA, classifier is wrapped by default, so prioritize it
-            # For pair_regression, check classifier first (what LoRA wraps), then reg_head
-            if hasattr(base, 'classifier'):
-                head = base.classifier
-            elif self.task == "pair_regression" and hasattr(base, 'reg_head'):
-                head = base.reg_head
-            elif hasattr(base, 'head'):
-                head = base.head
-            elif self.task == "pair_regression" and hasattr(base, 'reg_head'):
-                # Final fallback: try reg_head if classifier not found
-                head = base.reg_head
-            else:
-                raise AttributeError("Cannot find task head (classifier/reg_head/head) in base model")
-            
-            if hasattr(head, 'modules_to_save') and hasattr(head.modules_to_save, 'default'):
-                return head.modules_to_save.default
-            elif hasattr(head, 'original_module'):
-                return head.original_module
-            else:
-                return head
-        # Non-PEFT: check in standard order
+        # The head we need is always an attribute of the top-level self.model.
+        # If self.model is a PeftModel, calling self.model.classifier will correctly
+        # invoke the PEFT wrapper's forward method. We should NOT manually unwrap it.
+        
+        # Priority order for different tasks
         if self.task == "pair_regression" and hasattr(self.model, 'reg_head'):
             return self.model.reg_head
-        if hasattr(self.model, 'head'):
-            return self.model.head
         if hasattr(self.model, 'classifier'):
             return self.model.classifier
-        raise AttributeError("Cannot find task head (head/classifier/reg_head) in model")
+        if hasattr(self.model, 'head'):
+            return self.model.head
+        
+        # If no head is found, raise an error.
+        raise AttributeError("Cannot find a task head (classifier, head, or reg_head) in self.model.")
 
     # Backward-compatible alias
     def _get_classifier(self):

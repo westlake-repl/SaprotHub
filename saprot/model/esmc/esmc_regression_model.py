@@ -23,12 +23,13 @@ class ESMCRegressionModel(ESMCBaseModel):
         """
         self.test_result_path = test_result_path
         super().__init__(task="regression", **kwargs)
-        # --- DEBUG: Flag to ensure debug info is printed only once ---
+        # --- 关键补充: 用于确保调试报告只打印一次的标志位 ---
         self._has_printed_debug_report = False
 
+    # --- 关键补充: 完整的调试报告函数 ---
     def _print_debug_report(self, stage, inputs, labels, pooled_repr, outputs, loss):
         """Prints a detailed report for one training step for debugging."""
-        # --- FIX: Make distributed check robust for single-GPU and multi-GPU ---
+        # --- 优化: 使用更稳健的分布式检查 ---
         should_print = (not dist.is_initialized() or dist.get_rank() == 0)
 
         if should_print and not self._has_printed_debug_report:
@@ -73,7 +74,7 @@ class ESMCRegressionModel(ESMCBaseModel):
                         grad_mean_abs = param.grad.abs().mean().item()
                         grad_info = f"{grad_mean_abs:.8f}"
                     else:
-                        grad_info = "None (NO GRADIENT!)"
+                        grad_info = "None (NO GRADIENT!)" # <--- 我们要解决的就是这个问题
                     print(f"  - Head Param '{name}': Grad Mean Abs = {grad_info}")
             
             if not has_trainable_params:
@@ -83,7 +84,7 @@ class ESMCRegressionModel(ESMCBaseModel):
             print("DEBUG REPORT END")
             print("="*40 + "\n")
             
-            self._has_printed_debug_report = True # Set flag to true after printing
+            self._has_printed_debug_report = True # 打印后设置标志位，防止重复打印
 
     def initialize_metrics(self, stage):
         return {f"{stage}_loss": torchmetrics.MeanSquaredError(),
@@ -103,19 +104,14 @@ class ESMCRegressionModel(ESMCBaseModel):
 
         # Pooling - always needs gradients for head training
         pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
-
-        # CRITICAL FIX: Directly use modules_to_save.default if it exists
-        # This ensures we use the same weight object that's being trained
-        base_model = self._get_base_model()
-        head = None
         
-        # Fallback to _get_head() if modules_to_save.default not found
-        if head is None:
-            head = self._get_head()
+        # --- 优化: 简化逻辑 ---
+        # 直接从基类获取正确的、可能被PEFT包装过的头
+        head = self._get_head()
         
         logits = head(pooled_repr).squeeze(dim=-1)
 
-        # Store intermediate tensor for debugging
+        # --- 关键补充: 保存中间结果以供调试报告使用 ---
         self._last_pooled_repr = pooled_repr
 
         return logits
@@ -124,28 +120,24 @@ class ESMCRegressionModel(ESMCBaseModel):
         fitness = labels['labels'].to(outputs)
         loss = torch.nn.functional.mse_loss(outputs, fitness)
 
-        # --- DEBUG: Call the debug report function ---
-        # This happens at the beginning of the step, so gradients are from the PREVIOUS step.
+        # --- 关键补充: 在计算损失后立即调用调试报告 ---
+        # 这会显示上一步反向传播后留下的梯度信息
         if stage == "train":
             try:
                 self._print_debug_report(stage, None, labels, self._last_pooled_repr, outputs, loss)
             except Exception as e:
-                # --- FIX: Make distributed check robust ---
                 should_warn = (not dist.is_initialized() or dist.get_rank() == 0)
                 if should_warn:
                     warnings.warn(f"DEBUG REPORT FAILED with error: {e}")
 
         # Update metrics
         for metric in self.metrics[stage].values():
-            # Training is on half precision, but metrics expect float to compute correctly.
             metric.set_dtype(torch.float32)
             metric.update(outputs.detach(), fitness)
 
         if stage == "train":
             log_dict = {"train_loss": loss.item()}
             self.log_info(log_dict)
-
-            # Reset train metrics
             self.reset_metrics("train")
 
         return loss
@@ -162,7 +154,7 @@ class ESMCRegressionModel(ESMCBaseModel):
             targets[-1] = targets[-1].unsqueeze(dim=0) if targets[-1].shape == () else targets[-1]
             targets = torch.cat(gather_all_tensors(torch.cat(targets, dim=0)))
 
-            # --- FIX: Make distributed check robust ---
+            # --- 优化: 使用更稳健的分布式检查 ---
             should_write = (not dist.is_initialized() or dist.get_rank() == 0)
             if should_write:
                 with open(self.test_result_path, 'w') as w:
