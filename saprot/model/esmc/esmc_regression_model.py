@@ -1,4 +1,4 @@
-# file: esmc/model/esm_c_regression.py (或者您对应的文件路径)
+# file: esmc/model/esm_c_regression.py
 
 import torchmetrics
 import torch.distributed as dist
@@ -68,10 +68,14 @@ class ESMCRegressionModel(ESMCBaseModel):
                     has_trainable_params = True
                     # 梯度是在 loss.backward() 后计算的，所以我们检查的是上一步的梯度
                     if param.grad is not None:
-                        grad_mean_abs = param.grad.abs().mean().item()
-                        grad_info = f"{grad_mean_abs:.8f}"
-                        if grad_mean_abs == 0.0:
-                            grad_info += " (WARNING: Gradient is exactly zero!)"
+                        # Check for NaN/Inf in gradients
+                        if torch.isnan(param.grad).any() or torch.isinf(param.grad).any():
+                            grad_info = "NaN or Inf (CRITICAL: Unstable gradient!)"
+                        else:
+                            grad_mean_abs = param.grad.abs().mean().item()
+                            grad_info = f"{grad_mean_abs:.8f}"
+                            if grad_mean_abs == 0.0:
+                                grad_info += " (WARNING: Gradient is exactly zero!)"
                     else:
                         # 在第一个step之后，如果梯度仍然是None，则说明梯度没有回传
                         grad_info = "None (If this is not step 1, it means NO GRADIENT is flowing!)"
@@ -98,7 +102,9 @@ class ESMCRegressionModel(ESMCBaseModel):
         
         head = self._get_head()
         
-        logits = head(pooled_repr).squeeze(dim=-1)
+        # <<< 核心修改点 >>>
+        # 将输出强制转换为 float32，以保证损失计算时的数值稳定性。
+        logits = head(pooled_repr).squeeze(dim=-1).float()
 
         # 保存中间结果以供调试报告使用
         if self.training:
