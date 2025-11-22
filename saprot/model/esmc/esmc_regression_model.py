@@ -28,7 +28,10 @@ class ESMCRegressionModel(ESMCBaseModel):
 
     def _print_debug_report(self, stage, inputs, labels, pooled_repr, outputs, loss):
         """Prints a detailed report for one training step for debugging."""
-        if dist.get_rank() == 0 and not self._has_printed_debug_report:
+        # --- FIX: Make distributed check robust for single-GPU and multi-GPU ---
+        should_print = (not dist.is_initialized() or dist.get_rank() == 0)
+
+        if should_print and not self._has_printed_debug_report:
             print("\n" + "="*40)
             print(f"DEBUG REPORT FOR: {self.__class__.__name__} (Stage: {stage})")
             print("="*40)
@@ -127,7 +130,9 @@ class ESMCRegressionModel(ESMCBaseModel):
             try:
                 self._print_debug_report(stage, None, labels, self._last_pooled_repr, outputs, loss)
             except Exception as e:
-                if dist.get_rank() == 0:
+                # --- FIX: Make distributed check robust ---
+                should_warn = (not dist.is_initialized() or dist.get_rank() == 0)
+                if should_warn:
                     warnings.warn(f"DEBUG REPORT FAILED with error: {e}")
 
         # Update metrics
@@ -157,7 +162,9 @@ class ESMCRegressionModel(ESMCBaseModel):
             targets[-1] = targets[-1].unsqueeze(dim=0) if targets[-1].shape == () else targets[-1]
             targets = torch.cat(gather_all_tensors(torch.cat(targets, dim=0)))
 
-            if dist.get_rank() == 0:
+            # --- FIX: Make distributed check robust ---
+            should_write = (not dist.is_initialized() or dist.get_rank() == 0)
+            if should_write:
                 with open(self.test_result_path, 'w') as w:
                     w.write("pred\ttarget\n")
                     for pred, target in zip(preds, targets):

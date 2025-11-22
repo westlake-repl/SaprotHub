@@ -22,7 +22,10 @@ class SaprotRegressionModel(SaprotBaseModel):
 
     def _print_debug_report(self, stage, inputs, labels, repr_before_head, outputs, loss):
         """Prints a detailed report for one training step for debugging."""
-        if dist.get_rank() == 0 and not self._has_printed_debug_report:
+        # --- FIX: Make distributed check robust for single-GPU and multi-GPU ---
+        should_print = (not dist.is_initialized() or dist.get_rank() == 0)
+
+        if should_print and not self._has_printed_debug_report:
             print("\n" + "="*40)
             print(f"DEBUG REPORT FOR: {self.__class__.__name__} (Stage: {stage})")
             print("="*40)
@@ -54,7 +57,6 @@ class SaprotRegressionModel(SaprotBaseModel):
 
             # --- 4. CRITICAL: GRADIENT CHECK (from previous step) ---
             print("\n--- 4. GRADIENT CHECK (for trainable parameters) ---")
-            # This logic needs to adapt based on the model structure (ProtBERT vs ESM-style)
             trainable_params_found = False
             try:
                 # General approach: iterate through all parameters and find those requiring gradients
@@ -102,14 +104,8 @@ class SaprotRegressionModel(SaprotBaseModel):
                 logits = self.model.classifier.out_proj(x).squeeze(dim=-1)
             else:
                 outputs = self.model(**inputs)
-                # Assuming the structure is backbone -> classifier -> logits
-                # We need to get the input to the final layer. This can be tricky.
-                # A common pattern is that the logits come from a final nn.Linear layer.
-                # Here we assume the direct output `outputs.logits` is what we need.
-                # For a more detailed debug, one might need to hook into the model.
                 logits = outputs.logits.squeeze(dim=-1)
-                # Placeholder for repr_before_head in this case
-                repr_before_head = torch.zeros(1) # Not easily accessible without model hooks
+                repr_before_head = torch.zeros(1) 
 
         # For ProtBERT
         elif hasattr(self.model, "bert"):
@@ -129,7 +125,9 @@ class SaprotRegressionModel(SaprotBaseModel):
             try:
                 self._print_debug_report(stage, None, labels, self._last_repr_before_head, outputs, loss)
             except Exception as e:
-                if dist.get_rank() == 0:
+                # --- FIX: Make distributed check robust ---
+                should_warn = (not dist.is_initialized() or dist.get_rank() == 0)
+                if should_warn:
                     warnings.warn(f"DEBUG REPORT FAILED with error: {e}")
 
         # Update metrics
@@ -157,7 +155,9 @@ class SaprotRegressionModel(SaprotBaseModel):
             targets[-1] = targets[-1].unsqueeze(dim=0) if targets[-1].shape == () else targets[-1]
             targets = torch.cat(gather_all_tensors(torch.cat(targets, dim=0)))
 
-            if dist.get_rank() == 0:
+            # --- FIX: Make distributed check robust ---
+            should_write = (not dist.is_initialized() or dist.get_rank() == 0)
+            if should_write:
                 with open(self.test_result_path, 'w') as w:
                     w.write("pred\ttarget\n")
                     for pred, target in zip(preds, targets):
