@@ -1,7 +1,6 @@
 import torchmetrics
 import torch.distributed as dist
 import torch
-import torch.nn.functional as F
 
 from torch.nn.utils.rnn import pad_sequence
 from ..model_interface import register_model
@@ -15,16 +14,13 @@ except ImportError:
 
 @register_model
 class ESMCRegressionModel(ESMCBaseModel):
-    def __init__(self, test_result_path: str = None, target_mean: float = 0.0, target_std: float = 1.0, **kwargs):
+    def __init__(self, test_result_path: str = None, **kwargs):
         """
         Args:
             test_result_path: path to save test result
             **kwargs: other arguments for ESMCBaseModel
         """
         self.test_result_path = test_result_path
-        self.target_mean = float(target_mean)
-        self.target_std = max(float(target_std), 1e-6)
-        self._last_logits_norm = None
         super().__init__(task="regression", **kwargs)
 
     def initialize_metrics(self, stage):
@@ -43,10 +39,8 @@ class ESMCRegressionModel(ESMCBaseModel):
         # Backbone representations
         representations = self._get_representations(token_ids_batch)
 
-        # Use mean pooling like ESMC classification does
+        # Pooling - always needs gradients for head training
         pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
-        # Normalize pooled representations to stabilize the regression head
-        normalized_pooled_repr = self._normalize_pooled_repr(pooled_repr)
 
         # CRITICAL FIX: Directly use modules_to_save.default if it exists
         # This ensures we use the same weight object that's being trained
@@ -65,29 +59,13 @@ class ESMCRegressionModel(ESMCBaseModel):
         if head is None:
             head = self._get_head()
         
-        # Pass through classifier layers step by step for debugging
-        head_input = normalized_pooled_repr
+        logits = head(pooled_repr).squeeze(dim=-1)
 
-        if isinstance(head, torch.nn.Sequential):
-            x = head[0](head_input)
-            x = head[1](x)
-            x = head[2](x)
-            x = head[3](x)
-            
-            logits_norm = head[4](x).squeeze(dim=-1)  # Linear
-        else:
-            # If head is not Sequential, just call it directly
-            logits_norm = head(head_input).squeeze(dim=-1)
-        
-        self._last_logits_norm = logits_norm
-        logits = logits_norm * self.target_std + self.target_mean
         return logits
 
     def loss_func(self, stage, outputs, labels):
         fitness = labels['labels'].to(outputs)
-        fitness_norm = (fitness - self.target_mean) / self.target_std
-        logits_norm = self._last_logits_norm if self._last_logits_norm is not None else (outputs - self.target_mean) / self.target_std
-        loss = torch.nn.functional.mse_loss(logits_norm, fitness_norm)
+        loss = torch.nn.functional.mse_loss(outputs, fitness)
 
         # Update metrics
         for metric in self.metrics[stage].values():

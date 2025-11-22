@@ -8,14 +8,11 @@ from .base import ESMCBaseModel
 
 @register_model
 class ESMCPairRegressionModel(ESMCBaseModel):
-    def __init__(self, target_mean: float = 0.0, target_std: float = 1.0, **kwargs):
+    def __init__(self, **kwargs):
         """
         Args:
             **kwargs: other arguments for ESMCBaseModel
         """
-        self.target_mean = float(target_mean)
-        self.target_std = max(float(target_std), 1e-6)
-        self._last_logits_norm = None
         super().__init__(task="pair_regression", **kwargs)
 
     def initialize_metrics(self, stage):
@@ -43,16 +40,14 @@ class ESMCPairRegressionModel(ESMCBaseModel):
             reps_1 = self._get_representations(token_ids_1)
             reps_2 = self._get_representations(token_ids_2)
 
-        # Use mean pooling like ESMC classification does
+        reps_1 = F.layer_norm(reps_1, reps_1.shape[-1:])
+        reps_2 = F.layer_norm(reps_2, reps_2.shape[-1:])
+
         mask_1 = attention_mask_1.unsqueeze(-1)
         mask_2 = attention_mask_2.unsqueeze(-1)
 
         h1 = (reps_1 * mask_1).sum(dim=1) / mask_1.sum(dim=1).clamp(min=1)
         h2 = (reps_2 * mask_2).sum(dim=1) / mask_2.sum(dim=1).clamp(min=1)
-
-        # Normalize pooled representations for numerical stability
-        h1 = self._normalize_pooled_repr(h1)
-        h2 = self._normalize_pooled_repr(h2)
 
         hidden_concat = torch.cat([h1, h2], dim=-1)
         
@@ -75,17 +70,11 @@ class ESMCPairRegressionModel(ESMCBaseModel):
         if head is None:
             head = self._get_head()
         
-        logits_norm = head(hidden_concat).squeeze(-1)
-        self._last_logits_norm = logits_norm
-        logits = logits_norm * self.target_std + self.target_mean
-        
-        return logits
+        return head(hidden_concat).squeeze(-1)
 
     def loss_func(self, stage, logits, labels):
         fitness = labels['labels'].to(logits)
-        fitness_norm = (fitness - self.target_mean) / self.target_std
-        logits_norm = self._last_logits_norm if self._last_logits_norm is not None else (logits - self.target_mean) / self.target_std
-        loss = torch.nn.functional.mse_loss(logits_norm, fitness_norm)
+        loss = torch.nn.functional.mse_loss(logits, fitness)
 
         # Update metrics
         for metric in self.metrics[stage].values():
