@@ -30,6 +30,15 @@ class ESMCRegressionModel(ESMCBaseModel):
                 f"{stage}_pearson": torchmetrics.PearsonCorrCoef()}
 
     def forward(self, inputs, coords=None):
+        # =================================================================
+        # START: DETAILED DEBUGGING PRINTS
+        # =================================================================
+        print("\n" + "="*40)
+        print("--- ENTERING ESMCRegressionModel FORWARD PASS ---")
+        print(f"Step 1: Inspecting self.model object")
+        print(f"  - Type of self.model: {type(self.model)}")
+        # 在 LoRA 场景下，我们期望看到 <class 'peft.peft_model.PeftModel'>
+        
         # Parse proteins input
         proteins = self._parse_proteins_input(inputs)
 
@@ -39,27 +48,81 @@ class ESMCRegressionModel(ESMCBaseModel):
         # Backbone representations
         representations = self._get_representations(token_ids_batch)
 
-        # Pooling - always needs gradients for head training
+        # Pooling
         pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
 
-        # CRITICAL FIX: Directly use modules_to_save.default if it exists
-        # This ensures we use the same weight object that's being trained
+        print("\nStep 2: Acquiring the head module")
         base_model = self._get_base_model()
+        print(f"  - Type of base_model (from self._get_base_model()): {type(base_model)}")
+        # 我们期望看到 <class 'esm.sdk.api.ESMProtein'> 或类似的底层模型
+
         head = None
         
-        # First, try to get modules_to_save.default directly
-        if hasattr(base_model, 'classifier') and hasattr(base_model.classifier, 'modules_to_save'):
-            if hasattr(base_model.classifier.modules_to_save, 'default'):
-                head = base_model.classifier.modules_to_save.default
-        elif hasattr(base_model, 'head') and hasattr(base_model.head, 'modules_to_save'):
-            if hasattr(base_model.head.modules_to_save, 'default'):
-                head = base_model.head.modules_to_save.default
+        # --- Path A: Manual Search Logic ---
+        print("\nStep 3: Executing the manual search logic (if/elif block)")
         
-        # Fallback to _get_head() if modules_to_save.default not found
+        # Check for 'classifier'
+        if hasattr(base_model, 'classifier'):
+            print("  - Found 'classifier' attribute on base_model.")
+            print(f"    - Type of base_model.classifier: {type(base_model.classifier)}")
+            # 在 LoRA 场景下，我们期望看到 <class 'peft.tuners.lora.Linear'>
+            if hasattr(base_model.classifier, 'modules_to_save'):
+                print("    - 'classifier' has 'modules_to_save' attribute.")
+                if hasattr(base_model.classifier.modules_to_save, 'default'):
+                    print("    - 'modules_to_save' has 'default' attribute. Assigning it to head.")
+                    head = base_model.classifier.modules_to_save.default
+                    print(f"    - Head found via manual search (classifier path): {type(head)}")
+                else:
+                    print("    - 'modules_to_save' does NOT have 'default' attribute.")
+            else:
+                print("    - 'classifier' does NOT have 'modules_to_save' attribute.")
+        else:
+            print("  - Did NOT find 'classifier' attribute on base_model.")
+
+        # Check for 'head' if classifier path failed
+        if head is None and hasattr(base_model, 'head'):
+            print("  - Found 'head' attribute on base_model.")
+            print(f"    - Type of base_model.head: {type(base_model.head)}")
+            if hasattr(base_model.head, 'modules_to_save'):
+                print("    - 'head' has 'modules_to_save' attribute.")
+                if hasattr(base_model.head.modules_to_save, 'default'):
+                    print("    - 'modules_to_save' has 'default' attribute. Assigning it to head.")
+                    head = base_model.head.modules_to_save.default
+                    print(f"    - Head found via manual search (head path): {type(head)}")
+                else:
+                    print("    - 'modules_to_save' does NOT have 'default' attribute.")
+            else:
+                print("    - 'head' does NOT have 'modules_to_save' attribute.")
+        elif head is None:
+            print("  - Did NOT find 'head' attribute on base_model.")
+
+        print(f"\nStep 4: Result of manual search")
+        print(f"  - 'head' object after manual search: {type(head)}")
+
+        # --- Path B: The self._get_head() helper function ---
+        print("\nStep 5: Calling the helper function self._get_head() for comparison")
+        head_from_helper = self._get_head()
+        print(f"  - 'head' object returned by self._get_head(): {type(head_from_helper)}")
+
+        # --- Final Decision Logic ---
         if head is None:
+            print("\nStep 6: Manual search failed. Falling back to self._get_head().")
             head = self._get_head()
+        else:
+            print("\nStep 6: Manual search succeeded. Using the manually found head.")
+
+        print(f"\nStep 7: Final 'head' object being used for computation")
+        print(f"  - Final head type: {type(head)}")
+        # 我们期望看到 <class 'torch.nn.modules.linear.Linear'>
+
+        # =================================================================
+        # END: DETAILED DEBUGGING PRINTS
+        # =================================================================
         
         logits = head(pooled_repr).squeeze(dim=-1)
+        
+        print("--- FORWARD PASS COMPLETED ---")
+        print("="*40 + "\n")
 
         return logits
 
