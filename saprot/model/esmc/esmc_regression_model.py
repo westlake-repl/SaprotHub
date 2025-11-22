@@ -1,3 +1,5 @@
+# file: esmc/model/esm_c_regression.py (或者您对应的文件路径)
+
 import torchmetrics
 import torch.distributed as dist
 import torch
@@ -23,68 +25,64 @@ class ESMCRegressionModel(ESMCBaseModel):
         """
         self.test_result_path = test_result_path
         super().__init__(task="regression", **kwargs)
-        # --- 关键补充: 用于确保调试报告只打印一次的标志位 ---
-        self._has_printed_debug_report = False
+        # 新增: 用于记录训练步骤的计数器
+        self._train_step_counter = 0
 
-    # --- 关键补充: 完整的调试报告函数 ---
-    def _print_debug_report(self, stage, inputs, labels, pooled_repr, outputs, loss):
-        """Prints a detailed report for one training step for debugging."""
-        # --- 优化: 使用更稳健的分布式检查 ---
+    # 修改: 调试报告函数现在接受一个 step_count 参数
+    def _print_debug_report(self, stage, labels, pooled_repr, outputs, loss, step_count):
+        """在指定的训练步骤打印详细的调试报告。"""
+        # 确保只在主进程打印
         should_print = (not dist.is_initialized() or dist.get_rank() == 0)
 
-        if should_print and not self._has_printed_debug_report:
-            print("\n" + "="*40)
-            print(f"DEBUG REPORT FOR: {self.__class__.__name__} (Stage: {stage})")
-            print("="*40)
+        if should_print:
+            print("\n" + "="*60)
+            # 修改: 报告标题现在会显示当前的步骤数
+            print(f"DIAGNOSTIC REPORT FOR: {self.__class__.__name__} (Train Step: {step_count})")
+            print("="*60)
 
-            # --- 1. Check Inputs & Labels ---
-            print("\n--- 1. INPUTS & LABELS ---")
+            # 1. 检查输入和标签
+            print("\n--- [1] LABELS ---")
             fitness_labels = labels['labels'].to(outputs.device, dtype=torch.float32)
-            print(f"Labels (fitness) shape: {fitness_labels.shape}")
-            print(f"Labels (fitness) dtype: {fitness_labels.dtype}")
+            print(f"  - Shape: {fitness_labels.shape}")
+            print(f"  - Dtype: {fitness_labels.dtype}")
             if fitness_labels.numel() > 0:
-                print(f"Labels (fitness) values (min/mean/max): {fitness_labels.min().item():.4f} / {fitness_labels.mean().item():.4f} / {fitness_labels.max().item():.4f}")
-            print(f"Sample Labels: {fitness_labels[:5].cpu().numpy()}")
+                print(f"  - Stats (min/mean/max): {fitness_labels.min().item():.4f} / {fitness_labels.mean().item():.4f} / {fitness_labels.max().item():.4f}")
 
-            # --- 2. Check Model Internals ---
-            print("\n--- 2. MODEL INTERNALS ---")
-            print(f"Pooled Representation shape: {pooled_repr.shape}")
-            print(f"Pooled Representation dtype: {pooled_repr.dtype}")
-            if pooled_repr.numel() > 0:
-                print(f"Pooled Representation values (min/mean/max/std): {pooled_repr.min().item():.4f} / {pooled_repr.mean().item():.4f} / {pooled_repr.max().item():.4f} / {pooled_repr.std().item():.4f}")
+            # 2. 检查模型中间输出
+            print("\n--- [2] MODEL INTERNALS ---")
+            print(f"  - Pooled Representation Shape: {pooled_repr.shape}")
+            print(f"  - Pooled Representation Dtype: {pooled_repr.dtype}")
             
-            # --- 3. Check Final Outputs & Loss ---
-            print("\n--- 3. FINAL OUTPUTS & LOSS ---")
-            print(f"Final Logits (outputs) shape: {outputs.shape}")
-            print(f"Final Logits (outputs) dtype: {outputs.dtype}")
-            if outputs.numel() > 0:
-                print(f"Final Logits (outputs) values (min/mean/max/std): {outputs.min().item():.4f} / {outputs.mean().item():.4f} / {outputs.max().item():.4f} / {outputs.std().item():.4f}")
-            print(f"Sample Predictions: {outputs[:5].cpu().numpy()}")
-            print(f"Calculated Loss: {loss.item():.6f}")
+            # 3. 检查最终输出和损失
+            print("\n--- [3] FINAL OUTPUTS & LOSS ---")
+            print(f"  - Final Logits Shape: {outputs.shape}")
+            print(f"  - Final Logits Dtype: {outputs.dtype}")
+            print(f"  - Calculated Loss: {loss.item():.6f}")
 
-            # --- 4. CRITICAL: GRADIENT CHECK (from previous step) ---
-            print("\n--- 4. GRADIENT CHECK (for trainable parameters) ---")
+            # 4. 关键：梯度检查！
+            print("\n--- [4] GRADIENT CHECK (FOR TRAINABLE HEAD PARAMETERS) ---")
             head = self._get_head()
             has_trainable_params = False
             for name, param in head.named_parameters():
                 if param.requires_grad:
                     has_trainable_params = True
-                    grad_info = "N/A (first step)"
+                    # 梯度是在 loss.backward() 后计算的，所以我们检查的是上一步的梯度
                     if param.grad is not None:
                         grad_mean_abs = param.grad.abs().mean().item()
                         grad_info = f"{grad_mean_abs:.8f}"
+                        if grad_mean_abs == 0.0:
+                            grad_info += " (WARNING: Gradient is exactly zero!)"
                     else:
-                        grad_info = "None (NO GRADIENT!)" # <--- 我们要解决的就是这个问题
+                        # 在第一个step之后，如果梯度仍然是None，则说明梯度没有回传
+                        grad_info = "None (If this is not step 1, it means NO GRADIENT is flowing!)"
                     print(f"  - Head Param '{name}': Grad Mean Abs = {grad_info}")
             
             if not has_trainable_params:
                 print("  - WARNING: No trainable parameters found in the regression head!")
 
-            print("\n" + "="*40)
-            print("DEBUG REPORT END")
-            print("="*40 + "\n")
-            
-            self._has_printed_debug_report = True # 打印后设置标志位，防止重复打印
+            print("\n" + "="*60)
+            print(f"DIAGNOSTIC REPORT END (Step: {step_count})")
+            print("="*60 + "\n")
 
     def initialize_metrics(self, stage):
         return {f"{stage}_loss": torchmetrics.MeanSquaredError(),
@@ -93,26 +91,18 @@ class ESMCRegressionModel(ESMCBaseModel):
                 f"{stage}_pearson": torchmetrics.PearsonCorrCoef()}
 
     def forward(self, inputs, coords=None):
-        # Parse proteins input
         proteins = self._parse_proteins_input(inputs)
-
-        # Tokenization & Padding
         token_ids_batch, attention_mask, tokenizer = self._tokenize_sequences(proteins)
-
-        # Backbone representations
         representations = self._get_representations(token_ids_batch)
-
-        # Pooling - always needs gradients for head training
         pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
         
-        # --- 优化: 简化逻辑 ---
-        # 直接从基类获取正确的、可能被PEFT包装过的头
         head = self._get_head()
         
         logits = head(pooled_repr).squeeze(dim=-1)
 
-        # --- 关键补充: 保存中间结果以供调试报告使用 ---
-        self._last_pooled_repr = pooled_repr
+        # 保存中间结果以供调试报告使用
+        if self.training:
+            self._last_pooled_repr = pooled_repr
 
         return logits
 
@@ -120,17 +110,23 @@ class ESMCRegressionModel(ESMCBaseModel):
         fitness = labels['labels'].to(outputs)
         loss = torch.nn.functional.mse_loss(outputs, fitness)
 
-        # --- 关键补充: 在计算损失后立即调用调试报告 ---
-        # 这会显示上一步反向传播后留下的梯度信息
+        # 主要修改: 实现周期性打印逻辑
         if stage == "train":
-            try:
-                self._print_debug_report(stage, None, labels, self._last_pooled_repr, outputs, loss)
-            except Exception as e:
-                should_warn = (not dist.is_initialized() or dist.get_rank() == 0)
-                if should_warn:
-                    warnings.warn(f"DEBUG REPORT FAILED with error: {e}")
+            # 每次训练步骤，计数器加一
+            self._train_step_counter += 1
+            
+            # 在第1步打印（用于初始检查），然后每100步打印一次
+            if self._train_step_counter == 1 or self._train_step_counter % 100 == 0:
+                try:
+                    if hasattr(self, '_last_pooled_repr'):
+                        # 调用调试报告，并传入当前步骤数
+                        self._print_debug_report(stage, labels, self._last_pooled_repr, outputs, loss, self._train_step_counter)
+                except Exception as e:
+                    should_warn = (not dist.is_initialized() or dist.get_rank() == 0)
+                    if should_warn:
+                        warnings.warn(f"DIAGNOSTIC REPORT FAILED at step {self._train_step_counter} with error: {e}")
 
-        # Update metrics
+        # 更新指标
         for metric in self.metrics[stage].values():
             metric.set_dtype(torch.float32)
             metric.update(outputs.detach(), fitness)
@@ -154,7 +150,6 @@ class ESMCRegressionModel(ESMCBaseModel):
             targets[-1] = targets[-1].unsqueeze(dim=0) if targets[-1].shape == () else targets[-1]
             targets = torch.cat(gather_all_tensors(torch.cat(targets, dim=0)))
 
-            # --- 优化: 使用更稳健的分布式检查 ---
             should_write = (not dist.is_initialized() or dist.get_rank() == 0)
             if should_write:
                 with open(self.test_result_path, 'w') as w:
