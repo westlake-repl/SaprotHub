@@ -53,9 +53,11 @@ class ESMCPairRegressionModel(ESMCBaseModel):
         
         # Fallback to _get_head()
         head = self._get_head()
+        
+        logits_before_sigmoid = head(hidden_concat)
+        print("Paired Protein Model - Head Output:", logits_before_sigmoid.detach().cpu().numpy())
 
-        raw_output = head(hidden_concat).squeeze(-1)
-        scaled_output = torch.sigmoid(raw_output)
+        scaled_output = torch.sigmoid(head(hidden_concat).squeeze(-1))
 
         return scaled_output
 
