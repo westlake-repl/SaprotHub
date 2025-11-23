@@ -51,7 +51,7 @@ class ESMCRegressionModel(ESMCBaseModel):
         base_model = self._get_base_model()
         head = None
         
-        # Fallback to _get_head() if modules_to_save.default not found
+        # Fallback to _get_head()
         if head is None:
             head = self._get_head()
         

@@ -55,18 +55,7 @@ class ESMCPairRegressionModel(ESMCBaseModel):
         # This ensures we use the same weight object that's being trained
         head = None
         
-        # First, try to get modules_to_save.default directly
-        if hasattr(base_model, 'reg_head') and hasattr(base_model.reg_head, 'modules_to_save'):
-            if hasattr(base_model.reg_head.modules_to_save, 'default'):
-                head = base_model.reg_head.modules_to_save.default
-        elif hasattr(base_model, 'classifier') and hasattr(base_model.classifier, 'modules_to_save'):
-            if hasattr(base_model.classifier.modules_to_save, 'default'):
-                head = base_model.classifier.modules_to_save.default
-        elif hasattr(base_model, 'head') and hasattr(base_model.head, 'modules_to_save'):
-            if hasattr(base_model.head.modules_to_save, 'default'):
-                head = base_model.head.modules_to_save.default
-        
-        # Fallback to _get_head() if modules_to_save.default not found
+        # Fallback to _get_head()
         if head is None:
             head = self._get_head()
         
