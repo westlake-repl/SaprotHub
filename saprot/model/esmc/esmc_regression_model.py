@@ -84,9 +84,6 @@ class ESMCRegressionModel(ESMCBaseModel):
         head = self._get_head()
         
         logits = head(pooled_repr).squeeze(dim=-1)
-        # NOTE: This sigmoid is the most likely cause of the problem.
-        # It forces all predictions to be between 0 and 1.
-        logits = torch.sigmoid(logits)
 
         return logits
 
