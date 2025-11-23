@@ -51,15 +51,13 @@ class ESMCPairRegressionModel(ESMCBaseModel):
 
         hidden_concat = torch.cat([h1, h2], dim=-1)
         
-        # CRITICAL FIX: Directly use modules_to_save.default if it exists
-        # This ensures we use the same weight object that's being trained
-        head = None
-        
         # Fallback to _get_head()
-        if head is None:
-            head = self._get_head()
-        
-        return head(hidden_concat).squeeze(-1)
+        head = self._get_head()
+
+        raw_output = head(hidden_concat).squeeze(-1)
+        scaled_output = torch.sigmoid(raw_output)
+
+        return scaled_output
 
     def loss_func(self, stage, logits, labels):
         fitness = labels['labels'].to(logits)

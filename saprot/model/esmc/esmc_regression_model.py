@@ -49,11 +49,9 @@ class ESMCRegressionModel(ESMCBaseModel):
         # CRITICAL FIX: Directly use modules_to_save.default if it exists
         # This ensures we use the same weight object that's being trained
         base_model = self._get_base_model()
-        head = None
-        
+
         # Fallback to _get_head()
-        if head is None:
-            head = self._get_head()
+        head = self._get_head()
         
         logits = head(pooled_repr).squeeze(dim=-1)
         logits = torch.sigmoid(logits)
