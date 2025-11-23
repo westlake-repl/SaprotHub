@@ -23,6 +23,50 @@ class ESMCRegressionModel(ESMCBaseModel):
         """
         self.test_result_path = test_result_path
         super().__init__(task="regression", **kwargs)
+        self._train_step_counter = 0
+
+    # ======================= DIAGNOSTIC FUNCTION =======================
+    def _print_forward_diagnostics(self, model_name, stage, outputs, labels):
+        """Prints a detailed report of inputs and outputs for debugging."""
+        # Run only on rank 0 to avoid log spam
+        if dist.is_initialized() and dist.get_rank() != 0:
+            return
+        
+        # Print only on the first step and then periodically
+        if self._train_step_counter > 2 and self._train_step_counter % 100 != 0:
+            return
+
+        print("\n" + "="*30 + f" DIAGNOSTIC REPORT: {model_name} " + "="*30)
+        print(f"Stage: {stage} | Global Step: {self._train_step_counter}")
+        print("-" * (62 + len(model_name)))
+
+        # 1. Analyze Labels
+        fitness_labels = labels['labels'].to(outputs.device, dtype=torch.float32)
+        print("\n--- [1] LABELS (Ground Truth) ---")
+        print(f"  - Shape: {fitness_labels.shape}")
+        print(f"  - Dtype: {fitness_labels.dtype}")
+        if fitness_labels.numel() > 0:
+            print(f"  - Stats (min/mean/max/std): "
+                  f"{fitness_labels.min().item():.4f} / "
+                  f"{fitness_labels.mean().item():.4f} / "
+                  f"{fitness_labels.max().item():.4f} / "
+                  f"{fitness_labels.std().item():.4f}")
+            print(f"  - First 5 values: {fitness_labels.flatten()[:5].tolist()}")
+
+        # 2. Analyze Model Outputs
+        print("\n--- [2] MODEL OUTPUTS (Predictions) ---")
+        print(f"  - Shape: {outputs.shape}")
+        print(f"  - Dtype: {outputs.dtype}")
+        if outputs.numel() > 0:
+            print(f"  - Stats (min/mean/max/std): "
+                  f"{outputs.min().item():.4f} / "
+                  f"{outputs.mean().item():.4f} / "
+                  f"{outputs.max().item():.4f} / "
+                  f"{outputs.std().item():.4f}")
+            print(f"  - First 5 values: {outputs.flatten()[:5].tolist()}")
+        
+        print("\n" + "="* (62 + len(model_name)) + "\n")
+    # ====================================================================
 
     def initialize_metrics(self, stage):
         return {f"{stage}_loss": torchmetrics.MeanSquaredError(),
@@ -31,50 +75,38 @@ class ESMCRegressionModel(ESMCBaseModel):
                 f"{stage}_pearson": torchmetrics.PearsonCorrCoef()}
 
     def forward(self, inputs, coords=None):
-        # Parse proteins input
         proteins = self._parse_proteins_input(inputs)
-
-        # Tokenization & Padding
         token_ids_batch, attention_mask, tokenizer = self._tokenize_sequences(proteins)
-
-        # Backbone representations
         representations = self._get_representations(token_ids_batch)
-
-        # Normalize representations before pooling (mirrors pair_regression behaviour)
         representations = F.layer_norm(representations, representations.shape[-1:])
-
-        # Pooling - always needs gradients for head training
         pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
-
-        # CRITICAL FIX: Directly use modules_to_save.default if it exists
-        # This ensures we use the same weight object that's being trained
-        base_model = self._get_base_model()
-        head = None
         
-        # Fallback to _get_head() if modules_to_save.default not found
-        if head is None:
-            head = self._get_head()
+        head = self._get_head()
         
         logits = head(pooled_repr).squeeze(dim=-1)
+        # NOTE: This sigmoid is the most likely cause of the problem.
+        # It forces all predictions to be between 0 and 1.
         logits = torch.sigmoid(logits)
 
         return logits
 
     def loss_func(self, stage, outputs, labels):
+        if stage == "train":
+            self._train_step_counter += 1
+
+        # <<< CALLING THE DIAGNOSTIC FUNCTION HERE >>>
+        self._print_forward_diagnostics("ESMCRegressionModel", stage, outputs, labels)
+
         fitness = labels['labels'].to(outputs)
         loss = torch.nn.functional.mse_loss(outputs, fitness)
 
-        # Update metrics
         for metric in self.metrics[stage].values():
-            # Training is on half precision, but metrics expect float to compute correctly.
             metric.set_dtype(torch.float32)
             metric.update(outputs.detach(), fitness)
 
         if stage == "train":
             log_dict = {"train_loss": loss.item()}
             self.log_info(log_dict)
-
-            # Reset train metrics
             self.reset_metrics("train")
 
         return loss
@@ -91,29 +123,20 @@ class ESMCRegressionModel(ESMCBaseModel):
             targets[-1] = targets[-1].unsqueeze(dim=0) if targets[-1].shape == () else targets[-1]
             targets = torch.cat(gather_all_tensors(torch.cat(targets, dim=0)))
 
-            if dist.get_rank() == 0:
+            if not dist.is_initialized() or dist.get_rank() == 0:
                 with open(self.test_result_path, 'w') as w:
                     w.write("pred\ttarget\n")
                     for pred, target in zip(preds, targets):
                         w.write(f"{pred.item()}\t{target.item()}\n")
         
         log_dict = self.get_log_dict("test")
-
-        # if dist.get_rank() == 0:
-        #     print(log_dict)
-
         self.output_test_metrics(log_dict)
-
         self.log_info(log_dict)
         self.reset_metrics("test")
 
     def on_validation_epoch_end(self):
         log_dict = self.get_log_dict("valid")
-
-        # if dist.get_rank() == 0:
-        #     print(log_dict)
         self.log_info(log_dict)
         self.reset_metrics("valid")
         self.check_save_condition(log_dict["valid_loss"], mode="min")
-        
         self.plot_valid_metrics_curve(log_dict)
