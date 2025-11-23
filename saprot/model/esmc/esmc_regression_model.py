@@ -52,11 +52,9 @@ class ESMCRegressionModel(ESMCBaseModel):
 
         # Fallback to _get_head()
         head = self._get_head()
-
-        logits_before_sigmoid = head(pooled_repr)
-        print("Single Protein Model - Head Output:", logits_before_sigmoid.detach().cpu().numpy())
-
-        logits = torch.sigmoid(head(pooled_repr).squeeze(dim=-1))
+        
+        logits = head(pooled_repr).squeeze(dim=-1)
+        logits = torch.sigmoid(logits)
 
         return logits
 
