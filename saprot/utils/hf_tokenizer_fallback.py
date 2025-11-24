@@ -29,6 +29,33 @@ def _should_try_fallback(model_name: Any) -> bool:
     return "/" in model_name
 
 
+def _is_esmc_repo(model_name: Any) -> bool:
+    if not isinstance(model_name, str):
+        return False
+    lowered = model_name.lower()
+    return "evolutionaryscale/esmc-" in lowered
+
+
+def _load_esmc_tokenizer(model_name: str):
+    try:
+        from esm.models.esmc import ESMC  # type: ignore
+    except ImportError as exc:  # pragma: no cover
+        raise EnvironmentError(
+            "Loading tokenizer for EvolutionaryScale ESMC models requires the `esm` package "
+            "(pip install esm)."
+        ) from exc
+
+    if "600m" in model_name:
+        esmc_name = "esmc_600m"
+    else:
+        esmc_name = "esmc_300m"
+
+    temp_model = ESMC.from_pretrained(esmc_name)
+    tokenizer = temp_model.tokenizer
+    del temp_model
+    return tokenizer
+
+
 def patch_auto_tokenizer_with_snapshot_fallback(cache_root: Path | None = None) -> None:
     """
     Wrap ``AutoTokenizer.from_pretrained`` so that, when a huggingface model ID is
@@ -55,6 +82,10 @@ def patch_auto_tokenizer_with_snapshot_fallback(cache_root: Path | None = None) 
                 raise
 
             repo_id = str(pretrained_model_name_or_path)
+
+            if _is_esmc_repo(repo_id):
+                return _load_esmc_tokenizer(repo_id)
+
             safe_dir = repo_id.replace("/", "__")
             local_dir = cache_root / safe_dir
             tokenizer_config = local_dir / "tokenizer_config.json"
