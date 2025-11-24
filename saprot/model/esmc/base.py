@@ -85,6 +85,8 @@ class ESMCBaseModel(AbstractModel):
             if i < len(config_list):
                 entry = config_list[i]
                 lora_config_path = getattr(entry, "lora_config_path", entry)
+                if isinstance(lora_config_path, os.PathLike):
+                    lora_config_path = str(lora_config_path)
                 
                 if not isinstance(lora_config_path, str):
                     # Assume a Peft config object was provided directly
