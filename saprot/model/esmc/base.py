@@ -292,6 +292,12 @@ class ESMCBaseModel(AbstractModel):
         # This ensures base_model_name_or_path is set correctly in adapter_config.json
         # Use config_path if provided, otherwise use model_name as fallback
         name_or_path_value = self.config_path if self.config_path is not None else self.model_name
+        if self.config_path is None:
+            canonical_name_map = {
+                "esmc_300m": "EvolutionaryScale/esmc-300m-2024-12",
+                "esmc_600m": "EvolutionaryScale/esmc-600m-2024-12",
+            }
+            name_or_path_value = canonical_name_map.get(self.model_name, self.model_name)
         if hasattr(self.model, '__dict__'):
             self.model.__dict__['name_or_path'] = name_or_path_value
         # Also try to set it on the underlying model if it exists
