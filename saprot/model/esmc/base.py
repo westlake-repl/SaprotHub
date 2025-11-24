@@ -51,6 +51,8 @@ class ESMCBaseModel(AbstractModel):
         self.gradient_checkpointing = gradient_checkpointing
         self.lora_kwargs = lora_kwargs
         self.extra_config = extra_config
+        # Get config_path from kwargs if provided (for compatibility with ESM2 models)
+        self.config_path = kwargs.get("config_path", None)
         if device is None:
             self.device_str = "cuda" if torch.cuda.is_available() else "cpu"
         else:
@@ -285,6 +287,16 @@ class ESMCBaseModel(AbstractModel):
         self.model = ESMC.from_pretrained(self.model_name)
         self.model = self.model.to(torch.float32)
         self.tokenizer = self.model.tokenizer
+        
+        # Set name_or_path attribute for adapter saving (similar to ESM2 models)
+        # This ensures base_model_name_or_path is set correctly in adapter_config.json
+        # Use config_path if provided, otherwise use model_name as fallback
+        name_or_path_value = self.config_path if self.config_path is not None else self.model_name
+        if hasattr(self.model, '__dict__'):
+            self.model.__dict__['name_or_path'] = name_or_path_value
+        # Also try to set it on the underlying model if it exists
+        if hasattr(self.model, 'model') and hasattr(self.model.model, '__dict__'):
+            self.model.model.__dict__['name_or_path'] = name_or_path_value
 
         # Attach simple heads per task
         hidden_size = None
