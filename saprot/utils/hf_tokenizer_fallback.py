@@ -12,6 +12,11 @@ try:
 except ImportError:  # pragma: no cover
     snapshot_download = None  # type: ignore
 
+try:
+    from esm.sdk.api import ESMProtein  # type: ignore
+except ImportError:  # pragma: no cover
+    ESMProtein = None  # type: ignore
+
 
 def _default_cache_dir() -> Path:
     env_dir = os.environ.get("SAPROT_TOKENIZER_CACHE")
@@ -37,6 +42,12 @@ def _is_esmc_repo(model_name: Any) -> bool:
 
 
 def _load_esmc_tokenizer(model_name: str):
+    if ESMProtein is None:
+        raise EnvironmentError(
+            "Loading tokenizer for EvolutionaryScale ESMC models requires the `esm` package "
+            "(pip install esm)."
+        )
+
     try:
         from esm.models.esmc import ESMC  # type: ignore
     except ImportError as exc:  # pragma: no cover
@@ -53,7 +64,24 @@ def _load_esmc_tokenizer(model_name: str):
     temp_model = ESMC.from_pretrained(esmc_name)
     tokenizer = temp_model.tokenizer
     del temp_model
-    return tokenizer
+
+    class _ESMCTokenizerShim:
+        saprot_is_esmc = True
+
+        def __init__(self, base_tokenizer):
+            self._base = base_tokenizer
+
+        def __call__(self, sequences, *args, **kwargs):
+            if isinstance(sequences, str):
+                sequences = [sequences]
+            cleaned = [seq.replace(" ", "") for seq in sequences]
+            proteins = [ESMProtein(sequence=seq) for seq in cleaned]
+            return {"proteins": proteins}
+
+        def __getattr__(self, item):
+            return getattr(self._base, item)
+
+    return _ESMCTokenizerShim(tokenizer)
 
 
 def patch_auto_tokenizer_with_snapshot_fallback(cache_root: Path | None = None) -> None:
