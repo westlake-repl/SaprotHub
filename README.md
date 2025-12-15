@@ -30,7 +30,7 @@ Finding models through [SaprotHub Search](https://huggingface.co/spaces/SaProtHu
 2025/03/21: We’ve just set up a slack group for discussing ColabSaprot or asking any questions, you can join [here](https://westlakeai.slack.com/archives/C08JNBN40P7)!
 
 ### WeChat
-2024/12/01: You can scan the QR code to join our wechat groups （We currently host 4 active weichat groups with a total membership of nearly 1000 researchers and practitioners）:
+2024/12/01: You can scan the QR code to join our wechat groups （We currently host 5 active weichat groups with a total membership of nearly 1000 researchers and practitioners）:
 
 <img src="https://github.com/user-attachments/assets/ab0b726d-eace-44ba-8100-bfc5ad0e217e" width="50%">
 
