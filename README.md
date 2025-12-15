@@ -32,7 +32,7 @@ Finding models through [SaprotHub Search](https://huggingface.co/spaces/SaProtHu
 ### WeChat
 2024/12/01: You can scan the QR code to join our wechat groups （We currently host 4 active weichat groups with a total membership of nearly 1000 researchers and practitioners）:
 
-<img src="https://github.com/user-attachments/assets/17ab6d67-e70d-4508-ad3e-16c4266be000" width="50%">
+<img src="https://github.com/user-attachments/assets/ab0b726d-eace-44ba-8100-bfc5ad0e217e" width="50%">
 
 > We have 2 PhD positions for international students at Westlake University! see [here](https://x.com/duguyuan/status/1897101692665258245).
 
