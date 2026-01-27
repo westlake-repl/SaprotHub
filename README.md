@@ -1,4 +1,4 @@
-# [Democratizing Protein Language Model Training, Sharing and Collaboration ](https://www.nature.com/articles/s41587-025-02859-7)
+s# [Democratizing Protein Language Model Training, Sharing and Collaboration ](https://www.nature.com/articles/s41587-025-02859-7)
 <a href="https://doi.org/10.1101/2024.05.24.595648"><img src="https://img.shields.io/badge/Paper-bioRxiv-green" style="max-width: 100%;"></a>
 <a href="https://huggingface.co/SaProtHub"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-red?label=SaprotHub" style="max-width: 100%;"></a>
 <a href="https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb"><img src="Figure/colab-badge.svg" style="max-width: 100%;"></a>
@@ -32,7 +32,7 @@ Finding models through [SaprotHub Search](https://huggingface.co/spaces/SaProtHu
 ### WeChat
 2024/12/01: You can scan the QR code to join our wechat groups （We currently host 5 active weichat groups with a total membership of over 1000 researchers and practitioners）:
 
-<img src="https://github.com/user-attachments/assets/62f48c26-9c61-46de-b97a-2f5fa7aced52" width="50%">
+<img src="https://github.com/user-attachments/assets/5e0df843-c3d0-424d-ab89-75e1d1e605d8" width="50%">
 
 > We have 2 PhD positions for international students at Westlake University! see [here](https://x.com/duguyuan/status/1897101692665258245).
 
