@@ -18,6 +18,7 @@ Successful [wet-lab results](https://drive.google.com/file/d/1ZcDl0XYksTcUEaCfPI
 Finding models through [SaprotHub Search](https://huggingface.co/spaces/SaProtHub/SaprotHub-search), sharing your models via ColabSaprot to boost visibility and citations.
 
 ## News
+- **2026/01/28：** We are delighted to announce that [ColabESM3](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ESM-Play-V3.ipynb) and [ColabESMC](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ESM-Play-VC.ipynb) are now ready for use.
 - **2025/10/24:**: ColabSaprot and SaprotHub are published in Nature Biotechnology, see [here](https://www.nature.com/articles/s41587-025-02859-7).
 - **2024/05/06:** We are delighted  to announce that [ColabSeprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabSeprot.ipynb?hl=en)  and [SeprotHub](https://huggingface.co/SeprotHub) are now ready for use. ColabSeprot offers access to several state-of-the-art sequence-only Protein Language Models (PLMs), including ESM1b, ESM2, ProTrek, and ProtBert, enabling streamlined fine-tuning and prediction for protein sequence analysis.
   
@@ -185,6 +186,19 @@ Yes. If you have made significant valuable contributions to OPMC, it is possible
 
 Yes, you can. But you need to agree to join OPMC, and papers that use your ColabPLM for research are encouraged to mention the SaprotHub paper, which is the source literature of OPMC.-->
 
+
+## Citation
+If you find SaprotHub useful for your research, please consider citing the following paper:
+```
+@article{su2025democratizing,
+  title={Democratizing protein language model training, sharing and collaboration},
+  author={Su, Jin and Li, Zhikai and Tao, Tianli and Han, Chenchen and He, Yan and Dai, Fengyuan and Yuan, Qingyan and Gao, Yuan and Si, Tong and Zhang, Xuting and others},
+  journal={Nature Biotechnology},
+  pages={1--7},
+  year={2025},
+  publisher={Nature Publishing Group US New York}
+}
+```
 
 ## Other resources
 - [Evolla](https://www.biorxiv.org/content/10.1101/2025.01.05.630192v1) and its [online server](http://www.chat-protein.com/)

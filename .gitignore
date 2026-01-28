@@ -10,3 +10,5 @@ dev/
 /.idea/inspectionProfiles/profiles_settings.xml
 /.idea/inspectionProfiles/Project_Default.xml
 /.idea/vcs.xml
+/local_server/SaprotHubImage.tar
+/local_server/WindowsDeploy.bat
