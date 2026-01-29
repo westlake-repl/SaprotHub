@@ -54,8 +54,7 @@ class ESMCRegressionModel(ESMCBaseModel):
         head = self._get_head()
         
         logits = head(pooled_repr).squeeze(dim=-1)
-        logits = torch.sigmoid(logits)
-
+        
         return logits
 
     def loss_func(self, stage, outputs, labels):
