@@ -291,7 +291,6 @@ class ESMCBaseModel(AbstractModel):
         self.tokenizer = self.model.tokenizer
         
         # Set name_or_path attribute for adapter saving (similar to ESM2 models)
-        # This ensures base_model_name_or_path is set correctly in adapter_config.json
         # Use config_path if provided, otherwise use model_name as fallback
         name_or_path_value = self.config_path if self.config_path is not None else self.model_name
         if self.config_path is None:
