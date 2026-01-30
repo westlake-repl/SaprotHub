@@ -354,7 +354,6 @@ class ESMCBaseModel(AbstractModel):
 
         elif self.task == 'regression':
             classifier = torch.nn.Sequential(
-                # new LayerNorm
                 torch.nn.LayerNorm(hidden_size), 
                 torch.nn.Dropout(0.1),
                 torch.nn.Linear(hidden_size, hidden_size),
@@ -363,9 +362,9 @@ class ESMCBaseModel(AbstractModel):
                 torch.nn.Linear(hidden_size, 1)
             )
             # Initialize classifier weights properly (Xavier for Tanh activation)
-            for module in classifier.modules():
+            for module in classifier:
                 if isinstance(module, torch.nn.Linear):
-                    torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+                    torch.nn.init.xavier_uniform_(module.weight)
                     if module.bias is not None:
                         torch.nn.init.zeros_(module.bias)
             setattr(self.model, "classifier", classifier)
