@@ -52,7 +52,9 @@ class ESMCRegressionModel(ESMCBaseModel):
 
         # Fallback to _get_head()
         head = self._get_head()
-        
+
+        # using tanh not sigmoid
+        pooled_repr = torch.tanh(pooled_repr)
         logits = head(pooled_repr).squeeze(dim=-1)
         
         return logits
