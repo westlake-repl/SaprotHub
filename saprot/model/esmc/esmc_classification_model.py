@@ -1,5 +1,6 @@
 import torchmetrics
 import torch
+import torch.nn.functional as F
 from torch.nn.functional import cross_entropy
 
 from saprot.model.model_interface import register_model
@@ -34,6 +35,9 @@ class ESMCClassificationModel(ESMCBaseModel):
 
         # Forward through backbone and get representations
         representations = self._get_representations(token_ids_batch)
+
+        # Normalize representations
+        representations = F.layer_norm(representations, representations.shape[-1:])
         
         # Pooling - always needs gradients for head training
         pooled_repr = self._pool_representations(representations, token_ids_batch, tokenizer.pad_token_id)
