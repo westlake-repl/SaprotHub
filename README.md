@@ -45,7 +45,7 @@ For users who want to deploy ColabSaprot on their local server, please refer to 
 - [ColabSaprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (AA+3Di)
 - [ColabSeprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabSeprot.ipynb?hl=en) (AA) (including ColabESM1b, ColabESM2, ColabProtBert, ColabProTrek)
 - [ColabESMC](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ESM-Play-VC.ipynb) (300M,600M)
-- [ColabESM3](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ESM-Play-V3.ipynb)
+- [ColabESM3](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ESM-Play-V3.ipynb) （1.4B, structure-aware）
 - [ColabProtT5](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabProtT5.ipynb) (AA)
 - [SaProt-T/O](http://113.45.254.183:9527/) (edit protein based on partial sequence/structure and text, Support multiple site mutations)
 - [ColabMETL](https://github.com/gitter-lab/metl?tab=readme-ov-file#mutational-effect-transfer-learning)
