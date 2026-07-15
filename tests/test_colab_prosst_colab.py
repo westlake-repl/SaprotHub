@@ -91,14 +91,24 @@ class ColabProSSTNotebookTest(unittest.TestCase):
             "direct ProSSTHub and compatible Hugging Face community model loading",
             introduction,
         )
-        self.assertIn("direct model sharing to ProSSTHub", introduction)
+        self.assertIn(
+            "model sharing through personal Hugging Face repositories",
+            introduction,
+        )
+        self.assertIn(
+            "colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/"
+            "colab/ColabProSST.ipynb",
+            introduction,
+        )
+        self.assertIn("GitHub-SaprotHub", introduction)
         self.assertIn("ColabSaprot", introduction)
         self.assertIn("ColabSeprot", introduction)
         self.assertIn("ColabESMC", introduction)
         self.assertIn("ColabProtT5", introduction)
         self.assertIn("SaprotHub/OPMC paper", introduction)
         self.assertIn("Google Colab recommends Chrome", introduction)
-        self.assertIn("Hello-github-code/SaprotHub/issues", introduction)
+        self.assertIn("westlake-repl/SaprotHub/issues", introduction)
+        self.assertNotIn("Hello-github-code", introduction)
         self.assertNotIn("Prepare sequence and structure inputs", introduction)
         self.assertNotIn("Recommended for a first run", introduction)
         self.assertNotIn("Reuse latest structure conversion", introduction)
@@ -139,7 +149,12 @@ class ColabProSSTNotebookTest(unittest.TestCase):
         source = "".join(notebook["cells"][2]["source"])
 
         self.assertIn("Path('/content')", source)
+        self.assertIn(
+            "SAPROTHUB_REPO = 'https://github.com/westlake-repl/SaprotHub.git'",
+            source,
+        )
         self.assertIn("SAPROTHUB_BRANCH = 'main'", source)
+        self.assertNotIn("Hello-github-code", source)
         self.assertIn("os.chdir(ROOT)", source)
         self.assertNotIn("ROOT = Path(os.getcwd())", source)
         self.assertIn("def update_saprothub():", source)
