@@ -66,48 +66,53 @@ class ColabProSSTNotebookTest(unittest.TestCase):
         self.assertIn("outdated ColabProSST bootstrap", ui_source)
 
         introduction = "".join(notebook["cells"][0]["source"])
-        self.assertIn("A structure-aware ColabPLM powered by ProSST", introduction)
-        self.assertIn("Paper-NeurIPS%202024", introduction)
+        self.assertIn(
+            "Bringing ProSST into the SaprotHub and OPMC ecosystem",
+            introduction,
+        )
+        self.assertIn("Paper-Nature%20Biotechnology", introduction)
+        self.assertIn("www.nature.com/articles/s41587-025-02859-7", introduction)
         self.assertIn("huggingface.co/AI4Protein/ProSST-2048", introduction)
         self.assertIn("huggingface.co/ProSSTHub", introduction)
+        self.assertIn("huggingface.co/SaProtHub", introduction)
         self.assertIn("github.com/ai4protein/ProSST", introduction)
         self.assertIn("theopmc.github.io", introduction)
         self.assertIn("quantized structure tokens", introduction)
         self.assertIn("sequence-structure disentangled attention", introduction)
-        self.assertIn("PDB/mmCIF structure quantization", introduction)
-        self.assertIn("residue-level classification", introduction)
-        self.assertIn("protein-pair classification and regression", introduction)
-        self.assertIn(
-            "protein-level and residue-level embedding extraction",
-            introduction,
-        )
-        self.assertIn(
-            "single-site saturation mutagenesis with heatmaps",
-            introduction,
-        )
-        self.assertIn("checkpoint continuation", introduction)
-        self.assertIn("LoRA/PEFT training", introduction)
-        self.assertIn(
-            "direct ProSSTHub and compatible Hugging Face community model loading",
-            introduction,
-        )
-        self.assertIn(
-            "model sharing through personal Hugging Face repositories",
-            introduction,
-        )
-        self.assertIn(
-            "colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/"
-            "colab/ColabProSST.ipynb",
-            introduction,
-        )
+        self.assertIn("the official [SaprotHub]", introduction)
+        self.assertIn("Colab workflow for [ProSST]", introduction)
+        self.assertIn("protein language model training, prediction", introduction)
+        self.assertIn("SaprotHub search engine", introduction)
+        self.assertIn("open protein modeling community", introduction)
+        self.assertIn("structure-token conversion", introduction)
+        self.assertIn("mutation-effect prediction", introduction)
+        self.assertIn("downstream training and prediction", introduction)
+        self.assertIn("embedding extraction", introduction)
+        self.assertIn("checkpoint reuse", introduction)
+        self.assertIn("model sharing with ProSSTHub", introduction)
         self.assertIn("GitHub-SaprotHub", introduction)
         self.assertIn("ColabSaprot", introduction)
         self.assertIn("ColabSeprot", introduction)
         self.assertIn("ColabESMC", introduction)
         self.assertIn("ColabProtT5", introduction)
-        self.assertIn("SaprotHub/OPMC paper", introduction)
+        self.assertIn(
+            "Democratizing protein language model training, sharing and collaboration",
+            introduction,
+        )
+        self.assertIn("ProSST paper", introduction)
+        self.assertIn("New Notice", introduction)
         self.assertIn("Google Colab recommends Chrome", introduction)
-        self.assertIn("westlake-repl/SaprotHub/issues", introduction)
+        self.assertIn("Contact {sujin, yuanfajie}@westlake.edu.cn", introduction)
+        badge_links = [
+            "https://www.nature.com/articles/s41587-025-02859-7",
+            "https://huggingface.co/ProSSTHub",
+            "https://github.com/westlake-repl/SaprotHub",
+            "https://theopmc.github.io/",
+        ]
+        badge_positions = [introduction.index(link) for link in badge_links]
+        self.assertEqual(badge_positions, sorted(badge_positions))
+        self.assertNotIn("Paper-NeurIPS%202024", introduction)
+        self.assertNotIn("GitHub-ProSST", introduction)
         self.assertNotIn("Hello-github-code", introduction)
         self.assertNotIn("Prepare sequence and structure inputs", introduction)
         self.assertNotIn("Recommended for a first run", introduction)
