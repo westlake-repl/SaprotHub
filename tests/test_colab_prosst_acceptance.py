@@ -92,6 +92,62 @@ class ColabProSSTAcceptanceTest(unittest.TestCase):
             self.assertIn("small.csv", names)
             self.assertNotIn("large.pt", names)
 
+    def test_core_run_orchestrates_every_workflow_and_returns_report(self):
+        class SimulatedRunner(ColabProSSTAcceptanceRunner):
+            def runtime_check(self):
+                return {"cuda_available": True}
+
+            def family_metadata_check(self):
+                return {"models": ["simulated"]}
+
+            def prepare_live_sequence_input(self):
+                self.assets["structure_tokens"] = " ".join(
+                    "0" for _ in ACCEPTANCE_SEQUENCE
+                )
+                return {"sequence_length": len(ACCEPTANCE_SEQUENCE)}
+
+            def mutation_check(self):
+                return {"rows": 2}
+
+            def saturation_check(self):
+                return {"score_rows": len(ACCEPTANCE_SEQUENCE) * 20}
+
+            def embedding_check(self):
+                return {"index_rows": 2}
+
+            def train_task_check(self, task_type, asset_key, suffix, **kwargs):
+                result = {
+                    "checkpoint_path": f"{suffix}.pt",
+                    "task_type": task_type,
+                }
+                self.assets[f"{suffix}_result"] = result
+                return result
+
+            def prediction_check(self):
+                return {"rows": 6}
+
+            def cleanup_task_artifacts(self):
+                return None
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            runner = SimulatedRunner(
+                profile="core",
+                output_root=tmpdir,
+                saprothub_dir=tmpdir,
+                require_gpu=False,
+                workflow=FakeWorkflow(tmpdir),
+            )
+            result = runner.run()
+
+            self.assertTrue(result["success"])
+            self.assertEqual(result["required_failures"], [])
+            statuses = {item["name"]: item["status"] for item in result["results"]}
+            self.assertEqual(statuses["Exact checkpoint resume"], "PASS")
+            self.assertEqual(statuses["LoRA classification training"], "PASS")
+            self.assertEqual(statuses["Protein-pair regression training"], "PASS")
+            self.assertEqual(statuses["Six official model weight forwards"], "SKIP")
+            self.assertTrue(Path(result["report_zip"]).is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

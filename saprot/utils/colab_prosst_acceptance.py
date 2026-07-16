@@ -369,6 +369,464 @@ class ColabProSSTAcceptanceRunner:
             "embedding": embedding,
         }
 
+    def family_model_forward_check(self, spec) -> dict:
+        from transformers import AutoModelForMaskedLM, AutoTokenizer
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        tokenizer = AutoTokenizer.from_pretrained(
+            spec.model_path,
+            trust_remote_code=True,
+        )
+        load_kwargs = {
+            "trust_remote_code": True,
+            "low_cpu_mem_usage": True,
+        }
+        if device.type == "cuda":
+            load_kwargs["torch_dtype"] = torch.float16
+        model = AutoModelForMaskedLM.from_pretrained(
+            spec.model_path,
+            **load_kwargs,
+        )
+        try:
+            model = model.to(device).eval()
+            inputs = tokenizer(ACCEPTANCE_SEQUENCE, return_tensors="pt")
+            inputs = {key: value.to(device) for key, value in inputs.items()}
+            ss_input_ids = torch.full_like(inputs["input_ids"], 3)
+            ss_input_ids[:, 0] = 1
+            ss_input_ids[:, -1] = 2
+            with torch.inference_mode():
+                output = model(
+                    input_ids=inputs["input_ids"],
+                    attention_mask=inputs.get("attention_mask"),
+                    ss_input_ids=ss_input_ids,
+                )
+            logits = output.logits
+            if logits.shape[:2] != inputs["input_ids"].shape:
+                raise ValueError(
+                    f"Unexpected logits shape for {spec.model_path}: "
+                    f"{tuple(logits.shape)}."
+                )
+            return {
+                "model_path": spec.model_path,
+                "structure_vocab_size": spec.structure_vocab_size,
+                "parameters": sum(parameter.numel() for parameter in model.parameters()),
+                "input_shape": list(inputs["input_ids"].shape),
+                "ss_input_shape": list(ss_input_ids.shape),
+                "logits_shape": list(logits.shape),
+                "device": str(device),
+            }
+        finally:
+            del model
+
+    @staticmethod
+    def _require_file(path, label: str) -> Path:
+        path = Path(path)
+        if not path.is_file() or path.stat().st_size == 0:
+            raise FileNotFoundError(f"{label} was not created: {path}")
+        return path
+
+    def mutation_check(self) -> dict:
+        output_csv = self.run_dir / "mutation_scores.csv"
+        result = self.workflow.run_zero_shot(
+            input_csv=str(self.assets["mutation_sequence_only"]),
+            model_path=self.model_spec.model_path,
+            structure_vocab_size=self.model_spec.structure_vocab_size,
+            output_csv=str(output_csv),
+            download=False,
+            input_mode="sequence",
+        )
+        self._require_file(output_csv, "Mutation score CSV")
+        if len(result) != 2 or "score" not in result.columns:
+            raise ValueError("Mutation output does not contain two score rows.")
+        prepared = self._require_file(
+            result.attrs["prepared_input_csv"],
+            "Mutation prepared-input CSV",
+        )
+        return {
+            "rows": len(result),
+            "output_csv": output_csv,
+            "prepared_input_csv": prepared,
+        }
+
+    def saturation_check(self) -> dict:
+        result = self.workflow.run_saturation_mutagenesis(
+            input_csv=str(self.assets["saturation_prepared"]),
+            model_path=self.model_spec.model_path,
+            structure_vocab_size=self.model_spec.structure_vocab_size,
+            output_csv=str(self.run_dir / "saturation_scores.csv"),
+            output_matrix_csv=str(self.run_dir / "saturation_matrix.csv"),
+            output_heatmap_png=str(self.run_dir / "saturation_heatmap.png"),
+            download=False,
+            input_mode="tokens",
+        )
+        paths = {
+            "scores": self._require_file(result["output_csv"], "Saturation scores"),
+            "matrix": self._require_file(
+                result["output_matrix_csv"], "Saturation matrix"
+            ),
+            "heatmap": self._require_file(
+                result["output_heatmap_png"], "Saturation heatmap"
+            ),
+            "archive": self._require_file(
+                result["archive_path"], "Saturation archive"
+            ),
+        }
+        scores = pd.read_csv(paths["scores"])
+        expected_rows = len(ACCEPTANCE_SEQUENCE) * 20
+        if len(scores) != expected_rows:
+            raise ValueError(
+                f"Expected {expected_rows} saturation scores, got {len(scores)}."
+            )
+        return {**paths, "score_rows": len(scores)}
+
+    def embedding_check(self) -> dict:
+        result = self.workflow.extract_embeddings(
+            input_csv=str(self.assets["embedding_prepared"]),
+            model_path=self.model_spec.model_path,
+            structure_vocab_size=self.model_spec.structure_vocab_size,
+            level="both",
+            batch_size=1,
+            max_length=2046,
+            output_pt=str(self.run_dir / "both_embeddings.pt"),
+            output_index_csv=str(self.run_dir / "both_embeddings_index.csv"),
+            download=False,
+            input_mode="tokens",
+        )
+        embedding_path = self._require_file(
+            result["output_pt"], "Embedding tensor file"
+        )
+        index_path = self._require_file(
+            result["output_index_csv"], "Embedding index CSV"
+        )
+        archive_path = self._require_file(
+            result["archive_path"], "Embedding archive"
+        )
+        index = pd.read_csv(index_path)
+        if len(index) != 2:
+            raise ValueError(f"Expected two embedding index rows, got {len(index)}.")
+        saved = torch.load(embedding_path, map_location="cpu")
+        if not isinstance(saved, dict) or not saved:
+            raise ValueError("Embedding tensor file is empty or malformed.")
+        del saved
+        return {
+            "output_pt": embedding_path,
+            "output_index_csv": index_path,
+            "archive_path": archive_path,
+            "index_rows": len(index),
+        }
+
+    def train_task_check(
+        self,
+        task_type: str,
+        asset_key: str,
+        suffix: str,
+        training_method: str = "full",
+        save_training_state: bool = False,
+        initial_checkpoint: str = "",
+        resume_optimizer_state: bool = False,
+        keep_checkpoint: bool = False,
+    ) -> dict:
+        result = self.workflow.train_downstream(
+            task_type=task_type,
+            input_csv=str(self.assets[asset_key]),
+            task_name=f"{self.task_prefix}_{suffix}",
+            num_labels=2,
+            max_epochs=1,
+            batch_size=1,
+            learning_rate=2.0e-5,
+            model_path=self.model_spec.model_path,
+            structure_vocab_size=self.model_spec.structure_vocab_size,
+            freeze_backbone=True,
+            gradient_checkpointing=True,
+            initial_checkpoint=initial_checkpoint,
+            resume_optimizer_state=resume_optimizer_state,
+            save_training_state=save_training_state,
+            training_method=training_method,
+            download=False,
+            input_mode="tokens",
+        )
+        checkpoint = Path(result["checkpoint_path"])
+        if checkpoint.is_dir():
+            if not (checkpoint / "adapter_config.json").is_file():
+                raise FileNotFoundError(
+                    f"LoRA adapter config was not created: {checkpoint}"
+                )
+        else:
+            self._require_file(checkpoint, "Training checkpoint")
+        test_csv = self._require_file(
+            result["test_result_csv"],
+            "Training test-prediction CSV",
+        )
+        test_rows = len(pd.read_csv(test_csv))
+        if test_rows != 2:
+            raise ValueError(f"Expected two test predictions, got {test_rows}.")
+        if save_training_state and training_method == "full":
+            state = torch.load(checkpoint, map_location="cpu")
+            missing = sorted(
+                {
+                    "model",
+                    "global_step",
+                    "epoch",
+                    "best_value",
+                    "lr_scheduler",
+                    "optimizer",
+                }
+                - set(state)
+            )
+            del state
+            if missing:
+                raise ValueError(
+                    f"Exact-resume checkpoint is missing fields: {missing}."
+                )
+        details = {
+            **result,
+            "checkpoint_exists": checkpoint.exists(),
+            "test_rows": test_rows,
+        }
+        self.assets[f"{suffix}_result"] = result
+        if initial_checkpoint and resume_optimizer_state:
+            initial_path = Path(initial_checkpoint)
+            if initial_path != checkpoint:
+                initial_path.unlink(missing_ok=True)
+        if not keep_checkpoint:
+            if checkpoint.is_dir():
+                shutil.rmtree(checkpoint, ignore_errors=True)
+            else:
+                checkpoint.unlink(missing_ok=True)
+            download_path = Path(result["checkpoint_download_path"])
+            if download_path != checkpoint:
+                download_path.unlink(missing_ok=True)
+        return details
+
+    def prediction_check(self) -> dict:
+        training = self.assets["classification_full_result"]
+        output_csv = self.run_dir / "classification_predictions.csv"
+        result = self.workflow.predict_downstream(
+            task_type="classification",
+            input_csv=str(self.assets["classification_prepared"]),
+            checkpoint_path=training["checkpoint_path"],
+            num_labels=2,
+            batch_size=1,
+            model_path=self.model_spec.model_path,
+            structure_vocab_size=self.model_spec.structure_vocab_size,
+            output_csv=str(output_csv),
+            download=False,
+            input_mode="tokens",
+        )
+        self._require_file(output_csv, "Classification prediction CSV")
+        if len(result) != 6:
+            raise ValueError(f"Expected six predictions, got {len(result)}.")
+        return {"output_csv": output_csv, "rows": len(result)}
+
+    def hf_upload_check(self) -> dict:
+        if not self.hf_repo_id:
+            raise ValueError(
+                "Set HF_REPO_ID to a new model repository before enabling upload."
+            )
+        from huggingface_hub import get_token
+
+        if get_token() is None:
+            raise RuntimeError(
+                "No Hugging Face token is available. Add HF_TOKEN to Colab "
+                "Secrets or log in before running acceptance."
+            )
+        training = self.assets.get(
+            "classification_resume_result",
+            self.assets["classification_full_result"],
+        )
+        package = self.workflow.upload_checkpoint_to_hf(
+            repo_id=self.hf_repo_id,
+            checkpoint_path=training["checkpoint_path"],
+            task_type="classification",
+            num_labels=2,
+            model_path=self.model_spec.model_path,
+            structure_vocab_size=self.model_spec.structure_vocab_size,
+            private=self.hf_private,
+            run_login=False,
+            title="ColabProSST acceptance model",
+            description=(
+                "Temporary model created by the automated ColabProSST "
+                "release acceptance suite."
+            ),
+            download_package=False,
+            allow_update=False,
+        )
+        self._require_file(package / "metadata.json", "Uploaded package metadata")
+        return {
+            "repo_id": self.hf_repo_id,
+            "url": f"https://huggingface.co/{self.hf_repo_id}",
+            "package_dir": package,
+        }
+
+    def skip_step(self, name: str, reason: str, required: bool = False):
+        self.results.append(
+            AcceptanceResult(
+                name=name,
+                status="SKIP",
+                required=required,
+                duration_seconds=0.0,
+                details={"reason": reason},
+            )
+        )
+        print(f"[SKIP] {name}: {reason}")
+        self.write_reports()
+
+    def run(self) -> dict:
+        runtime_name = "Runtime and GPU"
+        metadata_name = "Official family metadata and tokenizers"
+        preparation_name = "Sequence-only preparation and direct conversion"
+        assets_name = "Prepared-token task inputs"
+
+        try:
+            self.run_step(runtime_name, self.runtime_check)
+            self.run_step(
+                metadata_name,
+                self.family_metadata_check,
+                dependencies=(runtime_name,),
+            )
+            self.run_step(
+                preparation_name,
+                self.prepare_live_sequence_input,
+                dependencies=(runtime_name,),
+            )
+            self.run_step(
+                assets_name,
+                self.build_task_inputs,
+                dependencies=(preparation_name,),
+            )
+
+            workflow_dependency = (assets_name,)
+            self.run_step(
+                "Sequence-only zero-shot mutation",
+                self.mutation_check,
+                dependencies=workflow_dependency,
+            )
+            self.run_step(
+                "Prepared-token saturation mutagenesis",
+                self.saturation_check,
+                dependencies=workflow_dependency,
+            )
+            self.run_step(
+                "Prepared-token protein and residue embeddings",
+                self.embedding_check,
+                dependencies=workflow_dependency,
+            )
+            self.run_step(
+                "Full classification training with resume state",
+                lambda: self.train_task_check(
+                    "classification",
+                    "classification_prepared",
+                    "classification_full",
+                    save_training_state=True,
+                    keep_checkpoint=True,
+                ),
+                dependencies=workflow_dependency,
+            )
+            self.run_step(
+                "Checkpoint classification prediction",
+                self.prediction_check,
+                dependencies=("Full classification training with resume state",),
+            )
+            self.run_step(
+                "Exact checkpoint resume",
+                lambda: self.train_task_check(
+                    "classification",
+                    "classification_prepared",
+                    "classification_resume",
+                    save_training_state=True,
+                    initial_checkpoint=self.assets[
+                        "classification_full_result"
+                    ]["checkpoint_path"],
+                    resume_optimizer_state=True,
+                    keep_checkpoint=True,
+                ),
+                dependencies=("Full classification training with resume state",),
+            )
+            self.run_step(
+                "LoRA classification training",
+                lambda: self.train_task_check(
+                    "classification",
+                    "classification_prepared",
+                    "classification_lora",
+                    training_method="lora",
+                ),
+                dependencies=workflow_dependency,
+            )
+            for task_type, asset_key, label in [
+                ("regression", "regression_prepared", "Protein regression training"),
+                (
+                    "token_classification",
+                    "token_classification_prepared",
+                    "Residue classification training",
+                ),
+                (
+                    "pair_classification",
+                    "pair_classification_prepared",
+                    "Protein-pair classification training",
+                ),
+                (
+                    "pair_regression",
+                    "pair_regression_prepared",
+                    "Protein-pair regression training",
+                ),
+            ]:
+                self.run_step(
+                    label,
+                    lambda task_type=task_type, asset_key=asset_key: (
+                        self.train_task_check(
+                            task_type,
+                            asset_key,
+                            task_type,
+                        )
+                    ),
+                    dependencies=workflow_dependency,
+                )
+
+            if self.profile == "full":
+                for spec in PROSST_MODEL_SPECS:
+                    self.run_step(
+                        f"Official model forward ProSST-{spec.structure_vocab_size}",
+                        lambda spec=spec: self.family_model_forward_check(spec),
+                        dependencies=(runtime_name, metadata_name),
+                    )
+            else:
+                self.skip_step(
+                    "Six official model weight forwards",
+                    "Core profile checks metadata/tokenizers but skips six "
+                    "sequential weight downloads and forwards.",
+                )
+
+            if self.run_hf_upload:
+                self.run_step(
+                    "Hugging Face model upload",
+                    self.hf_upload_check,
+                    required=False,
+                    dependencies=("Full classification training with resume state",),
+                )
+            else:
+                self.skip_step(
+                    "Hugging Face model upload",
+                    "Disabled. Enable RUN_HF_UPLOAD and provide a new HF_REPO_ID.",
+                )
+        finally:
+            self.cleanup_task_artifacts()
+            package = self.package_report()
+
+        required_failures = [
+            result.name
+            for result in self.results
+            if result.required and result.status != "PASS"
+        ]
+        return {
+            "success": not required_failures,
+            "required_failures": required_failures,
+            "report_csv": str(self.report_csv),
+            "report_json": str(self.report_json),
+            "report_markdown": str(self.report_markdown),
+            "report_zip": str(package),
+            "results": [asdict(result) for result in self.results],
+        }
+
     def write_reports(self):
         records = [asdict(result) for result in self.results]
         flat_records = [
@@ -466,4 +924,3 @@ class ColabProSSTAcceptanceRunner:
                 shutil.rmtree(path, ignore_errors=True)
             else:
                 path.unlink(missing_ok=True)
-
