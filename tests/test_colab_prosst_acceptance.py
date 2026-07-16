@@ -20,7 +20,53 @@ class FakeWorkflow:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
 
+class FakeTokenTrainingWorkflow(FakeWorkflow):
+    def train_downstream(self, **kwargs):
+        root = self.cache_dir.parent
+        checkpoint = root / "token-classification.pt"
+        checkpoint.write_bytes(b"weights")
+        predictions = root / "token-classification-predictions.csv"
+        predictions.write_text(
+            "prediction\n" + "\n".join("0" for _ in range(40)) + "\n",
+            encoding="utf-8",
+        )
+        return {
+            "checkpoint_path": str(checkpoint),
+            "checkpoint_download_path": str(checkpoint),
+            "test_result_csv": str(predictions),
+            "task_type": "token_classification",
+            "model_path": kwargs["model_path"],
+            "structure_vocab_size": kwargs["structure_vocab_size"],
+            "initial_checkpoint": "",
+            "resume_optimizer_state": False,
+            "save_training_state": False,
+            "training_method": "full",
+            "prepared_input_csv": None,
+        }
+
+
 class ColabProSSTAcceptanceTest(unittest.TestCase):
+    def test_residue_training_expects_one_prediction_per_test_residue(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            runner = ColabProSSTAcceptanceRunner(
+                profile="core",
+                output_root=tmpdir,
+                saprothub_dir=tmpdir,
+                require_gpu=False,
+                workflow=FakeTokenTrainingWorkflow(tmpdir),
+            )
+            token_input = runner.run_dir / "token-input.csv"
+            token_input.write_text("sequence\nACDE\n", encoding="utf-8")
+            runner.assets["token_input"] = token_input
+
+            result = runner.train_task_check(
+                task_type="token_classification",
+                asset_key="token_input",
+                suffix="token",
+            )
+
+            self.assertEqual(result["test_rows"], 40)
+
     def test_acceptance_notebook_reuses_product_bootstrap_and_runs_one_cell(self):
         notebook = json.loads(ACCEPTANCE_NOTEBOOK.read_text(encoding="utf-8"))
         code_cells = [

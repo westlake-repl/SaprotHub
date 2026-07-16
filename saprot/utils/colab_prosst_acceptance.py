@@ -558,8 +558,16 @@ class ColabProSSTAcceptanceRunner:
             "Training test-prediction CSV",
         )
         test_rows = len(pd.read_csv(test_csv))
-        if test_rows != 2:
-            raise ValueError(f"Expected two test predictions, got {test_rows}.")
+        expected_test_rows = (
+            2 * len(ACCEPTANCE_SEQUENCE)
+            if task_type == "token_classification"
+            else 2
+        )
+        if test_rows != expected_test_rows:
+            raise ValueError(
+                f"Expected {expected_test_rows} {task_type} test prediction "
+                f"rows, got {test_rows}."
+            )
         if save_training_state and training_method == "full":
             state = torch.load(checkpoint, map_location="cpu")
             missing = sorted(
