@@ -99,7 +99,6 @@ class ColabProSSTWorkflow:
         ]:
             path.mkdir(parents=True, exist_ok=True)
 
-        self.last_structure = None
         self._pending_downloads = queue.SimpleQueue()
 
     def set_output_dir(self, output_dir: str) -> None:
@@ -499,18 +498,20 @@ class ColabProSSTWorkflow:
                     "structure_vocab_size": structure_vocab_size,
                 },
             ]
-        ).to_csv(template_home / "prosst_zero_shot_template.csv", index=False)
+        ).to_csv(
+            template_home / "prosst_zero_shot_prepared_template.csv", index=False
+        )
 
         pd.DataFrame(
             [
                 {
                     "sequence": "ACD",
                     "mutant": "D3A",
-                    "pdb_path": "protein.pdb",
-                    "chain_id": "",
                 }
             ]
-        ).to_csv(template_home / "prosst_zero_shot_pdb_template.csv", index=False)
+        ).to_csv(
+            template_home / "prosst_zero_shot_sequence_template.csv", index=False
+        )
 
         pd.DataFrame(
             [
@@ -531,65 +532,36 @@ class ColabProSSTWorkflow:
                 {
                     "sequence": "ACF",
                     "label": 1,
-                    "stage": "test",
-                    "structure_tokens": "0 1 4",
-                    "structure_vocab_size": structure_vocab_size,
-                },
-            ]
-        ).to_csv(template_home / "prosst_classification_template.csv", index=False)
-
-        pd.DataFrame(
-            [
-                {
-                    "sequence": "ACD",
-                    "label": 1,
-                    "stage": "train",
-                    "pdb_path": "train.pdb",
-                    "chain_id": "",
-                },
-                {
-                    "sequence": "ACE",
-                    "label": 0,
-                    "stage": "valid",
-                    "pdb_path": "valid.pdb",
-                    "chain_id": "",
-                },
-                {
-                    "sequence": "ACF",
-                    "label": 1,
-                    "stage": "test",
-                    "pdb_path": "test.pdb",
-                    "chain_id": "",
-                },
-            ]
-        ).to_csv(template_home / "prosst_classification_pdb_template.csv", index=False)
-
-        pd.DataFrame(
-            [
-                {
-                    "sequence": "ACD",
-                    "residue_labels": "0 1 0",
-                    "stage": "train",
-                    "structure_tokens": "0 1 2",
-                    "structure_vocab_size": structure_vocab_size,
-                },
-                {
-                    "sequence": "ACE",
-                    "residue_labels": "1 -100 0",
-                    "stage": "valid",
-                    "structure_tokens": "0 1 3",
-                    "structure_vocab_size": structure_vocab_size,
-                },
-                {
-                    "sequence": "ACF",
-                    "residue_labels": "0 1 1",
                     "stage": "test",
                     "structure_tokens": "0 1 4",
                     "structure_vocab_size": structure_vocab_size,
                 },
             ]
         ).to_csv(
-            template_home / "prosst_token_classification_template.csv",
+            template_home / "prosst_classification_prepared_template.csv",
+            index=False,
+        )
+
+        pd.DataFrame(
+            [
+                {
+                    "sequence": "ACD",
+                    "label": 1,
+                    "stage": "train",
+                },
+                {
+                    "sequence": "ACE",
+                    "label": 0,
+                    "stage": "valid",
+                },
+                {
+                    "sequence": "ACF",
+                    "label": 1,
+                    "stage": "test",
+                },
+            ]
+        ).to_csv(
+            template_home / "prosst_classification_sequence_template.csv",
             index=False,
         )
 
@@ -599,26 +571,49 @@ class ColabProSSTWorkflow:
                     "sequence": "ACD",
                     "residue_labels": "0 1 0",
                     "stage": "train",
-                    "pdb_path": "train.pdb",
-                    "chain_id": "",
+                    "structure_tokens": "0 1 2",
+                    "structure_vocab_size": structure_vocab_size,
                 },
                 {
                     "sequence": "ACE",
                     "residue_labels": "1 -100 0",
                     "stage": "valid",
-                    "pdb_path": "valid.pdb",
-                    "chain_id": "",
+                    "structure_tokens": "0 1 3",
+                    "structure_vocab_size": structure_vocab_size,
                 },
                 {
                     "sequence": "ACF",
                     "residue_labels": "0 1 1",
                     "stage": "test",
-                    "pdb_path": "test.pdb",
-                    "chain_id": "",
+                    "structure_tokens": "0 1 4",
+                    "structure_vocab_size": structure_vocab_size,
                 },
             ]
         ).to_csv(
-            template_home / "prosst_token_classification_pdb_template.csv",
+            template_home / "prosst_token_classification_prepared_template.csv",
+            index=False,
+        )
+
+        pd.DataFrame(
+            [
+                {
+                    "sequence": "ACD",
+                    "residue_labels": "0 1 0",
+                    "stage": "train",
+                },
+                {
+                    "sequence": "ACE",
+                    "residue_labels": "1 -100 0",
+                    "stage": "valid",
+                },
+                {
+                    "sequence": "ACF",
+                    "residue_labels": "0 1 1",
+                    "stage": "test",
+                },
+            ]
+        ).to_csv(
+            template_home / "prosst_token_classification_sequence_template.csv",
             index=False,
         )
 
@@ -646,7 +641,9 @@ class ColabProSSTWorkflow:
                     "structure_vocab_size": structure_vocab_size,
                 },
             ]
-        ).to_csv(template_home / "prosst_regression_template.csv", index=False)
+        ).to_csv(
+            template_home / "prosst_regression_prepared_template.csv", index=False
+        )
 
         pd.DataFrame(
             [
@@ -654,25 +651,21 @@ class ColabProSSTWorkflow:
                     "sequence": "ACD",
                     "label": 0.5,
                     "stage": "train",
-                    "pdb_path": "train.pdb",
-                    "chain_id": "",
                 },
                 {
                     "sequence": "ACE",
                     "label": 0.2,
                     "stage": "valid",
-                    "pdb_path": "valid.pdb",
-                    "chain_id": "",
                 },
                 {
                     "sequence": "ACF",
                     "label": 0.8,
                     "stage": "test",
-                    "pdb_path": "test.pdb",
-                    "chain_id": "",
                 },
             ]
-        ).to_csv(template_home / "prosst_regression_pdb_template.csv", index=False)
+        ).to_csv(
+            template_home / "prosst_regression_sequence_template.csv", index=False
+        )
 
         pair_examples = [
             {
@@ -681,8 +674,6 @@ class ColabProSSTWorkflow:
                 "stage": "train",
                 "structure_tokens_1": "0 1 2",
                 "structure_tokens_2": "3 4",
-                "pdb_path_1": "train_protein_1.pdb",
-                "pdb_path_2": "train_protein_2.pdb",
             },
             {
                 "sequence_1": "ACE",
@@ -690,8 +681,6 @@ class ColabProSSTWorkflow:
                 "stage": "valid",
                 "structure_tokens_1": "0 1 3",
                 "structure_tokens_2": "0 2",
-                "pdb_path_1": "valid_protein_1.pdb",
-                "pdb_path_2": "valid_protein_2.pdb",
             },
             {
                 "sequence_1": "ACF",
@@ -699,8 +688,6 @@ class ColabProSSTWorkflow:
                 "stage": "test",
                 "structure_tokens_1": "0 1 4",
                 "structure_tokens_2": "0 3",
-                "pdb_path_1": "test_protein_1.pdb",
-                "pdb_path_2": "test_protein_2.pdb",
             },
         ]
         pair_labels = {
@@ -709,7 +696,7 @@ class ColabProSSTWorkflow:
         }
         for task_type, labels in pair_labels.items():
             token_rows = []
-            path_rows = []
+            sequence_rows = []
             for example, label in zip(pair_examples, labels):
                 common = {
                     "sequence_1": example["sequence_1"],
@@ -725,22 +712,14 @@ class ColabProSSTWorkflow:
                         "structure_vocab_size": structure_vocab_size,
                     }
                 )
-                path_rows.append(
-                    {
-                        **common,
-                        "pdb_path_1": example["pdb_path_1"],
-                        "chain_id_1": "",
-                        "pdb_path_2": example["pdb_path_2"],
-                        "chain_id_2": "",
-                    }
-                )
+                sequence_rows.append(common)
 
             pd.DataFrame(token_rows).to_csv(
-                template_home / f"prosst_{task_type}_template.csv",
+                template_home / f"prosst_{task_type}_prepared_template.csv",
                 index=False,
             )
-            pd.DataFrame(path_rows).to_csv(
-                template_home / f"prosst_{task_type}_pdb_template.csv",
+            pd.DataFrame(sequence_rows).to_csv(
+                template_home / f"prosst_{task_type}_sequence_template.csv",
                 index=False,
             )
 
@@ -760,27 +739,24 @@ class ColabProSSTWorkflow:
         )
         for template_name in ["prediction", "embedding"]:
             single_input_tokens.to_csv(
-                template_home / f"prosst_{template_name}_template.csv",
+                template_home / f"prosst_{template_name}_prepared_template.csv",
                 index=False,
             )
         single_input_tokens.iloc[[0]].to_csv(
-            template_home / "prosst_saturation_template.csv",
+            template_home / "prosst_saturation_prepared_template.csv",
             index=False,
         )
 
-        single_input_paths = pd.DataFrame(
-            [
-                {"sequence": "ACD", "pdb_path": "protein_1.pdb", "chain_id": ""},
-                {"sequence": "ACE", "pdb_path": "protein_2.pdb", "chain_id": ""},
-            ]
+        single_input_sequences = pd.DataFrame(
+            [{"sequence": "ACD"}, {"sequence": "ACE"}]
         )
         for template_name in ["prediction", "embedding"]:
-            single_input_paths.to_csv(
-                template_home / f"prosst_{template_name}_pdb_template.csv",
+            single_input_sequences.to_csv(
+                template_home / f"prosst_{template_name}_sequence_template.csv",
                 index=False,
             )
-        single_input_paths.iloc[[0]].to_csv(
-            template_home / "prosst_saturation_pdb_template.csv",
+        single_input_sequences.iloc[[0]].to_csv(
+            template_home / "prosst_saturation_sequence_template.csv",
             index=False,
         )
 
@@ -796,7 +772,7 @@ class ColabProSSTWorkflow:
                 for example in pair_examples[:2]
             ]
         ).to_csv(
-            template_home / "prosst_pair_prediction_template.csv",
+            template_home / "prosst_pair_prediction_prepared_template.csv",
             index=False,
         )
         pd.DataFrame(
@@ -804,15 +780,11 @@ class ColabProSSTWorkflow:
                 {
                     "sequence_1": example["sequence_1"],
                     "sequence_2": example["sequence_2"],
-                    "pdb_path_1": example["pdb_path_1"],
-                    "chain_id_1": "",
-                    "pdb_path_2": example["pdb_path_2"],
-                    "chain_id_2": "",
                 }
                 for example in pair_examples[:2]
             ]
         ).to_csv(
-            template_home / "prosst_pair_prediction_pdb_template.csv",
+            template_home / "prosst_pair_prediction_sequence_template.csv",
             index=False,
         )
 
@@ -845,8 +817,6 @@ class ColabProSSTWorkflow:
             chain_id=chain,
             structure_vocab_size=structure_vocab_size,
         )
-        self.last_structure = result
-
         output_path = Path(output_csv) if output_csv else self.output_dir / "prosst_structure_tokens.csv"
         df = pd.DataFrame(
             [
@@ -854,8 +824,6 @@ class ColabProSSTWorkflow:
                     "sequence": result["sequence"],
                     "structure_tokens": serialize_structure_tokens(result["structure_tokens"]),
                     "structure_vocab_size": int(result["structure_vocab_size"]),
-                    "pdb_path": structure_path,
-                    "chain_id": chain or "",
                 }
             ]
         )
@@ -871,101 +839,30 @@ class ColabProSSTWorkflow:
 
         return df
 
-    def attach_last_structure_tokens(
-        self,
-        csv_path: str,
-        output_path: str,
-        structure_vocab_size: Optional[int] = None,
-    ) -> str:
-        if self.last_structure is None:
-            raise RuntimeError(
-                "Run structure conversion first, or provide structure_tokens/"
-                "structure_path/pdb_path in the CSV."
-            )
-
-        df = pd.read_csv(csv_path)
-        lower_columns = {column.lower(): column for column in df.columns}
-        sequence_column = lower_columns.get(
-            "sequence", lower_columns.get("protein")
-        )
-        if sequence_column is None:
-            raise ValueError(
-                "CSV needs a sequence/protein column before reusing the last "
-                "structure tokens."
-            )
-
-        sequences = df[sequence_column].astype(str).str.strip().str.upper()
-        expected_sequence = str(self.last_structure["sequence"]).strip().upper()
-        mismatched = sequences[sequences != expected_sequence]
-        if not mismatched.empty:
-            raise ValueError(
-                "Cannot reuse one structure token sequence for CSV rows with "
-                "different protein sequences. Add per-row structure_tokens/"
-                "structure_path/pdb_path columns."
-            )
-
-        last_vocab_size = int(
-            self.last_structure.get(
-                "structure_vocab_size",
-                DEFAULT_PROSST_MODEL.structure_vocab_size,
-            )
-        )
-        if (
-            structure_vocab_size is not None
-            and last_vocab_size != int(structure_vocab_size)
-        ):
-            raise ValueError(
-                "Cannot reuse the latest structure tokens with the selected "
-                f"model: tokens use structure_vocab_size={last_vocab_size}, but "
-                f"the model requires {structure_vocab_size}. Convert the "
-                "structure again with the selected model."
-            )
-
-        df["structure_tokens"] = serialize_structure_tokens(
-            self.last_structure["structure_tokens"]
-        )
-        df["structure_vocab_size"] = last_vocab_size
-
-        df.to_csv(output_path, index=False)
-        return output_path
-
     def _prepare_input_csv(
         self,
         input_csv: str,
         upload_csv: bool,
-        use_last_structure_tokens: bool,
         suffix: str,
         structure_vocab_size: Optional[int] = None,
-        input_mode: Optional[str] = None,
+        input_mode: str = INPUT_MODE_TOKENS,
         pair_mode: bool = False,
     ) -> tuple[str, Optional[str]]:
         input_csv = self.maybe_upload_path(input_csv, upload_csv)
-        if input_mode is not None:
-            input_mode = str(input_mode).strip().lower()
-            if input_mode not in INPUT_MODES:
-                raise ValueError(
-                    f"input_mode must be one of {sorted(INPUT_MODES)}."
-                )
-            if input_mode == INPUT_MODE_SEQUENCE:
-                output_path = self.output_dir / f"prosst_{suffix}_prepared.csv"
-                prepared_csv = prepare_sequence_csv_with_structure_tokens(
-                    input_csv=input_csv,
-                    output_csv=str(output_path),
-                    cache_dir=str(self.cache_dir),
-                    structure_vocab_size=int(structure_vocab_size),
-                    pair_mode=pair_mode,
-                )
-                return prepared_csv, prepared_csv
-            return input_csv, None
-
-        if use_last_structure_tokens:
-            output_path = self.output_dir / f"prosst_{suffix}_with_structure.csv"
-            input_csv = self.attach_last_structure_tokens(
-                input_csv,
-                str(output_path),
-                structure_vocab_size=structure_vocab_size,
+        input_mode = str(input_mode).strip().lower()
+        if input_mode not in INPUT_MODES:
+            raise ValueError(f"input_mode must be one of {sorted(INPUT_MODES)}.")
+        if input_mode == INPUT_MODE_SEQUENCE:
+            output_path = self.output_dir / f"prosst_{suffix}_prepared.csv"
+            prepared_csv = prepare_sequence_csv_with_structure_tokens(
+                input_csv=input_csv,
+                output_csv=str(output_path),
+                cache_dir=str(self.cache_dir),
+                structure_vocab_size=int(structure_vocab_size),
+                pair_mode=pair_mode,
             )
-        return input_csv, (input_csv if use_last_structure_tokens else None)
+            return prepared_csv, prepared_csv
+        return input_csv, None
 
     @staticmethod
     def _validate_category_ids(labels, num_labels: int, task_name: str) -> None:
@@ -1064,18 +961,6 @@ class ColabProSSTWorkflow:
             )
 
     @staticmethod
-    def _validate_structure_reuse(
-        task_type: str,
-        use_last_structure_tokens: bool,
-    ) -> None:
-        if task_type in PAIR_TASK_TYPES and use_last_structure_tokens:
-            raise ValueError(
-                "Protein-pair tasks cannot reuse one latest structure "
-                "conversion. Provide structure_tokens_1 and "
-                "structure_tokens_2, or two structure paths per CSV row."
-            )
-
-    @staticmethod
     def _load_training_checkpoint(
         checkpoint_path: str,
         require_training_state: bool = False,
@@ -1143,14 +1028,11 @@ class ColabProSSTWorkflow:
         self,
         input_csv: str,
         upload_csv: bool = False,
-        use_last_structure_tokens: bool = False,
-        structure_zip: str = "",
-        upload_structure_zip: bool = False,
         model_path: str = MODEL_PROSST_2048,
         structure_vocab_size: Optional[int] = None,
         output_csv: Optional[str] = None,
         download: bool = True,
-        input_mode: Optional[str] = None,
+        input_mode: str = INPUT_MODE_TOKENS,
     ) -> pd.DataFrame:
         structure_vocab_size = resolve_structure_vocab_size(
             model_path,
@@ -1159,14 +1041,9 @@ class ColabProSSTWorkflow:
         input_csv, prepared_input_csv = self._prepare_input_csv(
             input_csv,
             upload_csv,
-            use_last_structure_tokens,
             "mutation",
             structure_vocab_size,
             input_mode=input_mode,
-        )
-        structure_base_dir = self.maybe_extract_asset_zip(
-            structure_zip,
-            upload_structure_zip,
         )
         output_path = Path(output_csv) if output_csv else self.output_dir / "prosst_mutation_scores.csv"
 
@@ -1176,7 +1053,7 @@ class ColabProSSTWorkflow:
             model_path=model_path,
             cache_dir=str(self.cache_dir),
             structure_vocab_size=structure_vocab_size,
-            structure_base_dir=structure_base_dir,
+            structure_base_dir=None,
         )
         df.attrs["output_csv"] = str(output_path)
         df.attrs["prepared_input_csv"] = prepared_input_csv
@@ -1189,16 +1066,13 @@ class ColabProSSTWorkflow:
         self,
         input_csv: str,
         upload_csv: bool = False,
-        use_last_structure_tokens: bool = False,
-        structure_zip: str = "",
-        upload_structure_zip: bool = False,
         model_path: str = MODEL_PROSST_2048,
         structure_vocab_size: Optional[int] = None,
         output_csv: Optional[str] = None,
         output_matrix_csv: Optional[str] = None,
         output_heatmap_png: Optional[str] = None,
         download: bool = True,
-        input_mode: Optional[str] = None,
+        input_mode: str = INPUT_MODE_TOKENS,
     ) -> dict:
         structure_vocab_size = resolve_structure_vocab_size(
             model_path,
@@ -1207,14 +1081,9 @@ class ColabProSSTWorkflow:
         input_csv, prepared_input_csv = self._prepare_input_csv(
             input_csv,
             upload_csv,
-            use_last_structure_tokens,
             "saturation",
             structure_vocab_size,
             input_mode=input_mode,
-        )
-        structure_base_dir = self.maybe_extract_asset_zip(
-            structure_zip,
-            upload_structure_zip,
         )
         score_path = (
             Path(output_csv)
@@ -1239,7 +1108,7 @@ class ColabProSSTWorkflow:
             model_path=model_path,
             cache_dir=str(self.cache_dir),
             structure_vocab_size=structure_vocab_size,
-            structure_base_dir=structure_base_dir,
+            structure_base_dir=None,
         )
 
         archive_path = self.output_dir / "prosst_saturation_mutagenesis.zip"
@@ -1265,9 +1134,6 @@ class ColabProSSTWorkflow:
         self,
         input_csv: str,
         upload_csv: bool = False,
-        use_last_structure_tokens: bool = False,
-        structure_zip: str = "",
-        upload_structure_zip: bool = False,
         model_path: str = MODEL_PROSST_2048,
         structure_vocab_size: Optional[int] = None,
         level: str = "protein",
@@ -1277,7 +1143,7 @@ class ColabProSSTWorkflow:
         output_index_csv: Optional[str] = None,
         checkpoint_path: str = "",
         download: bool = True,
-        input_mode: Optional[str] = None,
+        input_mode: str = INPUT_MODE_TOKENS,
     ) -> dict:
         level = str(level).strip().lower()
         if level not in EMBEDDING_LEVELS:
@@ -1309,14 +1175,9 @@ class ColabProSSTWorkflow:
         input_csv, prepared_input_csv = self._prepare_input_csv(
             input_csv,
             upload_csv,
-            use_last_structure_tokens,
             "embedding",
             structure_vocab_size,
             input_mode=input_mode,
-        )
-        structure_base_dir = self.maybe_extract_asset_zip(
-            structure_zip,
-            upload_structure_zip,
         )
 
         embedding_path = (
@@ -1339,7 +1200,7 @@ class ColabProSSTWorkflow:
             structure_vocab_size=structure_vocab_size,
             batch_size=batch_size,
             max_length=max_length,
-            structure_base_dir=structure_base_dir,
+            structure_base_dir=None,
             checkpoint_path=checkpoint_path,
             checkpoint_task_type=(
                 artifact_metadata["task_type"] if artifact_metadata else None
@@ -1374,9 +1235,6 @@ class ColabProSSTWorkflow:
         task_type: str,
         input_csv: str,
         upload_csv: bool = False,
-        use_last_structure_tokens: bool = False,
-        structure_zip: str = "",
-        upload_structure_zip: bool = False,
         task_name: str = "ProSSTUserTask",
         num_labels: int = 2,
         max_epochs: int = 2,
@@ -1395,7 +1253,7 @@ class ColabProSSTWorkflow:
         lora_dropout: float = 0.05,
         learning_rate: float = 2.0e-5,
         download: bool = True,
-        input_mode: Optional[str] = None,
+        input_mode: str = INPUT_MODE_TOKENS,
     ) -> dict:
         if task_type not in SUPPORTED_TASK_TYPES:
             raise ValueError(f"Unsupported ProSST task_type: {task_type}.")
@@ -1411,7 +1269,6 @@ class ColabProSSTWorkflow:
             raise ValueError("LoRA alpha must be at least 1.")
         if not 0 <= lora_dropout < 1:
             raise ValueError("LoRA dropout must be in the range [0, 1).")
-        self._validate_structure_reuse(task_type, use_last_structure_tokens)
         task_name = self._validate_task_name(task_name)
         structure_vocab_size = resolve_structure_vocab_size(
             model_path,
@@ -1461,17 +1318,11 @@ class ColabProSSTWorkflow:
         input_csv, prepared_input_csv = self._prepare_input_csv(
             input_csv,
             upload_csv,
-            use_last_structure_tokens,
             f"{task_type}_train",
             structure_vocab_size,
             input_mode=input_mode,
             pair_mode=task_type in PAIR_TASK_TYPES,
         )
-        structure_base_dir = self.maybe_extract_asset_zip(
-            structure_zip,
-            upload_structure_zip,
-        )
-
         self._validate_training_labels(input_csv, task_type, num_labels)
 
         construct_prosst_lmdb(
@@ -1481,7 +1332,7 @@ class ColabProSSTWorkflow:
             task_type,
             cache_dir=str(self.cache_dir),
             structure_vocab_size=structure_vocab_size,
-            structure_base_dir=structure_base_dir,
+            structure_base_dir=None,
         )
 
         model_py = {
@@ -1655,20 +1506,16 @@ class ColabProSSTWorkflow:
         input_csv: str,
         checkpoint_path: str,
         upload_csv: bool = False,
-        use_last_structure_tokens: bool = False,
-        structure_zip: str = "",
-        upload_structure_zip: bool = False,
         num_labels: int = 2,
         batch_size: int = 1,
         model_path: str = MODEL_PROSST_2048,
         structure_vocab_size: Optional[int] = None,
         output_csv: Optional[str] = None,
         download: bool = True,
-        input_mode: Optional[str] = None,
+        input_mode: str = INPUT_MODE_TOKENS,
     ) -> pd.DataFrame:
         if task_type not in SUPPORTED_TASK_TYPES:
             raise ValueError(f"Unsupported ProSST task_type: {task_type}.")
-        self._validate_structure_reuse(task_type, use_last_structure_tokens)
         structure_vocab_size = resolve_structure_vocab_size(
             model_path,
             structure_vocab_size,
@@ -1680,15 +1527,10 @@ class ColabProSSTWorkflow:
         input_csv, prepared_input_csv = self._prepare_input_csv(
             input_csv,
             upload_csv,
-            use_last_structure_tokens,
             f"{task_type}_predict",
             structure_vocab_size,
             input_mode=input_mode,
             pair_mode=task_type in PAIR_TASK_TYPES,
-        )
-        structure_base_dir = self.maybe_extract_asset_zip(
-            structure_zip,
-            upload_structure_zip,
         )
         output_path = Path(output_csv) if output_csv else self.output_dir / f"prosst_{task_type}_predictions.csv"
 
@@ -1702,7 +1544,7 @@ class ColabProSSTWorkflow:
             batch_size=batch_size,
             cache_dir=str(self.cache_dir),
             structure_vocab_size=structure_vocab_size,
-            structure_base_dir=structure_base_dir,
+            structure_base_dir=None,
         )
         df.attrs["output_csv"] = str(output_path)
         df.attrs["prepared_input_csv"] = prepared_input_csv

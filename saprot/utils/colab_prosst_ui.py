@@ -10,6 +10,10 @@ import traceback
 import uuid
 from pathlib import Path
 
+from saprot.data.sequence_to_prosst import (
+    ESMFOLD_MAX_RESIDUES,
+    normalize_protein_sequence,
+)
 from saprot.model.prosst.specs import (
     DEFAULT_PROSST_MODEL,
     PROSST_MODEL_SPECS,
@@ -398,23 +402,17 @@ class _ModelArtifactField:
 
 
 class _StructureInput:
+    SEQUENCE = "sequence"
     TOKENS = "tokens"
-    REUSE = "reuse"
-    PATHS = "paths"
 
     def __init__(self, ui):
         self.ui = ui
         self.pair_mode = False
         widgets = ui.widgets
-        default_mode = (
-            self.REUSE
-            if getattr(ui.workflow, "last_structure", None) is not None
-            else self.TOKENS
-        )
         self.mode = widgets.RadioButtons(
             options=self._mode_options(),
-            value=default_mode,
-            description="Structure input:",
+            value=self.SEQUENCE,
+            description="Input method:",
             style={"description_width": "initial"},
             layout=widgets.Layout(width="100%", max_width=ui.GUIDE_WIDTH),
         )
@@ -425,12 +423,7 @@ class _StructureInput:
                 overflow="visible",
             )
         )
-        self.zip_upload = _UploadField(
-            ui,
-            "Structure ZIP:",
-            "ZIP containing PDB/mmCIF files referenced by the CSV",
-        )
-        self.items = [self.mode, self.hint, *self.zip_upload.items]
+        self.items = [self.mode, self.hint]
         self.display_items = [
             widgets.VBox(
                 self.items,
@@ -447,15 +440,9 @@ class _StructureInput:
         self._update({"new": self.mode.value})
 
     def _mode_options(self):
-        if self.pair_mode:
-            return [
-                ("CSV contains structure tokens for both proteins", self.TOKENS),
-                ("CSV contains structure file paths for both proteins", self.PATHS),
-            ]
         return [
-            ("CSV contains structure_tokens", self.TOKENS),
-            ("Reuse latest structure conversion", self.REUSE),
-            ("CSV contains structure file paths", self.PATHS),
+            ("Sequence only - prepare structure automatically", self.SEQUENCE),
+            ("Prepared CSV with structure_tokens", self.TOKENS),
         ]
 
     def set_pair_mode(self, enabled):
@@ -464,24 +451,13 @@ class _StructureInput:
             self._update({"new": self.mode.value})
             return
 
-        current_mode = self.mode.value
         self.pair_mode = enabled
         self.mode.options = self._mode_options()
-        valid_modes = {value for _label, value in self.mode.options}
-        self.mode.value = (
-            current_mode if current_mode in valid_modes else self.TOKENS
-        )
         self._update({"new": self.mode.value})
 
     @property
-    def reuse_latest(self):
-        return self.mode.value == self.REUSE
-
-    @property
-    def structure_zip(self):
-        if self.mode.value != self.PATHS:
-            return ""
-        return self.zip_upload.value
+    def input_mode(self):
+        return self.mode.value
 
     def validate(self, csv_path, structure_vocab_size=None):
         path = Path(csv_path)
@@ -489,11 +465,37 @@ class _StructureInput:
             raise FileNotFoundError(f"Input CSV does not exist: {path}")
 
         with path.open("r", encoding="utf-8-sig", newline="") as handle:
-            reader = csv.reader(handle)
-            try:
-                columns = {column.strip().lower() for column in next(reader)}
-            except StopIteration as exc:
-                raise ValueError("The uploaded CSV is empty.") from exc
+            reader = csv.DictReader(handle)
+            columns = {
+                column.strip().lower() for column in (reader.fieldnames or [])
+            }
+            rows = [
+                {
+                    str(column).strip().lower(): value
+                    for column, value in row.items()
+                }
+                for row in reader
+            ]
+        if not columns or not rows:
+            raise ValueError("The uploaded CSV is empty.")
+
+        sequence_columns = (
+            ("sequence_1", "sequence_2") if self.pair_mode else ("sequence",)
+        )
+        missing_sequences = sorted(set(sequence_columns) - columns)
+        if missing_sequences:
+            raise ValueError(
+                "The uploaded CSV is missing required sequence column(s): "
+                f"{missing_sequences}."
+            )
+
+        if self.mode.value == self.SEQUENCE:
+            for row_number, row in enumerate(rows, start=2):
+                for column in sequence_columns:
+                    normalize_protein_sequence(
+                        row.get(column, ""),
+                        context=f"row {row_number} {column}",
+                    )
 
         if self.pair_mode and self.mode.value == self.TOKENS:
             required = {"structure_tokens_1", "structure_tokens_2"}
@@ -506,110 +508,64 @@ class _StructureInput:
                 )
         elif self.mode.value == self.TOKENS and "structure_tokens" not in columns:
             raise ValueError(
-                "You selected `CSV contains structure_tokens`, but the uploaded "
-                "CSV has no structure_tokens column. Choose another structure "
-                "input mode or add that column."
+                "You selected `Prepared CSV with structure_tokens`, but the "
+                "uploaded CSV has no structure_tokens column. Upload a prepared "
+                "CSV or choose the sequence-only input method."
             )
-
-        if self.pair_mode and self.mode.value == self.PATHS:
-            missing_partners = [
-                index
-                for index in (1, 2)
-                if not columns.intersection(
-                    {f"pdb_path_{index}", f"structure_path_{index}"}
-                )
-            ]
-            if missing_partners:
+        if self.mode.value == self.TOKENS:
+            if "structure_vocab_size" not in columns:
                 raise ValueError(
-                    "Protein-pair path input requires pdb_path_1/"
-                    "structure_path_1 and pdb_path_2/structure_path_2. Missing "
-                    f"path input for protein(s): {missing_partners}."
+                    "A prepared token CSV must include structure_vocab_size. "
+                    "Use the file downloaded from ColabProSST preparation."
                 )
-        elif self.mode.value == self.PATHS and not columns.intersection(
-            {"pdb_path", "structure_path"}
-        ):
-            raise ValueError(
-                "You selected `CSV contains structure file paths`, but the "
-                "uploaded CSV has no pdb_path or structure_path column."
-            )
-        if self.mode.value == self.REUSE and getattr(
-            self.ui.workflow, "last_structure", None
-        ) is None:
-            raise ValueError(
-                "No structure conversion is available in this Colab session. "
-                "Run `Convert protein structure to ProSST tokens` first."
-            )
-        if self.mode.value == self.REUSE and structure_vocab_size is not None:
-            last_structure = self.ui.workflow.last_structure
-            last_vocab_size = int(
-                last_structure.get(
-                    "structure_vocab_size",
-                    DEFAULT_PROSST_MODEL.structure_vocab_size,
-                )
-            )
-            if last_vocab_size != int(structure_vocab_size):
+            try:
+                vocab_sizes = {
+                    int(str(row.get("structure_vocab_size", "")).strip())
+                    for row in rows
+                }
+            except ValueError as exc:
                 raise ValueError(
-                    "The latest structure conversion used vocabulary "
-                    f"{last_vocab_size}, but the selected model requires "
-                    f"{structure_vocab_size}. Convert the structure again with "
-                    "the selected model."
+                    "structure_vocab_size must be an integer in every CSV row."
+                ) from exc
+            if structure_vocab_size is not None and vocab_sizes != {
+                int(structure_vocab_size)
+            }:
+                raise ValueError(
+                    "The prepared CSV uses structure_vocab_size="
+                    f"{sorted(vocab_sizes)}, but the selected ProSST model uses "
+                    f"{structure_vocab_size}. Select the model used to prepare "
+                    "this CSV."
                 )
 
     def _update(self, change):
         mode = change["new"]
-        self.zip_upload.set_visible(mode == self.PATHS)
-
-        if self.pair_mode and mode == self.TOKENS:
+        if self.pair_mode and mode == self.SEQUENCE:
             self.hint.value = (
-                "Every CSV row must contain <code>structure_tokens_1</code> "
+                "Upload a CSV with <code>sequence_1</code> and "
+                "<code>sequence_2</code>. ColabProSST predicts both structures "
+                "and generates matching tokens automatically. Each sequence "
+                f"must be at most {ESMFOLD_MAX_RESIDUES} residues."
+            )
+        elif self.pair_mode and mode == self.TOKENS:
+            self.hint.value = (
+                "Upload a prepared CSV containing <code>structure_tokens_1</code> "
                 "and <code>structure_tokens_2</code>, aligned with "
-                "<code>sequence_1</code> and <code>sequence_2</code>. Upload "
-                "only the CSV; a Structure ZIP is not needed. A single latest "
-                "structure conversion cannot be reused for a protein pair."
+                "<code>sequence_1</code> and <code>sequence_2</code>. Select the "
+                "same ProSST model used to prepare the tokens."
             )
-        elif self.pair_mode and mode == self.PATHS:
+        elif mode == self.SEQUENCE:
             self.hint.value = (
-                "Every CSV row must contain one path for each protein: "
-                "<code>pdb_path_1</code>/<code>structure_path_1</code> and "
-                "<code>pdb_path_2</code>/<code>structure_path_2</code>. Upload "
-                "one ZIP containing all relative-path structure files."
-            )
-        elif mode == self.TOKENS:
-            self.hint.value = (
-                "Every CSV row must contain <code>structure_tokens</code>. "
-                "Upload only the CSV; a Structure ZIP is not needed."
-            )
-        elif mode == self.REUSE:
-            last_structure = getattr(self.ui.workflow, "last_structure", None)
-            if last_structure is None:
-                availability = (
-                    "<br><font color='red'>No structure has been converted in "
-                    "this session yet.</font>"
-                )
-            else:
-                sequence_length = len(last_structure.get("sequence", ""))
-                vocab_size = int(
-                    last_structure.get(
-                        "structure_vocab_size",
-                        DEFAULT_PROSST_MODEL.structure_vocab_size,
-                    )
-                )
-                availability = (
-                    f"<br>Latest conversion available: {sequence_length} "
-                    f"residues, ProSST-{vocab_size}. Select the same base model."
-                )
-            self.hint.value = (
-                "First run <b>Convert protein structure to ProSST tokens</b>. "
-                "Then upload a CSV whose every row has the same sequence. "
-                "Do not upload a Structure ZIP."
-                + availability
+                "Upload a CSV with <code>sequence</code>. ColabProSST predicts "
+                "each structure and generates tokens for the selected model "
+                f"automatically. Sequences must be at most {ESMFOLD_MAX_RESIDUES} "
+                "residues. The prepared CSV can be downloaded after the task."
             )
         else:
             self.hint.value = (
-                "Every CSV row must contain <code>pdb_path</code> or "
-                "<code>structure_path</code>. Upload a Structure ZIP when those "
-                "values are filenames or relative paths. Existing absolute Colab "
-                "paths do not require a ZIP."
+                "Upload a prepared CSV containing <code>sequence</code>, "
+                "<code>structure_tokens</code>, and "
+                "<code>structure_vocab_size</code>. Select the same ProSST "
+                "model used to prepare the tokens."
             )
 
 
@@ -838,18 +794,18 @@ class ColabProSSTUI:
                 "<code>residue_labels</code>, and <code>stage</code>. "
                 "<code>residue_labels</code> must contain one integer category "
                 "per residue; use <code>-100</code> only to ignore an unlabeled "
-                "residue. Then choose one structure input method."
+                "residue. Then choose one of the two input methods below."
             )
         if ColabProSSTUI._is_pair_task(task_type):
             return (
                 "The CSV must contain <code>sequence_1</code>, "
                 "<code>sequence_2</code>, <code>label</code>, and "
-                "<code>stage</code>. Provide matching structure inputs for "
-                "both proteins using the selected method."
+                "<code>stage</code>. ColabProSST can prepare both structures "
+                "automatically, or use tokens already stored in the CSV."
             )
         return (
             "The CSV must contain <code>sequence</code>, <code>label</code>, "
-            "and <code>stage</code>. Then choose one structure input method."
+            "and <code>stage</code>. Then choose one of the two input methods below."
         )
 
     @staticmethod
@@ -886,34 +842,22 @@ class ColabProSSTUI:
 
     def _input_guide(self):
         return self._html(
-            "<h3>Prepare sequence and structure inputs</h3>"
-            "<p>Every CSV row needs an amino-acid sequence and matching ProSST "
-            "structure tokens. Protein-pair tasks instead need "
-            "<code>sequence_1</code>/<code>sequence_2</code> and matching "
-            "structure inputs for both proteins. Choose one of these input "
-            "methods:</p>"
+            "<h3>Choose one input method</h3>"
             "<ol>"
-            "<li><b>Recommended for a first run:</b> open <b>Prediction &gt; "
-            "Convert protein structure to ProSST tokens</b>, select a ProSST "
-            "model, upload one PDB/mmCIF file, and run the conversion. Return "
-            "to your task, select the same model, upload a CSV containing the "
-            "same sequence, and choose <b>Reuse latest structure conversion</b>. "
-            "A Structure ZIP is not needed. This shortcut works only when every "
-            "CSV row has that same sequence.</li>"
-            "<li><b>CSV already contains <code>structure_tokens</code>:</b> "
-            "upload only the CSV. Keep the generated "
-            "<code>structure_vocab_size</code> column and select the matching "
-            "ProSST model. This is the recommended format for repeated use and "
-            "future Colab sessions.</li>"
-            "<li><b>CSV does not contain <code>structure_tokens</code>:</b> every "
-            "row must instead contain <code>pdb_path</code> or "
-            "<code>structure_path</code>. Upload the corresponding Structure ZIP "
-            "when these values are filenames or relative paths. Files already "
-            "available at absolute Colab paths do not need a ZIP.</li>"
+            "<li><b>Sequence only:</b> upload a CSV containing amino-acid "
+            "sequences. ColabProSST predicts structures and generates tokens "
+            "automatically. This uses the public ESMFold service, sends each "
+            f"sequence to that service, and supports up to {ESMFOLD_MAX_RESIDUES} "
+            "residues per sequence. You can download the prepared token CSV "
+            "after the task.</li>"
+            "<li><b>Prepared token CSV:</b> first open <b>Prediction &gt; Prepare "
+            "reusable structure-token CSV</b>, generate and download the CSV, "
+            "then upload that file to later tasks. Select the same ProSST model "
+            "used during preparation. This avoids repeating structure "
+            "prediction and is recommended for repeated work.</li>"
             "</ol>"
-            "<p><b>Protein-pair tasks:</b> provide both partners in every row. "
-            "The single latest structure conversion cannot be reused for a "
-            "pair.</p>",
+            "<p>Protein-pair tasks use the same two methods with "
+            "<code>sequence_1</code> and <code>sequence_2</code>.</p>",
             width="100%",
             max_width=self.GUIDE_WIDTH,
             overflow="visible",
@@ -1359,7 +1303,7 @@ class ColabProSSTUI:
         csv_input = _UploadField(
             self,
             "Training CSV:",
-            "Path to a CSV with sequence, label, stage, and structure input",
+            "CSV with sequence, label, and stage; tokens are optional",
         )
         dataset_help = self._html(
             self._training_dataset_help("classification"),
@@ -1429,19 +1373,14 @@ class ColabProSSTUI:
             structure_input.set_pair_mode(self._is_pair_task(selected_task))
             if selected_task == "token_classification":
                 placeholder = (
-                    "Path to a CSV with sequence, residue_labels, stage, and "
-                    "structure input"
+                    "CSV with sequence, residue_labels, and stage"
                 )
             elif self._is_pair_task(selected_task):
                 placeholder = (
-                    "Path to a CSV with sequence_1, sequence_2, label, stage, "
-                    "and two structure inputs"
+                    "CSV with sequence_1, sequence_2, label, and stage"
                 )
             else:
-                placeholder = (
-                    "Path to a CSV with sequence, label, stage, and structure "
-                    "input"
-                )
+                placeholder = "CSV with sequence, label, and stage"
             csv_input.path.placeholder = placeholder
 
         def toggle_advanced(_button):
@@ -1530,8 +1469,7 @@ class ColabProSSTUI:
             result = self.workflow.train_downstream(
                 task_type=task_type.value,
                 input_csv=csv_input.value,
-                use_last_structure_tokens=structure_input.reuse_latest,
-                structure_zip=structure_input.structure_zip,
+                input_mode=structure_input.input_mode,
                 task_name=clean_task_name,
                 num_labels=num_labels.value,
                 max_epochs=epochs.value,
@@ -1577,6 +1515,7 @@ class ColabProSSTUI:
             self._display_result_downloads(
                 (artifact_label, result["checkpoint_download_path"]),
                 ("test predictions CSV", result["test_result_csv"]),
+                ("prepared input CSV", result.get("prepared_input_csv")),
             )
             finish_hint.value = (
                 "<h3>The training is completed. You can then:</h3>"
@@ -1659,7 +1598,7 @@ class ColabProSSTUI:
             "Extract protein embeddings", style="info"
         )
         structure_button = self._button(
-            "Convert protein structure to ProSST tokens", style="info"
+            "Prepare reusable structure-token CSV", style="info"
         )
         template_button = self._button("Download CSV templates")
         property_button.on_click(
@@ -1711,8 +1650,8 @@ class ColabProSSTUI:
             self._separator(),
             structure_button,
             self._html(
-                "Convert a PDB or mmCIF structure into the structure tokens "
-                "required by ProSST."
+                "Convert one PDB/mmCIF structure into a durable CSV containing "
+                "its sequence and ProSST structure tokens."
             ),
             self._separator(),
             template_button,
@@ -1748,7 +1687,7 @@ class ColabProSSTUI:
         csv_input = _UploadField(
             self,
             "Prediction CSV:",
-            "Path to a CSV with sequence and structure input",
+            "CSV with sequence; prepared structure tokens are optional",
         )
         structure_input = _StructureInput(self)
         structure_input.set_pair_mode(
@@ -1772,10 +1711,9 @@ class ColabProSSTUI:
             prediction_help.value = self._prediction_output_help(selected_task)
             structure_input.set_pair_mode(self._is_pair_task(selected_task))
             csv_input.path.placeholder = (
-                "Path to a CSV with sequence_1, sequence_2, and two structure "
-                "inputs"
+                "CSV with sequence_1 and sequence_2"
                 if self._is_pair_task(selected_task)
-                else "Path to a CSV with sequence and structure input"
+                else "CSV with sequence"
             )
 
         def predict():
@@ -1795,8 +1733,7 @@ class ColabProSSTUI:
                 task_type=task_type.value,
                 input_csv=csv_input.value,
                 checkpoint_path=checkpoint.value,
-                use_last_structure_tokens=structure_input.reuse_latest,
-                structure_zip=structure_input.structure_zip,
+                input_mode=structure_input.input_mode,
                 num_labels=num_labels.value,
                 batch_size=batch_size.value,
                 model_path=model.value,
@@ -1809,6 +1746,7 @@ class ColabProSSTUI:
             self.display(result.head())
             self._display_result_downloads(
                 ("predictions CSV", result.attrs.get("output_csv")),
+                ("prepared input CSV", result.attrs.get("prepared_input_csv")),
             )
 
         checkpoint.on_loaded(
@@ -1890,7 +1828,7 @@ class ColabProSSTUI:
         csv_input = _UploadField(
             self,
             "Protein CSV:",
-            "Path to a CSV with sequence and structure input",
+            "CSV with sequence; prepared structure tokens are optional",
         )
         structure_input = _StructureInput(self)
         batch_size = widgets.Dropdown(
@@ -1951,8 +1889,7 @@ class ColabProSSTUI:
             print("Extracting ProSST embeddings...")
             result = self.workflow.extract_embeddings(
                 input_csv=csv_input.value,
-                use_last_structure_tokens=structure_input.reuse_latest,
-                structure_zip=structure_input.structure_zip,
+                input_mode=structure_input.input_mode,
                 model_path=model.value,
                 structure_vocab_size=model_spec.structure_vocab_size,
                 level=level.value,
@@ -1980,6 +1917,7 @@ class ColabProSSTUI:
                 ("embedding ZIP", result["archive_path"]),
                 ("embeddings PT", result["output_pt"]),
                 ("embedding index CSV", result["output_index_csv"]),
+                ("prepared input CSV", result.get("prepared_input_csv")),
             )
             completion.value = (
                 "<b>Embedding extraction completed.</b><br>"
@@ -2024,7 +1962,7 @@ class ColabProSSTUI:
         csv_input = _UploadField(
             self,
             "Protein CSV:",
-            "Path to a one-row CSV with sequence and structure input",
+            "One-row CSV with sequence; prepared structure tokens are optional",
         )
         structure_input = _StructureInput(self)
         start_button = self._button(
@@ -2044,8 +1982,7 @@ class ColabProSSTUI:
             print("Running single-site saturation mutagenesis...")
             result = self.workflow.run_saturation_mutagenesis(
                 input_csv=csv_input.value,
-                use_last_structure_tokens=structure_input.reuse_latest,
-                structure_zip=structure_input.structure_zip,
+                input_mode=structure_input.input_mode,
                 model_path=model.value,
                 structure_vocab_size=model_spec.structure_vocab_size,
                 download=False,
@@ -2060,6 +1997,7 @@ class ColabProSSTUI:
                 ("mutation scores CSV", result["output_csv"]),
                 ("score matrix CSV", result["output_matrix_csv"]),
                 ("heatmap PNG", result["output_heatmap_png"]),
+                ("prepared input CSV", result.get("prepared_input_csv")),
             )
 
         start_button.on_click(
@@ -2092,7 +2030,7 @@ class ColabProSSTUI:
         csv_input = _UploadField(
             self,
             "Mutation CSV:",
-            "Path to a CSV with sequence, mutant, and structure input",
+            "CSV with sequence and mutant; prepared structure tokens are optional",
         )
         structure_input = _StructureInput(self)
         start_button = self._button("Start prediction", style="info")
@@ -2109,8 +2047,7 @@ class ColabProSSTUI:
             print("Start mutational effect prediction...")
             result = self.workflow.run_zero_shot(
                 input_csv=csv_input.value,
-                use_last_structure_tokens=structure_input.reuse_latest,
-                structure_zip=structure_input.structure_zip,
+                input_mode=structure_input.input_mode,
                 model_path=model.value,
                 structure_vocab_size=model_spec.structure_vocab_size,
                 download=False,
@@ -2119,6 +2056,7 @@ class ColabProSSTUI:
             self.display(result.head())
             self._display_result_downloads(
                 ("mutation scores CSV", result.attrs.get("output_csv")),
+                ("prepared input CSV", result.attrs.get("prepared_input_csv")),
             )
 
         start_button.on_click(
@@ -2142,7 +2080,9 @@ class ColabProSSTUI:
             self._heading("Mutation data:", level=3),
             self._html(
                 "The CSV must contain <code>sequence</code> and "
-                "<code>mutant</code>. Then choose one structure input method."
+                "<code>mutant</code>. Choose automatic preparation or upload a "
+                "prepared token CSV. Zero-shot mutation scoring uses official "
+                "ProSST family models, not downstream fine-tuned checkpoints."
             ),
             *csv_input.items,
             *structure_input.display_items,
@@ -2204,21 +2144,22 @@ class ColabProSSTUI:
                 ("structure tokens CSV", result.attrs.get("output_csv")),
             )
             next_steps.value = (
-                "<h3>Use these tokens in your next task</h3>"
+                "<h3>Your reusable input CSV is ready</h3>"
                 "<ol>"
-                "<li>Click <b>Go back</b> below and open training or the "
-                "prediction task you need.</li>"
-                "<li>Upload a CSV containing the same amino-acid sequence.</li>"
+                "<li>Download the <b>structure tokens CSV</b> above.</li>"
+                "<li>Open training or the prediction task you need and upload "
+                "that downloaded CSV.</li>"
                 f"<li>Keep <b>{get_prosst_model_spec(model.value).display_name}</b> "
-                "selected. Structure tokens cannot be reused by a different "
-                "ProSST vocabulary.</li>"
-                "<li>Select <b>Reuse latest structure conversion</b>. Do not "
-                "upload a Structure ZIP.</li>"
+                "selected, because tokens are specific to its structure "
+                "vocabulary.</li>"
+                "<li>Select <b>Prepared CSV with structure_tokens</b>.</li>"
                 "</ol>"
-                "The shortcut lasts only for this running Colab session. For a "
-                "future session, keep the downloaded conversion CSV and place "
-                "its <code>structure_tokens</code> and "
-                "<code>structure_vocab_size</code> in your task CSV."
+                "The downloaded file already contains <code>sequence</code>, "
+                "<code>structure_tokens</code>, and "
+                "<code>structure_vocab_size</code>, so it can also be reused in "
+                "future Colab sessions. Add task-specific columns such as "
+                "<code>label</code>, <code>stage</code>, or <code>mutant</code> "
+                "when needed."
             )
             next_steps.layout.display = None
 
@@ -2227,7 +2168,7 @@ class ColabProSSTUI:
             lambda _button: self._start_task(start_button, output, convert)
         )
         self._display_page(
-            self._heading("Convert protein structure to ProSST tokens"),
+            self._heading("Prepare reusable structure-token CSV"),
             self._heading("Model setting:", level=3),
             model,
             self._heading("Structure setting:", level=3),

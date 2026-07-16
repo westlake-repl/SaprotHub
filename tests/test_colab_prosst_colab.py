@@ -218,17 +218,15 @@ class ColabProSSTNotebookTest(unittest.TestCase):
         )
         self.assertIn("I want to share my model publicly", home_source)
         self.assertIn("self._input_guide()", home_source)
-        self.assertIn("Recommended for a first run", guide_source)
-        self.assertIn("Prediction &gt;", guide_source)
-        self.assertIn("CSV already contains", guide_source)
-        self.assertIn("CSV does not contain", guide_source)
-        self.assertIn("absolute Colab paths", guide_source)
-        self.assertIn("structure_vocab_size", guide_source)
+        self.assertIn("Sequence only", guide_source)
+        self.assertIn("Prepared token CSV", guide_source)
+        self.assertIn("public ESMFold service", guide_source)
+        self.assertIn("reusable structure-token CSV", guide_source)
         self.assertIn('width="100%"', guide_source)
         self.assertIn("max_width=self.GUIDE_WIDTH", guide_source)
         self.assertNotIn("convert a protein structure", home_source)
         self.assertNotIn("Download CSV templates", home_source)
-        self.assertIn("Convert protein structure to ProSST tokens", prediction_source)
+        self.assertIn("Prepare reusable structure-token CSV", prediction_source)
         self.assertIn("Download CSV templates", prediction_source)
 
     def test_shared_interface_copy_is_kept_in_sync_with_colabsaprot(self):
@@ -269,8 +267,8 @@ class ColabProSSTNotebookTest(unittest.TestCase):
                 self.assertIn(copy, reference)
                 self.assertIn(copy, prosst)
 
-        self.assertIn("Convert protein structure to ProSST tokens", prosst)
-        self.assertIn("Structure input:", prosst)
+        self.assertIn("Prepare reusable structure-token CSV", prosst)
+        self.assertIn("Input method:", prosst)
 
     def test_share_page_follows_the_colabsaprot_login_first_flow(self):
         source = UI_PATH.read_text(encoding="utf-8")
@@ -302,25 +300,24 @@ class ColabProSSTNotebookTest(unittest.TestCase):
         self.assertIn("def personal_hf_model_repo_id", workflow_source)
         self.assertIn('f"{username}/{repo_name}"', workflow_source)
 
-    def test_task_pages_require_an_explicit_structure_input_mode(self):
+    def test_task_pages_offer_exactly_two_input_modes(self):
         source = UI_PATH.read_text(encoding="utf-8")
 
         self.assertEqual(source.count("structure_input = _StructureInput(self)"), 5)
-        self.assertIn("CSV contains structure_tokens", source)
-        self.assertIn("Reuse latest structure conversion", source)
-        self.assertIn("CSV contains structure file paths", source)
-        self.assertIn("structure_input.reuse_latest", source)
-        self.assertIn("structure_input.structure_zip", source)
-        self.assertNotIn(
-            'description="Reuse tokens from the latest structure conversion"',
-            source,
-        )
+        self.assertIn("Sequence only - prepare structure automatically", source)
+        self.assertIn("Prepared CSV with structure_tokens", source)
+        self.assertIn("structure_input.input_mode", source)
+        self.assertNotIn("Reuse latest structure conversion", source)
+        self.assertNotIn("CSV contains structure file paths", source)
+        self.assertNotIn("structure_input.reuse_latest", source)
+        self.assertNotIn("structure_input.structure_zip", source)
+        self.assertNotIn("Structure ZIP:", source)
         structure_page = source.split("def _structure_page(self):", 1)[1].split(
             "def _share_page(self):", 1
         )[0]
-        self.assertIn("Use these tokens in your next task", structure_page)
-        self.assertIn("Reuse latest structure conversion", structure_page)
-        self.assertIn("lasts only for this running Colab session", structure_page)
+        self.assertIn("Your reusable input CSV is ready", structure_page)
+        self.assertIn("Prepared CSV with structure_tokens", structure_page)
+        self.assertIn("future Colab sessions", structure_page)
 
         training_page = source.split("def _training_page(self):", 1)[1].split(
             "def _prediction_menu_page(self):", 1
@@ -2446,43 +2443,6 @@ class ColabProSSTWorkflowTest(unittest.TestCase):
             self.assertEqual(captured[0]["model"].kwargs.num_labels, 2)
             self.assertNotIn("num_labels", captured[1]["model"].kwargs)
 
-    def test_pair_tasks_reject_single_structure_reuse(self):
-        with tempfile.TemporaryDirectory() as temporary_dir:
-            root = Path(temporary_dir)
-            workflow = self.workflow_class(
-                output_dir=str(root / "output"),
-                upload_dir=str(root / "uploads"),
-                asset_dir=str(root / "assets"),
-                cache_dir=str(root / "cache"),
-                saprothub_dir=str(root / "SaprotHub"),
-            )
-
-            for method_name, kwargs in [
-                (
-                    "train_downstream",
-                    {
-                        "task_type": "pair_classification",
-                        "input_csv": "unused.csv",
-                    },
-                ),
-                (
-                    "predict_downstream",
-                    {
-                        "task_type": "pair_regression",
-                        "input_csv": "unused.csv",
-                        "checkpoint_path": "unused.pt",
-                    },
-                ),
-            ]:
-                with self.subTest(method=method_name), self.assertRaisesRegex(
-                    ValueError,
-                    "cannot reuse one latest structure conversion",
-                ):
-                    getattr(workflow, method_name)(
-                        use_last_structure_tokens=True,
-                        **kwargs,
-                    )
-
     def test_pair_label_validation_matches_scalar_task_semantics(self):
         with tempfile.TemporaryDirectory() as temporary_dir:
             root = Path(temporary_dir)
@@ -2699,30 +2659,34 @@ class ColabProSSTWorkflowTest(unittest.TestCase):
             )
 
             token_template = self.pd.read_csv(
-                root / "templates" / "prosst_classification_template.csv"
+                root / "templates" / "prosst_classification_prepared_template.csv"
             )
             residue_template = self.pd.read_csv(
-                root / "templates" / "prosst_token_classification_template.csv"
-            )
-            path_template = self.pd.read_csv(
-                root / "templates" / "prosst_classification_pdb_template.csv"
-            )
-            pair_template = self.pd.read_csv(
-                root / "templates" / "prosst_pair_classification_template.csv"
-            )
-            pair_path_template = self.pd.read_csv(
                 root
                 / "templates"
-                / "prosst_pair_regression_pdb_template.csv"
+                / "prosst_token_classification_prepared_template.csv"
+            )
+            sequence_template = self.pd.read_csv(
+                root / "templates" / "prosst_classification_sequence_template.csv"
+            )
+            pair_template = self.pd.read_csv(
+                root
+                / "templates"
+                / "prosst_pair_classification_prepared_template.csv"
+            )
+            pair_sequence_template = self.pd.read_csv(
+                root
+                / "templates"
+                / "prosst_pair_regression_sequence_template.csv"
             )
             pair_prediction = self.pd.read_csv(
-                root / "templates" / "prosst_pair_prediction_template.csv"
+                root / "templates" / "prosst_pair_prediction_prepared_template.csv"
             )
             embedding_template = self.pd.read_csv(
-                root / "templates" / "prosst_embedding_template.csv"
+                root / "templates" / "prosst_embedding_prepared_template.csv"
             )
             saturation_template = self.pd.read_csv(
-                root / "templates" / "prosst_saturation_template.csv"
+                root / "templates" / "prosst_saturation_prepared_template.csv"
             )
             self.assertEqual(
                 token_template["structure_vocab_size"].unique().tolist(),
@@ -2736,7 +2700,10 @@ class ColabProSSTWorkflowTest(unittest.TestCase):
                 residue_template.loc[0, "residue_labels"],
                 "0 1 0",
             )
-            self.assertNotIn("structure_vocab_size", path_template.columns)
+            self.assertEqual(
+                sequence_template.columns.tolist(),
+                ["sequence", "label", "stage"],
+            )
             self.assertEqual(
                 pair_template["structure_vocab_size"].unique().tolist(),
                 [20],
@@ -2749,10 +2716,9 @@ class ColabProSSTWorkflowTest(unittest.TestCase):
                     "structure_tokens_2",
                 }.issubset(pair_template.columns)
             )
-            self.assertTrue(
-                {"pdb_path_1", "pdb_path_2"}.issubset(
-                    pair_path_template.columns
-                )
+            self.assertEqual(
+                pair_sequence_template.columns.tolist(),
+                ["sequence_1", "sequence_2", "label", "stage"],
             )
             self.assertNotIn("label", pair_prediction.columns)
             self.assertEqual(
@@ -2772,72 +2738,6 @@ class ColabProSSTWorkflowTest(unittest.TestCase):
                 saturation_template.columns.tolist(),
                 ["sequence", "structure_tokens", "structure_vocab_size"],
             )
-
-    def test_reusing_latest_conversion_overrides_other_structure_sources(self):
-        with tempfile.TemporaryDirectory() as temporary_dir:
-            root = Path(temporary_dir)
-            input_csv = root / "input.csv"
-            output_csv = root / "output.csv"
-            self.pd.DataFrame(
-                [
-                    {
-                        "sequence": "ACD",
-                        "structure_tokens": "1 1 1",
-                        "pdb_path": "old.pdb",
-                    }
-                ]
-            ).to_csv(input_csv, index=False)
-
-            workflow = self.workflow_class(
-                output_dir=str(root / "output"),
-                upload_dir=str(root / "uploads"),
-                asset_dir=str(root / "assets"),
-                cache_dir=str(root / "cache"),
-                saprothub_dir=str(root / "SaprotHub"),
-            )
-            workflow.last_structure = {
-                "sequence": "ACD",
-                "structure_tokens": [7, 8, 9],
-            }
-            workflow.attach_last_structure_tokens(input_csv, output_csv)
-
-            result = self.pd.read_csv(output_csv)
-            self.assertEqual(result.loc[0, "structure_tokens"], "7 8 9")
-            self.assertEqual(result.loc[0, "structure_vocab_size"], 2048)
-            self.assertEqual(result.loc[0, "pdb_path"], "old.pdb")
-
-    def test_reusing_latest_conversion_rejects_a_different_model_family(self):
-        with tempfile.TemporaryDirectory() as temporary_dir:
-            root = Path(temporary_dir)
-            input_csv = root / "input.csv"
-            output_csv = root / "output.csv"
-            self.pd.DataFrame([{"sequence": "ACD"}]).to_csv(
-                input_csv,
-                index=False,
-            )
-
-            workflow = self.workflow_class(
-                output_dir=str(root / "output"),
-                upload_dir=str(root / "uploads"),
-                asset_dir=str(root / "assets"),
-                cache_dir=str(root / "cache"),
-                saprothub_dir=str(root / "SaprotHub"),
-            )
-            workflow.last_structure = {
-                "sequence": "ACD",
-                "structure_tokens": [7, 8, 9],
-                "structure_vocab_size": 128,
-            }
-
-            with self.assertRaisesRegex(
-                ValueError,
-                "tokens use structure_vocab_size=128",
-            ):
-                workflow.attach_last_structure_tokens(
-                    str(input_csv),
-                    str(output_csv),
-                    structure_vocab_size=2048,
-                )
 
     def test_classification_category_mismatch_is_explicit(self):
         with tempfile.TemporaryDirectory() as temporary_dir:
@@ -3830,11 +3730,11 @@ class ColabProSSTWidgetTest(unittest.TestCase):
         self.assertEqual(input_guide.layout.max_width, ui.GUIDE_WIDTH)
         self.assertEqual(input_guide.layout.overflow, "visible")
         self.assertIsNone(input_guide.layout.height)
-        self.assertIn("CSV already contains", input_guide.value)
+        self.assertIn("Sequence only", input_guide.value)
+        self.assertIn("Prepared token CSV", input_guide.value)
         self.assertIn("structure_tokens", input_guide.value)
-        self.assertIn("absolute Colab paths", input_guide.value)
+        self.assertIn("public ESMFold service", input_guide.value)
         self.assertIn("Protein-pair tasks", input_guide.value)
-        self.assertIn("cannot be reused for a pair", input_guide.value)
 
         model_dropdown = ui._model_dropdown()
         self.assertFalse(model_dropdown.disabled)
@@ -3909,92 +3809,76 @@ class ColabProSSTWidgetTest(unittest.TestCase):
         self.assertEqual(metadata_method.value, "lora")
 
         structure_input = module._StructureInput(ui)
-        self.assertEqual(structure_input.mode.value, structure_input.TOKENS)
-        self.assertEqual(structure_input.zip_upload.path.layout.display, "none")
-        self.assertIn("Upload only the CSV", structure_input.hint.value)
+        self.assertEqual(structure_input.mode.value, structure_input.SEQUENCE)
+        self.assertEqual(
+            list(structure_input.mode.options),
+            [
+                (
+                    "Sequence only - prepare structure automatically",
+                    structure_input.SEQUENCE,
+                ),
+                ("Prepared CSV with structure_tokens", structure_input.TOKENS),
+            ],
+        )
+        self.assertIn("predicts", structure_input.hint.value)
 
         with tempfile.TemporaryDirectory() as temporary_dir:
             root = Path(temporary_dir)
             tokens_csv = root / "tokens.csv"
             tokens_csv.write_text(
-                "sequence,structure_tokens\nACD,\"1 2 3\"\n",
+                "sequence,structure_tokens,structure_vocab_size\n"
+                "ACD,\"1 2 3\",2048\n",
                 encoding="utf-8",
             )
             sequence_csv = root / "sequence.csv"
             sequence_csv.write_text("sequence\nACD\n", encoding="utf-8")
-            paths_csv = root / "paths.csv"
-            paths_csv.write_text(
-                "sequence,pdb_path\nACD,protein.pdb\n",
+            long_sequence_csv = root / "long-sequence.csv"
+            long_sequence_csv.write_text(
+                f"sequence\n{'A' * 401}\n",
                 encoding="utf-8",
             )
             pair_tokens_csv = root / "pair-tokens.csv"
             pair_tokens_csv.write_text(
-                "sequence_1,sequence_2,structure_tokens_1,structure_tokens_2\n"
-                "ACD,AC,\"1 2 3\",\"4 5\"\n",
+                "sequence_1,sequence_2,structure_tokens_1,structure_tokens_2,"
+                "structure_vocab_size\nACD,AC,\"1 2 3\",\"4 5\",2048\n",
                 encoding="utf-8",
             )
             incomplete_pair_csv = root / "incomplete-pair.csv"
             incomplete_pair_csv.write_text(
-                "sequence_1,sequence_2,structure_tokens_1\n"
-                "ACD,AC,\"1 2 3\"\n",
+                "sequence_1,sequence_2,structure_tokens_1,structure_vocab_size\n"
+                "ACD,AC,\"1 2 3\",2048\n",
                 encoding="utf-8",
             )
-            pair_paths_csv = root / "pair-paths.csv"
-            pair_paths_csv.write_text(
-                "sequence_1,sequence_2,pdb_path_1,structure_path_2\n"
-                "ACD,AC,protein_1.pdb,protein_2.cif\n",
+            pair_sequence_csv = root / "pair-sequence.csv"
+            pair_sequence_csv.write_text(
+                "sequence_1,sequence_2\nACD,AC\n",
                 encoding="utf-8",
             )
 
+            structure_input.validate(sequence_csv)
+            with self.assertRaisesRegex(ValueError, "at most 400"):
+                structure_input.validate(long_sequence_csv)
+
+            structure_input.mode.value = structure_input.TOKENS
             structure_input.validate(tokens_csv)
+            with self.assertRaisesRegex(ValueError, "selected ProSST model"):
+                structure_input.validate(tokens_csv, structure_vocab_size=20)
             with self.assertRaisesRegex(ValueError, "no structure_tokens column"):
-                structure_input.validate(sequence_csv)
-
-            structure_input.mode.value = structure_input.PATHS
-            structure_input.validate(paths_csv)
-            with self.assertRaisesRegex(ValueError, "no pdb_path or structure_path"):
-                structure_input.validate(sequence_csv)
-
-            structure_input.mode.value = structure_input.REUSE
-            with self.assertRaisesRegex(ValueError, "No structure conversion"):
                 structure_input.validate(sequence_csv)
 
             structure_input.set_pair_mode(True)
             self.assertEqual(structure_input.mode.value, structure_input.TOKENS)
-            self.assertNotIn(
-                structure_input.REUSE,
-                [value for _label, value in structure_input.mode.options],
-            )
             self.assertIn("structure_tokens_1", structure_input.hint.value)
             structure_input.validate(pair_tokens_csv)
             with self.assertRaisesRegex(ValueError, "structure_tokens_2"):
                 structure_input.validate(incomplete_pair_csv)
 
-            structure_input.mode.value = structure_input.PATHS
-            structure_input.validate(pair_paths_csv)
-            with self.assertRaisesRegex(
-                ValueError,
-                r"protein\(s\): \[1, 2\]",
-            ):
-                structure_input.validate(paths_csv)
-
+            structure_input.mode.value = structure_input.SEQUENCE
+            structure_input.validate(pair_sequence_csv)
+            self.assertIn("predicts both structures", structure_input.hint.value)
             structure_input.set_pair_mode(False)
-            self.assertIn(
-                structure_input.REUSE,
-                [value for _label, value in structure_input.mode.options],
-            )
+            self.assertEqual(structure_input.input_mode, structure_input.SEQUENCE)
 
-        structure_input.mode.value = structure_input.PATHS
-        self.assertIsNone(structure_input.zip_upload.path.layout.display)
-        structure_input.zip_upload.value = "/tmp/structures.zip"
-        self.assertEqual(
-            structure_input.structure_zip, "/tmp/structures.zip"
-        )
-
-        structure_input.mode.value = structure_input.REUSE
-        self.assertTrue(structure_input.reuse_latest)
-        self.assertEqual(structure_input.structure_zip, "")
-        self.assertIn("No structure has been converted", structure_input.hint.value)
         self.assertEqual(len(structure_input.display_items), 1)
         structure_group = structure_input.display_items[0]
         self.assertEqual(tuple(structure_group.children), tuple(structure_input.items))
@@ -4062,10 +3946,9 @@ class ColabProSSTWidgetTest(unittest.TestCase):
         self.assertEqual(rejected_field.value, "")
         self.assertIsNone(rejected_field.metadata)
 
-        workflow.last_structure = {"sequence": "ACD"}
         structure_input = module._StructureInput(ui)
-        self.assertEqual(structure_input.mode.value, structure_input.REUSE)
-        self.assertIn("3 residues", structure_input.hint.value)
+        self.assertEqual(structure_input.mode.value, structure_input.SEQUENCE)
+        self.assertIn("400 residues", structure_input.hint.value)
 
         rendered.clear()
         ui._home_page()
@@ -4078,7 +3961,7 @@ class ColabProSSTWidgetTest(unittest.TestCase):
                 "I want to share my model publicly",
             ],
         )
-        self.assertIn("Prepare sequence and structure inputs", home_items[4].value)
+        self.assertIn("Choose one input method", home_items[4].value)
 
         ui.navigation_history.clear()
         ui.current_page = ui._home_page
@@ -4242,7 +4125,7 @@ class ColabProSSTWidgetTest(unittest.TestCase):
         training_structure = next(
             item
             for item in training_items
-            if getattr(item, "description", "") == "Structure input:"
+            if getattr(item, "description", "") == "Input method:"
         )
         training_start = next(
             item
@@ -4412,7 +4295,7 @@ class ColabProSSTWidgetTest(unittest.TestCase):
         prediction_structure = next(
             item
             for item in prediction_items
-            if getattr(item, "description", "") == "Structure input:"
+            if getattr(item, "description", "") == "Input method:"
         )
         self.assertEqual(prediction_task.value, "token_classification")
         self.assertEqual(prediction_categories.value, 3)
