@@ -842,7 +842,10 @@ class ColabProSSTUI:
 
     def _input_guide(self):
         return self._html(
-            "<h3>Choose one input method</h3>"
+            "<h3>Important: Choose one input method</h3>"
+            "<p>ProSST requires both an amino-acid sequence and matching "
+            "ProSST structure tokens as input. Therefore, every protein must "
+            "be prepared using one of the two methods below.</p>"
             "<ol>"
             "<li><b>Sequence only:</b> upload a CSV containing amino-acid "
             "sequences. ColabProSST predicts structures and generates tokens "

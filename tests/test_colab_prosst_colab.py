@@ -4008,7 +4008,11 @@ class ColabProSSTWidgetTest(unittest.TestCase):
                 "I want to share my model publicly",
             ],
         )
-        self.assertIn("Choose one input method", home_items[4].value)
+        self.assertIn("Important: Choose one input method", home_items[4].value)
+        self.assertIn(
+            "requires both an amino-acid sequence and matching ProSST structure tokens",
+            home_items[4].value,
+        )
 
         ui.navigation_history.clear()
         ui.current_page = ui._home_page
