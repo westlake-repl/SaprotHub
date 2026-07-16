@@ -423,7 +423,21 @@ class _StructureInput:
                 overflow="visible",
             )
         )
-        self.items = [self.mode, self.hint]
+        self.home_help = widgets.HTML(
+            value=(
+                "<b>Need more guidance or an example?</b> Return to the "
+                "ColabProSST home page for the complete input instructions. "
+                "Choose your ProSST model there and click "
+                "<b>Download CSV templates</b> for ready-to-use examples."
+            ),
+            layout=widgets.Layout(
+                width="100%",
+                max_width=ui.GUIDE_WIDTH,
+                overflow="visible",
+                margin="6px 0 0 0",
+            ),
+        )
+        self.items = [self.mode, self.hint, self.home_help]
         self.display_items = [
             widgets.VBox(
                 self.items,
@@ -862,10 +876,13 @@ class ColabProSSTUI:
             "</ol>"
             "<p>Protein-pair tasks use the same two methods with "
             "<code>sequence_1</code> and <code>sequence_2</code>.</p>"
-            "<p><b>CSV templates:</b> choose your intended ProSST model below, "
-            "then download examples for every supported task. Prepared-token "
-            "templates contain the matching <code>structure_vocab_size</code>; "
-            "sequence-only templates can be used directly.</p>",
+            "<hr style='border:0;border-top:1px solid #dadce0;margin:18px 0 12px'>"
+            "<h3 style='margin:0 0 8px'>CSV templates</h3>"
+            "<p><b>Start here:</b> choose your intended ProSST model below, "
+            "then download ready-to-use examples for every supported task. "
+            "Prepared-token templates contain the matching "
+            "<code>structure_vocab_size</code>; sequence-only templates can "
+            "be used directly.</p>",
             width="100%",
             max_width=self.GUIDE_WIDTH,
             overflow="visible",
@@ -1181,7 +1198,7 @@ class ColabProSSTUI:
         template_model.description = "Template model:"
         template_model.style = {"description_width": "initial"}
         template_button = self._button(
-            "Download CSV templates", width="220px"
+            "Download CSV templates", width="280px", style="info"
         )
         train_button = self._button(
             "I want to train my own model", width="400px"
@@ -1204,12 +1221,13 @@ class ColabProSSTUI:
 
         self._display_page(
             title,
-            train_button,
-            predict_button,
-            share_button,
             input_guide,
             template_model,
             template_button,
+            self._separator(),
+            train_button,
+            predict_button,
+            share_button,
         )
 
     def _training_page(self):

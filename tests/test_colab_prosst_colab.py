@@ -3786,6 +3786,7 @@ class ColabProSSTWidgetTest(unittest.TestCase):
         self.assertIn("public ESMFold service", input_guide.value)
         self.assertIn("Protein-pair tasks", input_guide.value)
         self.assertIn("CSV templates", input_guide.value)
+        self.assertIn("Start here", input_guide.value)
         self.assertIn("structure_vocab_size", input_guide.value)
 
         model_dropdown = ui._model_dropdown()
@@ -3934,6 +3935,8 @@ class ColabProSSTWidgetTest(unittest.TestCase):
         self.assertEqual(len(structure_input.display_items), 1)
         structure_group = structure_input.display_items[0]
         self.assertEqual(tuple(structure_group.children), tuple(structure_input.items))
+        self.assertIn("ColabProSST home page", structure_input.home_help.value)
+        self.assertIn("Download CSV templates", structure_input.home_help.value)
         self.assertEqual(structure_group.layout.grid_gap, "4px")
         self.assertEqual(structure_group.layout.margin, "0 0 18px 0")
         self.assertEqual(structure_group.layout.max_width, ui.GUIDE_WIDTH)
@@ -4005,21 +4008,32 @@ class ColabProSSTWidgetTest(unittest.TestCase):
         rendered.clear()
         ui._home_page()
         home_items = list(flatten_widgets(rendered[-1]))
-        self.assertEqual(
-            [item.description for item in home_items[1:4]],
-            [
-                "I want to train my own model",
-                "I want to use existing models to make prediction",
-                "I want to share my model publicly",
-            ],
+        home_descriptions = [
+            getattr(item, "description", "") for item in home_items
+        ]
+        action_labels = [
+            "I want to train my own model",
+            "I want to use existing models to make prediction",
+            "I want to share my model publicly",
+        ]
+        action_positions = [home_descriptions.index(label) for label in action_labels]
+        self.assertEqual(action_positions, sorted(action_positions))
+        guide = next(
+            item
+            for item in home_items
+            if "Important: Choose one input method" in getattr(item, "value", "")
         )
-        self.assertIn("Important: Choose one input method", home_items[4].value)
+        self.assertLess(
+            home_descriptions.index("Download CSV templates"),
+            action_positions[0],
+        )
+        self.assertIn("Important: Choose one input method", guide.value)
         self.assertIn(
             "requires both an amino-acid sequence and matching ProSST structure tokens",
-            home_items[4].value,
+            guide.value,
         )
-        self.assertEqual(home_items[5].description, "Template model:")
-        self.assertEqual(home_items[6].description, "Download CSV templates")
+        self.assertIn("Template model:", home_descriptions)
+        self.assertIn("Download CSV templates", home_descriptions)
 
         ui.navigation_history.clear()
         ui.current_page = ui._home_page
