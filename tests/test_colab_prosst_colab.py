@@ -225,9 +225,10 @@ class ColabProSSTNotebookTest(unittest.TestCase):
         self.assertIn('width="100%"', guide_source)
         self.assertIn("max_width=self.GUIDE_WIDTH", guide_source)
         self.assertNotIn("convert a protein structure", home_source)
-        self.assertNotIn("Download CSV templates", home_source)
+        self.assertIn("Download CSV templates", home_source)
+        self.assertIn("Template model:", home_source)
         self.assertIn("Prepare reusable structure-token CSV", prediction_source)
-        self.assertIn("Download CSV templates", prediction_source)
+        self.assertNotIn("Download CSV templates", prediction_source)
 
     def test_shared_interface_copy_is_kept_in_sync_with_colabsaprot(self):
         reference_notebook = json.loads(
@@ -3782,6 +3783,8 @@ class ColabProSSTWidgetTest(unittest.TestCase):
         self.assertIn("structure_tokens", input_guide.value)
         self.assertIn("public ESMFold service", input_guide.value)
         self.assertIn("Protein-pair tasks", input_guide.value)
+        self.assertIn("CSV templates", input_guide.value)
+        self.assertIn("structure_vocab_size", input_guide.value)
 
         model_dropdown = ui._model_dropdown()
         self.assertFalse(model_dropdown.disabled)
@@ -4013,6 +4016,8 @@ class ColabProSSTWidgetTest(unittest.TestCase):
             "requires both an amino-acid sequence and matching ProSST structure tokens",
             home_items[4].value,
         )
+        self.assertEqual(home_items[5].description, "Template model:")
+        self.assertEqual(home_items[6].description, "Download CSV templates")
 
         ui.navigation_history.clear()
         ui.current_page = ui._home_page

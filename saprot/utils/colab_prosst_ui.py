@@ -861,7 +861,11 @@ class ColabProSSTUI:
             "prediction and is recommended for repeated work.</li>"
             "</ol>"
             "<p>Protein-pair tasks use the same two methods with "
-            "<code>sequence_1</code> and <code>sequence_2</code>.</p>",
+            "<code>sequence_1</code> and <code>sequence_2</code>.</p>"
+            "<p><b>CSV templates:</b> choose your intended ProSST model below, "
+            "then download examples for every supported task. Prepared-token "
+            "templates contain the matching <code>structure_vocab_size</code>; "
+            "sequence-only templates can be used directly.</p>",
             width="100%",
             max_width=self.GUIDE_WIDTH,
             overflow="visible",
@@ -1173,6 +1177,12 @@ class ColabProSSTUI:
             "Please choose what you want to do with ColabProSST"
         )
         input_guide = self._input_guide()
+        template_model = self._model_dropdown()
+        template_model.description = "Template model:"
+        template_model.style = {"description_width": "initial"}
+        template_button = self._button(
+            "Download CSV templates", width="220px"
+        )
         train_button = self._button(
             "I want to train my own model", width="400px"
         )
@@ -1188,6 +1198,9 @@ class ColabProSSTUI:
             lambda _button: self._navigate(self._prediction_menu_page)
         )
         share_button.on_click(lambda _button: self._navigate(self._share_page))
+        template_button.on_click(
+            lambda button: self._download_templates(button, template_model.value)
+        )
 
         self._display_page(
             title,
@@ -1195,6 +1208,8 @@ class ColabProSSTUI:
             predict_button,
             share_button,
             input_guide,
+            template_model,
+            template_button,
         )
 
     def _training_page(self):
@@ -1316,9 +1331,6 @@ class ColabProSSTUI:
             overflow="visible",
         )
         structure_input = _StructureInput(self)
-        template_button = self._button(
-            "Download CSV templates", width="220px"
-        )
         batch_size = widgets.Dropdown(
             options=[1, 2, 4, 8, 16, 32],
             value=1,
@@ -1542,9 +1554,6 @@ class ColabProSSTUI:
         update_training_controls()
         training_start.observe(update_training_controls, names="value")
         training_method.observe(update_training_controls, names="value")
-        template_button.on_click(
-            lambda button: self._download_templates(button, model.value)
-        )
         advanced_button.on_click(toggle_advanced)
         start_button.on_click(
             lambda _button: self._start_task(start_button, output, train)
@@ -1572,7 +1581,6 @@ class ColabProSSTUI:
             dataset_help,
             *csv_input.items,
             *structure_input.display_items,
-            template_button,
             self._heading("Training hyper-parameters:", level=3),
             batch_size,
             epochs,
@@ -1604,7 +1612,6 @@ class ColabProSSTUI:
         structure_button = self._button(
             "Prepare reusable structure-token CSV", style="info"
         )
-        template_button = self._button("Download CSV templates")
         property_button.on_click(
             lambda _button: self._navigate(self._property_prediction_page)
         )
@@ -1620,7 +1627,6 @@ class ColabProSSTUI:
         structure_button.on_click(
             lambda _button: self._navigate(self._structure_page)
         )
-        template_button.on_click(self._download_templates)
         self._display_page(
             self._heading(
                 "ColabProSST supports multiple prediction tasks, which one "
@@ -1657,8 +1663,6 @@ class ColabProSSTUI:
                 "Convert one PDB/mmCIF structure into a durable CSV containing "
                 "its sequence and ProSST structure tokens."
             ),
-            self._separator(),
-            template_button,
         )
 
     def _property_prediction_page(self):
