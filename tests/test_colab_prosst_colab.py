@@ -4023,9 +4023,9 @@ class ColabProSSTWidgetTest(unittest.TestCase):
             for item in home_items
             if "Important: Choose one input method" in getattr(item, "value", "")
         )
-        self.assertLess(
+        self.assertGreater(
             home_descriptions.index("Download CSV templates"),
-            action_positions[0],
+            action_positions[-1],
         )
         self.assertIn("Important: Choose one input method", guide.value)
         self.assertIn(

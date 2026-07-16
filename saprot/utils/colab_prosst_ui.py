@@ -1221,13 +1221,13 @@ class ColabProSSTUI:
 
         self._display_page(
             title,
-            input_guide,
-            template_model,
-            template_button,
-            self._separator(),
             train_button,
             predict_button,
             share_button,
+            self._separator(),
+            input_guide,
+            template_model,
+            template_button,
         )
 
     def _training_page(self):
