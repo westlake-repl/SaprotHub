@@ -586,6 +586,114 @@ class ColabProSSTBootstrapTest(unittest.TestCase):
 
 
 class ColabProSSTStructureRuntimeTest(unittest.TestCase):
+    def test_esmfold_prediction_validates_and_caches_sequences(self):
+        from saprot.data.sequence_to_prosst import (
+            ESMFOLD_MAX_RESIDUES,
+            normalize_protein_sequence,
+            predict_structure_with_esmfold,
+        )
+
+        self.assertEqual(normalize_protein_sequence(" acd\nEF "), "ACDEF")
+        with self.assertRaisesRegex(ValueError, "unsupported amino-acid"):
+            normalize_protein_sequence("ACD-")
+        with self.assertRaisesRegex(ValueError, "at most"):
+            normalize_protein_sequence("A" * (ESMFOLD_MAX_RESIDUES + 1))
+
+        calls = []
+
+        class Response:
+            status_code = 200
+            text = "TITLE TEST\nATOM      1  N   ALA A   1\nEND\n"
+
+        def request_post(*args, **kwargs):
+            calls.append((args, kwargs))
+            return Response()
+
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            first = predict_structure_with_esmfold(
+                "ACD",
+                temporary_dir,
+                request_post=request_post,
+            )
+            second = predict_structure_with_esmfold(
+                "ACD",
+                temporary_dir,
+                request_post=request_post,
+            )
+
+            self.assertEqual(first, second)
+            self.assertTrue(Path(first).is_file())
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0][1]["data"], "ACD")
+
+    def test_sequence_csv_is_enriched_for_single_and_pair_inputs(self):
+        import pandas as pd
+
+        from saprot.data.sequence_to_prosst import (
+            prepare_sequence_csv_with_structure_tokens,
+        )
+
+        predicted_sequences = {}
+        prediction_calls = []
+
+        def predict(sequence, cache_dir):
+            prediction_calls.append(sequence)
+            path = str(Path(cache_dir) / f"{sequence}.pdb")
+            predicted_sequences[path] = sequence
+            return path
+
+        def quantize(path, cache_dir, structure_vocab_size):
+            sequence = predicted_sequences[path]
+            return {
+                "sequence": sequence,
+                "structure_tokens": list(range(len(sequence))),
+                "structure_vocab_size": structure_vocab_size,
+            }
+
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            temporary_dir = Path(temporary_dir)
+            single_input = temporary_dir / "single.csv"
+            single_output = temporary_dir / "single-prepared.csv"
+            pd.DataFrame(
+                [
+                    {"sequence": "acd", "label": 0},
+                    {"sequence": "ACD", "label": 1},
+                ]
+            ).to_csv(single_input, index=False)
+
+            prepare_sequence_csv_with_structure_tokens(
+                str(single_input),
+                str(single_output),
+                str(temporary_dir / "cache"),
+                20,
+                structure_predictor=predict,
+                structure_quantizer=quantize,
+            )
+            single = pd.read_csv(single_output)
+            self.assertEqual(prediction_calls, ["ACD"])
+            self.assertEqual(single["sequence"].tolist(), ["ACD", "ACD"])
+            self.assertEqual(single["structure_tokens"].tolist(), ["0 1 2"] * 2)
+            self.assertEqual(single["structure_vocab_size"].tolist(), [20, 20])
+
+            pair_input = temporary_dir / "pair.csv"
+            pair_output = temporary_dir / "pair-prepared.csv"
+            pd.DataFrame(
+                [{"sequence_1": "AC", "sequence_2": "ADE", "label": 1}]
+            ).to_csv(pair_input, index=False)
+            prepare_sequence_csv_with_structure_tokens(
+                str(pair_input),
+                str(pair_output),
+                str(temporary_dir / "cache"),
+                128,
+                pair_mode=True,
+                structure_predictor=predict,
+                structure_quantizer=quantize,
+            )
+            pair = pd.read_csv(pair_output)
+            self.assertEqual(pair.loc[0, "structure_tokens_1"], "0 1")
+            self.assertEqual(pair.loc[0, "structure_tokens_2"], "0 1 2")
+            self.assertEqual(pair.loc[0, "structure_vocab_size"], 128)
+
     def test_official_model_specs_cover_every_quantized_checkpoint(self):
         from saprot.model.prosst.specs import (
             DEFAULT_PROSST_MODEL,
