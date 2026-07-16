@@ -9,6 +9,11 @@ from saprot.utils.colab_prosst_acceptance import (
 )
 
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+ACCEPTANCE_NOTEBOOK = REPO_ROOT / "colab" / "ColabProSST_Acceptance.ipynb"
+PRODUCT_NOTEBOOK = REPO_ROOT / "colab" / "ColabProSST.ipynb"
+
+
 class FakeWorkflow:
     def __init__(self, root):
         self.cache_dir = Path(root) / "cache"
@@ -16,6 +21,34 @@ class FakeWorkflow:
 
 
 class ColabProSSTAcceptanceTest(unittest.TestCase):
+    def test_acceptance_notebook_reuses_product_bootstrap_and_runs_one_cell(self):
+        notebook = json.loads(ACCEPTANCE_NOTEBOOK.read_text(encoding="utf-8"))
+        code_cells = [
+            cell for cell in notebook["cells"] if cell["cell_type"] == "code"
+        ]
+        self.assertEqual(len(code_cells), 1)
+        source = "".join(code_cells[0]["source"])
+        introduction = "".join(notebook["cells"][0]["source"])
+        manual = "".join(notebook["cells"][2]["source"])
+
+        self.assertIn("PROFILE = 'full'", source)
+        self.assertIn("COLABPROSST_SKIP_UI", source)
+        self.assertIn("ColabProSSTAcceptanceRunner", source)
+        self.assertIn("runner.run()", source)
+        self.assertEqual(source.count("files.download("), 1)
+        self.assertIn("run the same cell one more time", introduction)
+        self.assertIn("all six official ProSST models", introduction)
+        self.assertIn("exactly one local download", manual)
+
+        product = json.loads(PRODUCT_NOTEBOOK.read_text(encoding="utf-8"))
+        product_source = "\n".join(
+            "".join(cell.get("source", []))
+            for cell in product["cells"]
+            if cell.get("cell_type") == "code"
+        )
+        self.assertIn("os.environ.get('COLABPROSST_SKIP_UI')", product_source)
+        self.assertIn("COLABPROSST_UI.launch()", product_source)
+
     def test_steps_record_pass_fail_and_dependency_skip(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             runner = ColabProSSTAcceptanceRunner(
