@@ -108,11 +108,13 @@ class ColabProSSTNotebookTest(unittest.TestCase):
             "https://huggingface.co/ProSSTHub",
             "https://github.com/westlake-repl/SaprotHub",
             "https://theopmc.github.io/",
+            "https://proceedings.neurips.cc/paper_files/paper/2024/hash/3ed57b293db0aab7cc30c44f45262348-Abstract-Conference.html",
+            "https://github.com/ai4protein/ProSST",
         ]
         badge_positions = [introduction.index(link) for link in badge_links]
         self.assertEqual(badge_positions, sorted(badge_positions))
-        self.assertNotIn("Paper-NeurIPS%202024", introduction)
-        self.assertNotIn("GitHub-ProSST", introduction)
+        self.assertIn("Paper-ProSST", introduction)
+        self.assertIn("GitHub-ProSST", introduction)
         self.assertNotIn("Hello-github-code", introduction)
         self.assertNotIn("Prepare sequence and structure inputs", introduction)
         self.assertNotIn("Recommended for a first run", introduction)
