@@ -318,6 +318,9 @@ class ColabProSSTNotebookTest(unittest.TestCase):
         self.assertIn("Your reusable input CSV is ready", structure_page)
         self.assertIn("Prepared CSV with structure_tokens", structure_page)
         self.assertIn("future Colab sessions", structure_page)
+        self.assertIn("Sequence CSV - automatic", structure_page)
+        self.assertIn("One PDB/mmCIF file", structure_page)
+        self.assertIn("prepare_sequence_input_csv", structure_page)
 
         training_page = source.split("def _training_page(self):", 1)[1].split(
             "def _prediction_menu_page(self):", 1
@@ -1449,6 +1452,50 @@ class ColabProSSTWorkflowTest(unittest.TestCase):
 
         cls.pd = pandas
         cls.workflow_class = ColabProSSTWorkflow
+
+    def test_preparation_page_workflow_infers_pair_csv_and_records_output(self):
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            input_csv = root / "pairs.csv"
+            self.pd.DataFrame(
+                [{"sequence_1": "ACD", "sequence_2": "ACE", "label": 1}]
+            ).to_csv(input_csv, index=False)
+            workflow = self.workflow_class(
+                output_dir=str(root / "output"),
+                upload_dir=str(root / "uploads"),
+                asset_dir=str(root / "assets"),
+                cache_dir=str(root / "cache"),
+                saprothub_dir=str(root / "SaprotHub"),
+            )
+            captured = {}
+
+            def prepare(**kwargs):
+                captured.update(kwargs)
+                prepared = self.pd.read_csv(kwargs["input_csv"])
+                prepared["structure_tokens_1"] = "0 1 2"
+                prepared["structure_tokens_2"] = "0 1 3"
+                prepared["structure_vocab_size"] = kwargs[
+                    "structure_vocab_size"
+                ]
+                prepared.to_csv(kwargs["output_csv"], index=False)
+                return kwargs["output_csv"]
+
+            with patch(
+                "saprot.utils.colab_prosst_workflow."
+                "prepare_sequence_csv_with_structure_tokens",
+                side_effect=prepare,
+            ):
+                result = workflow.prepare_sequence_input_csv(
+                    str(input_csv),
+                    structure_vocab_size=128,
+                    download=False,
+                )
+
+            self.assertTrue(captured["pair_mode"])
+            self.assertEqual(captured["structure_vocab_size"], 128)
+            self.assertEqual(result.loc[0, "label"], 1)
+            self.assertEqual(result.loc[0, "structure_tokens_1"], "0 1 2")
+            self.assertTrue(Path(result.attrs["output_csv"]).is_file())
 
     def test_personal_hf_repository_uses_the_logged_in_account(self):
         with patch("huggingface_hub.get_token", return_value="hf_test"), patch(

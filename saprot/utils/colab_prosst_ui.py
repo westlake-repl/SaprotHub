@@ -852,7 +852,8 @@ class ColabProSSTUI:
             "after the task.</li>"
             "<li><b>Prepared token CSV:</b> first open <b>Prediction &gt; Prepare "
             "reusable structure-token CSV</b>, generate and download the CSV, "
-            "then upload that file to later tasks. Select the same ProSST model "
+            "or download the prepared input CSV after any sequence-only task. "
+            "Upload that file to later tasks. Select the same ProSST model "
             "used during preparation. This avoids repeating structure "
             "prediction and is recommended for repeated work.</li>"
             "</ol>"
@@ -2095,6 +2096,27 @@ class ColabProSSTUI:
         self.current_page = self._structure_page
         widgets = self.widgets
         model = self._model_dropdown()
+        source = widgets.ToggleButtons(
+            options=[
+                ("Sequence CSV - automatic", "sequence"),
+                ("One PDB/mmCIF file", "structure"),
+            ],
+            value="sequence",
+            description="Preparation source:",
+            style={"description_width": "initial"},
+            layout=widgets.Layout(width=self.WIDTH, height=self.HEIGHT),
+        )
+        source_help = self._html(
+            "",
+            width="100%",
+            max_width=self.GUIDE_WIDTH,
+            overflow="visible",
+        )
+        sequence_csv = _UploadField(
+            self,
+            "Sequence CSV:",
+            "CSV with sequence, or sequence_1 and sequence_2",
+        )
         structure = _UploadField(
             self,
             "Structure file:",
@@ -2128,25 +2150,52 @@ class ColabProSSTUI:
                 change["new"]
             ).structure_vocab_size
 
-        def convert():
-            if not structure.value:
-                raise ValueError("Upload a PDB/mmCIF file or enter its path.")
-            print("Converting structure to ProSST tokens...")
-            result = self.workflow.convert_structure(
-                structure_path=structure.value,
-                chain_id=chain.value,
-                structure_vocab_size=vocab.value,
-                download=False,
+        def update_source(change):
+            use_sequence = change["new"] == "sequence"
+            sequence_csv.set_visible(use_sequence)
+            structure.set_visible(not use_sequence)
+            chain.layout.display = "none" if use_sequence else None
+            start_button.description = (
+                "Prepare token CSV" if use_sequence else "Convert structure"
             )
+            source_help.value = (
+                "ColabProSST sends each sequence to the public ESMFold service, "
+                f"which accepts at most {ESMFOLD_MAX_RESIDUES} residues per "
+                "sequence. Results are cached in this runtime."
+                if use_sequence
+                else "The uploaded coordinates are quantized directly and are "
+                "not sent to the ESMFold service."
+            )
+
+        def convert():
+            if source.value == "sequence":
+                if not sequence_csv.value:
+                    raise ValueError("Upload a sequence CSV or enter its path.")
+                print("Preparing structures and ProSST tokens from sequences...")
+                result = self.workflow.prepare_sequence_input_csv(
+                    input_csv=sequence_csv.value,
+                    structure_vocab_size=vocab.value,
+                    download=False,
+                )
+            else:
+                if not structure.value:
+                    raise ValueError("Upload a PDB/mmCIF file or enter its path.")
+                print("Converting structure to ProSST tokens...")
+                result = self.workflow.convert_structure(
+                    structure_path=structure.value,
+                    chain_id=chain.value,
+                    structure_vocab_size=vocab.value,
+                    download=False,
+                )
             self.latest_model_path = model.value
-            self.display(result)
+            self.display(result.head())
             self._display_result_downloads(
-                ("structure tokens CSV", result.attrs.get("output_csv")),
+                ("prepared token CSV", result.attrs.get("output_csv")),
             )
             next_steps.value = (
                 "<h3>Your reusable input CSV is ready</h3>"
                 "<ol>"
-                "<li>Download the <b>structure tokens CSV</b> above.</li>"
+                "<li>Download the <b>prepared token CSV</b> above.</li>"
                 "<li>Open training or the prediction task you need and upload "
                 "that downloaded CSV.</li>"
                 f"<li>Keep <b>{get_prosst_model_spec(model.value).display_name}</b> "
@@ -2164,14 +2213,24 @@ class ColabProSSTUI:
             next_steps.layout.display = None
 
         model.observe(update_model, names="value")
+        source.observe(update_source, names="value")
+        update_source({"new": source.value})
         start_button.on_click(
             lambda _button: self._start_task(start_button, output, convert)
         )
         self._display_page(
             self._heading("Prepare reusable structure-token CSV"),
+            self._html(
+                "Use a sequence CSV for automatic batch preparation, or use an "
+                "existing experimental/predicted PDB or mmCIF structure for one "
+                "protein. All original CSV columns are kept in the output."
+            ),
             self._heading("Model setting:", level=3),
             model,
-            self._heading("Structure setting:", level=3),
+            self._heading("Preparation input:", level=3),
+            source,
+            source_help,
+            *sequence_csv.items,
             *structure.items,
             chain,
             vocab,

@@ -800,6 +800,49 @@ class ColabProSSTWorkflow:
 
         return template_zip
 
+    def prepare_sequence_input_csv(
+        self,
+        input_csv: str,
+        upload_csv: bool = False,
+        structure_vocab_size: int = 2048,
+        output_csv: Optional[str] = None,
+        download: bool = True,
+    ) -> pd.DataFrame:
+        input_csv = self.maybe_upload_path(input_csv, upload_csv)
+        columns = {
+            str(column).strip().lower()
+            for column in pd.read_csv(input_csv, nrows=0).columns
+        }
+        pair_columns = {"sequence_1", "sequence_2"}
+        if columns.intersection(pair_columns) and not pair_columns.issubset(columns):
+            raise ValueError(
+                "Protein-pair preparation requires both sequence_1 and sequence_2."
+            )
+        pair_mode = pair_columns.issubset(columns)
+        if not pair_mode and "sequence" not in columns and "protein" not in columns:
+            raise ValueError(
+                "Sequence preparation requires a sequence column, or both "
+                "sequence_1 and sequence_2 for protein pairs."
+            )
+
+        output_path = (
+            Path(output_csv)
+            if output_csv
+            else self.output_dir / "prosst_prepared_input.csv"
+        )
+        prepared_csv = prepare_sequence_csv_with_structure_tokens(
+            input_csv=input_csv,
+            output_csv=str(output_path),
+            cache_dir=str(self.cache_dir),
+            structure_vocab_size=int(structure_vocab_size),
+            pair_mode=pair_mode,
+        )
+        result = pd.read_csv(prepared_csv)
+        result.attrs["output_csv"] = prepared_csv
+        if download:
+            self._download(Path(prepared_csv))
+        return result
+
     def convert_structure(
         self,
         structure_path: str,
