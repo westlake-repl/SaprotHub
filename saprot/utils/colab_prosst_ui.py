@@ -676,20 +676,7 @@ class ColabProSSTUI:
             button.tooltip = str(path)
 
             def download_result(_button, download_path=str(path)):
-                self.system_status.clear_output(wait=True)
-                try:
-                    self._download_file_once(download_path)
-                    with self.system_status:
-                        print(
-                            f"Download started: {Path(download_path).name}. "
-                            "Check your browser downloads."
-                        )
-                except Exception as exc:
-                    with self.system_status:
-                        print(
-                            f"Download failed for {download_path}: "
-                            f"{type(exc).__name__}: {exc}"
-                        )
+                self._download_with_status(download_path)
 
             button.on_click(download_result)
             buttons.append(button)
@@ -905,9 +892,7 @@ class ColabProSSTUI:
         self.back_button = self._button("Go back", width="120px", style="success")
         self.refresh_button = self._button("Refresh", width="120px", style="success")
         self.stop_button = self._button("Stop", width="120px", style="danger")
-        self.system_status = self.widgets.Output(
-            layout=self.widgets.Layout(width=self.WIDTH)
-        )
+        self.system_status = self._new_system_status()
 
         self.back_button.on_click(lambda _button: self._go_back())
         self.refresh_button.on_click(lambda _button: self._refresh_page())
@@ -928,6 +913,16 @@ class ColabProSSTUI:
             ),
             self.system_status,
         ]
+        self._system_status_index = len(self.system_widgets) - 1
+
+    def _new_system_status(self):
+        return self.widgets.Output(
+            layout=self.widgets.Layout(width=self.WIDTH)
+        )
+
+    def _reset_system_status(self):
+        self.system_status = self._new_system_status()
+        self.system_widgets[self._system_status_index] = self.system_status
 
     @staticmethod
     def _download_file_once(path):
@@ -937,6 +932,26 @@ class ColabProSSTUI:
         if not download_path.is_file():
             raise FileNotFoundError(f"Download file does not exist: {download_path}")
         files.download(str(download_path))
+
+    def _download_with_status(self, path):
+        download_path = Path(path)
+        self.system_status.clear_output(wait=True)
+        try:
+            with self.system_status:
+                print(
+                    f"Download started: {download_path.name}. "
+                    "Check your browser downloads."
+                )
+                # Capture Colab's transient Javascript in this widget so it
+                # cannot replace the cell output that owns the full interface.
+                self._download_file_once(download_path)
+        except Exception as exc:
+            self.system_status.clear_output(wait=True)
+            with self.system_status:
+                print(
+                    f"Download failed for {download_path}: "
+                    f"{type(exc).__name__}: {exc}"
+                )
 
     def _update_navigation_controls(self):
         self.back_button.disabled = not self.navigation_history
@@ -959,6 +974,9 @@ class ColabProSSTUI:
         if remember and previous_page is not None and previous_page != page:
             self.navigation_history.append(previous_page)
         self.current_page = page
+        # Download Javascript captured by an Output widget can replay if that
+        # widget is displayed again. Every page receives a fresh status slot.
+        self._reset_system_status()
         self.clear_output(wait=True)
         page()
         self._update_navigation_controls()
@@ -1028,20 +1046,7 @@ class ColabProSSTUI:
         if path is None:
             return
 
-        try:
-            import google.colab  # noqa: F401
-
-            self._download_file_once(path)
-            self.system_status.clear_output(wait=True)
-            with self.system_status:
-                print(
-                    f'Download started: {Path(path).name}. '
-                    'Check your browser downloads.'
-                )
-        except Exception as exc:
-            self.system_status.clear_output(wait=True)
-            with self.system_status:
-                print(f"Download failed for {path}: {type(exc).__name__}: {exc}")
+        self._download_with_status(path)
 
     def stop_task(self, silent=False):
         thread = self.active_thread
