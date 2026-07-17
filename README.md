@@ -47,7 +47,7 @@ For users who want to deploy ColabSaprot on their local server, please refer to 
 - [ColabESMC](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ESM-Play-VC.ipynb) (300M,600M)
 - [ColabESM3](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ESM-Play-V3.ipynb) （1.4B, structure-aware）
 - [ColabProtT5](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabProtT5.ipynb) (AA)
-- [ColabProSST](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabProSST.ipynb) (AA+structure tokens; structure vocabularies: 20, 128, 512, 1024, 2048, 4096; [ProSSTHub](https://huggingface.co/ProSSTHub))
+- [ColabProSST](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabProSST.ipynb) (AA+structure tokens)
 - [SaProt-T/O](http://113.45.254.183:9527/) (edit protein based on partial sequence/structure and text, Support multiple site mutations)
 - [ColabMETL](https://github.com/gitter-lab/metl?tab=readme-ov-file#mutational-effect-transfer-learning)
 - [Evolla](http://www.chat-protein.com/) (80B protein ChatGPT)
