@@ -675,12 +675,15 @@ class ColabProSSTUI:
             )
             button.tooltip = str(path)
 
-            def queue_result(_button, download_path=str(path)):
+            def download_result(_button, download_path=str(path)):
                 self.system_status.clear_output(wait=True)
                 try:
-                    self.workflow.queue_download(download_path)
+                    self._download_file_once(download_path)
                     with self.system_status:
-                        print(f"Preparing download: {Path(download_path).name}")
+                        print(
+                            f"Download started: {Path(download_path).name}. "
+                            "Check your browser downloads."
+                        )
                 except Exception as exc:
                     with self.system_status:
                         print(
@@ -688,7 +691,7 @@ class ColabProSSTUI:
                             f"{type(exc).__name__}: {exc}"
                         )
 
-            button.on_click(queue_result)
+            button.on_click(download_result)
             buttons.append(button)
 
         if not buttons:
@@ -927,107 +930,13 @@ class ColabProSSTUI:
         ]
 
     @staticmethod
-    def _download_javascript(comm_id, filename, size):
-        request_key = f"colabprosst-download:{comm_id}"
-        return f"""
-        (async () => {{
-          const requestKey = {json.dumps(request_key)};
-          window.__colabProSSTDownloadRequests =
-              window.__colabProSSTDownloadRequests || new Set();
-          let alreadyRequested =
-              window.__colabProSSTDownloadRequests.has(requestKey);
-          try {{
-            alreadyRequested = alreadyRequested ||
-                sessionStorage.getItem(requestKey) === '1';
-          }} catch (error) {{}}
-          if (alreadyRequested || !google.colab.kernel.accessAllowed) return;
-
-          window.__colabProSSTDownloadRequests.add(requestKey);
-          try {{ sessionStorage.setItem(requestKey, '1'); }} catch (error) {{}}
-
-          const progressBox = document.createElement('div');
-          const label = document.createElement('label');
-          label.textContent = `Downloading ${{{json.dumps(filename)}}}: `;
-          progressBox.appendChild(label);
-          const progress = document.createElement('progress');
-          progress.max = {int(size)};
-          progressBox.appendChild(progress);
-          document.body.appendChild(progressBox);
-
-          try {{
-            const buffers = [];
-            let downloaded = 0;
-            const channel = await google.colab.kernel.comms.open(
-                {json.dumps(comm_id)});
-            channel.send({{}});
-            for await (const message of channel.messages) {{
-              channel.send({{}});
-              if (!message.buffers) continue;
-              for (const buffer of message.buffers) {{
-                buffers.push(buffer);
-                downloaded += buffer.byteLength;
-                progress.value = downloaded;
-              }}
-            }}
-            const blob = new Blob(buffers, {{type: 'application/binary'}});
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = {json.dumps(filename)};
-            progressBox.appendChild(link);
-            link.click();
-            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-          }} catch (error) {{
-            window.__colabProSSTDownloadRequests.delete(requestKey);
-            try {{ sessionStorage.removeItem(requestKey); }} catch (_) {{}}
-            throw error;
-          }} finally {{
-            progressBox.remove();
-          }}
-        }})();
-        """
-
-    def _download_file_once(self, path):
-        from google.colab import output as colab_output
-        from IPython import get_ipython
+    def _download_file_once(path):
+        from google.colab import files
 
         download_path = Path(path)
         if not download_path.is_file():
             raise FileNotFoundError(f"Download file does not exist: {download_path}")
-
-        shell = get_ipython()
-        if shell is None or getattr(shell, "kernel", None) is None:
-            raise RuntimeError("A live IPython kernel is required for downloads.")
-        comm_manager = shell.kernel.comm_manager
-        comm_id = f"colabprosst_download_{uuid.uuid4()}"
-
-        def send_file(comm, _open_message):
-            handle = download_path.open("rb")
-
-            def send_chunk(_message):
-                chunk = handle.read(1024 * 1024)
-                if chunk:
-                    comm.send({}, None, [chunk])
-                    return
-                comm.close()
-                handle.close()
-                comm_manager.unregister_target(comm_id, send_file)
-
-            comm.on_msg(send_chunk)
-
-        comm_manager.register_target(comm_id, send_file)
-        script = self._download_javascript(
-            comm_id,
-            download_path.name,
-            download_path.stat().st_size,
-        )
-        try:
-            # The UI cell keeps running to poll widget events, so Javascript
-            # display records may be delayed or ignored by Colab. Evaluate the
-            # request directly in the active cell output frame instead.
-            colab_output.eval_js(script, ignore_result=True)
-        except Exception:
-            comm_manager.unregister_target(comm_id, send_file)
-            raise
+        files.download(str(download_path))
 
     def _update_navigation_controls(self):
         self.back_button.disabled = not self.navigation_history
