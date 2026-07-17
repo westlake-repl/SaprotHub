@@ -113,7 +113,6 @@ class ColabProSSTWorkflow:
             return
 
         self._pending_downloads.put(str(path))
-        print("queued download:", path)
 
     def queue_download(self, path: str) -> None:
         download_path = Path(path)

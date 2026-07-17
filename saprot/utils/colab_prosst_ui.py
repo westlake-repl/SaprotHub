@@ -676,7 +676,17 @@ class ColabProSSTUI:
             button.tooltip = str(path)
 
             def queue_result(_button, download_path=str(path)):
-                self.workflow.queue_download(download_path)
+                self.system_status.clear_output(wait=True)
+                try:
+                    self.workflow.queue_download(download_path)
+                    with self.system_status:
+                        print(f"Preparing download: {Path(download_path).name}")
+                except Exception as exc:
+                    with self.system_status:
+                        print(
+                            f"Download failed for {download_path}: "
+                            f"{type(exc).__name__}: {exc}"
+                        )
 
             button.on_click(queue_result)
             buttons.append(button)
@@ -892,7 +902,6 @@ class ColabProSSTUI:
         self.back_button = self._button("Go back", width="120px", style="success")
         self.refresh_button = self._button("Refresh", width="120px", style="success")
         self.stop_button = self._button("Stop", width="120px", style="danger")
-        self.download_output = self._new_download_output()
         self.system_status = self.widgets.Output(
             layout=self.widgets.Layout(width=self.WIDTH)
         )
@@ -914,15 +923,8 @@ class ColabProSSTUI:
                 "interface.<br><b>Refresh:</b> stop the running task and reset the "
                 "current interface.<br><b>Stop:</b> stop the running task."
             ),
-            self.download_output,
             self.system_status,
         ]
-        self._download_output_index = len(self.system_widgets) - 2
-
-    def _new_download_output(self):
-        return self.widgets.Output(
-            layout=self.widgets.Layout(width="100%", max_width=self.GUIDE_WIDTH)
-        )
 
     @staticmethod
     def _download_javascript(comm_id, filename, size):
@@ -971,6 +973,7 @@ class ColabProSSTUI:
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = {json.dumps(filename)};
+            progressBox.appendChild(link);
             link.click();
             setTimeout(() => URL.revokeObjectURL(link.href), 1000);
           }} catch (error) {{
@@ -983,9 +986,9 @@ class ColabProSSTUI:
         }})();
         """
 
-    def _download_file_once(self, path, download_slot):
+    def _download_file_once(self, path):
+        from google.colab import output as colab_output
         from IPython import get_ipython
-        from IPython.display import Javascript
 
         download_path = Path(path)
         if not download_path.is_file():
@@ -1018,14 +1021,13 @@ class ColabProSSTUI:
             download_path.stat().st_size,
         )
         try:
-            download_slot.append_display_data(Javascript(script))
+            # The UI cell keeps running to poll widget events, so Javascript
+            # display records may be delayed or ignored by Colab. Evaluate the
+            # request directly in the active cell output frame instead.
+            colab_output.eval_js(script, ignore_result=True)
         except Exception:
             comm_manager.unregister_target(comm_id, send_file)
             raise
-
-    def _reset_download_output(self):
-        self.download_output = self._new_download_output()
-        self.system_widgets[self._download_output_index] = self.download_output
 
     def _update_navigation_controls(self):
         self.back_button.disabled = not self.navigation_history
@@ -1048,9 +1050,6 @@ class ColabProSSTUI:
         if remember and previous_page is not None and previous_page != page:
             self.navigation_history.append(previous_page)
         self.current_page = page
-        # A Colab Output widget retains Javascript display records. Reusing it
-        # on another page would replay completed download scripts.
-        self._reset_download_output()
         self.clear_output(wait=True)
         page()
         self._update_navigation_controls()
@@ -1123,13 +1122,11 @@ class ColabProSSTUI:
         try:
             import google.colab  # noqa: F401
 
-            # A shared output keeps the cell compact. Browser-side request IDs
-            # make replayed Javascript records idempotent.
-            self._download_file_once(path, self.download_output)
+            self._download_file_once(path)
             self.system_status.clear_output(wait=True)
             with self.system_status:
                 print(
-                    f'Download request sent: {Path(path).name}. '
+                    f'Download started: {Path(path).name}. '
                     'Check your browser downloads.'
                 )
         except Exception as exc:
@@ -2482,7 +2479,6 @@ class ColabProSSTUI:
         """Display the first page and optionally keep Colab widget events alive."""
         self.navigation_history.clear()
         self.current_page = self._home_page
-        self._reset_download_output()
         self._home_page()
         self._update_navigation_controls()
         self.display(self._widget_stack(*self.system_widgets))
