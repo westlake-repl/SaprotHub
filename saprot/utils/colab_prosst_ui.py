@@ -650,6 +650,8 @@ class _StructureInput:
                 "<code>sequence_2</code>. Only these sequence columns are used; "
                 "structure-token columns are not required. ColabProSST predicts "
                 "both structures and generates matching tokens automatically. "
+                "X residues are first completed with ESM-2 650M; predicted "
+                "residues and confidence values are logged. "
                 f"Each sequence must be at most {ESMFOLD_MAX_RESIDUES} residues."
             )
         elif self.pair_mode and mode == self.STRUCTURE:
@@ -660,14 +662,18 @@ class _StructureInput:
                 "PDB/mmCIF files. Optional <code>chain_1</code> and "
                 "<code>chain_2</code> columns select a chain. ColabProSST "
                 "generates both token sequences automatically. Each ProSST "
-                "input supports up to 2046 residues."
+                "input supports up to 2046 residues. X positions are restored "
+                "from the supplied structure when possible."
             )
         elif mode == self.SEQUENCE:
             self.hint.value = (
                 "Upload a CSV with <code>sequence</code>. Only this sequence "
                 "column is used; <code>structure_tokens</code> is not required. "
                 "ColabProSST predicts each structure and generates tokens for "
-                "the selected model automatically. Sequences must be at most "
+                "the selected model automatically. X residues are first "
+                "completed with ESM-2 650M; predicted residues and confidence "
+                "values are logged, and values below 0.50 are marked for "
+                "review. Sequences must be at most "
                 f"{ESMFOLD_MAX_RESIDUES} residues."
             )
         else:
@@ -677,7 +683,8 @@ class _StructureInput:
                 "PDB/mmCIF files. Add an optional <code>chain</code> column when "
                 "a structure contains multiple chains. ColabProSST validates "
                 "the sequence and generates tokens for the selected model. "
-                "ProSST inputs support up to 2046 residues."
+                "X positions are restored from the supplied structure when "
+                "possible. ProSST inputs support up to 2046 residues."
             )
 
 
@@ -972,11 +979,20 @@ class ColabProSSTUI:
             "protein-pair tasks. ColabProSST validates each sequence and "
             "generates the model-specific structure tokens automatically. This "
             "method is suitable when you already have experimental or predicted "
-            "structures, including proteins longer than the automatic service's "
+            "structures. X positions are restored from matching residue "
+            "identities in the supplied structure when available. This method "
+            "also supports proteins "
+            "longer than the automatic service's "
             "limit, up to the current ProSST input maximum of 2046 residues.</li>"
             "<li><b>Sequence only:</b> upload a CSV containing amino-acid "
             "sequences. ColabProSST predicts structures and generates tokens "
-            "automatically. This uses the public ESMFold service, sends each "
+            "automatically. If a sequence contains X, ColabProSST first uses "
+            "ESM-2 650M to predict each missing residue and reports its "
+            "confidence; the model is loaded only when needed. These are "
+            "model predictions rather than experimentally confirmed residues. "
+            "Confidence below 0.50 and sequences with many X residues are "
+            "marked for review in the audit report. Structure "
+            "prediction then uses the public ESMFold service, sends each "
             f"sequence to that service, and supports up to {ESMFOLD_MAX_RESIDUES} "
             "residues per sequence.</li>"
             "</ol>"

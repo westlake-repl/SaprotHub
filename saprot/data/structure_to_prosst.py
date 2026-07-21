@@ -134,6 +134,36 @@ def prepare_structure_csv_with_structure_tokens(
                 str(result.get("sequence") or "").split()
             ).upper()
             validate_sequence_and_structure(sequence, tokens, context=context)
+            if (
+                parsed_sequence
+                and len(parsed_sequence) == len(sequence)
+                and all(
+                    csv_residue == structure_residue or csv_residue == "X"
+                    for csv_residue, structure_residue in zip(
+                        sequence,
+                        parsed_sequence,
+                    )
+                )
+            ):
+                restored_positions = [
+                    index + 1
+                    for index, (csv_residue, structure_residue) in enumerate(
+                        zip(sequence, parsed_sequence)
+                    )
+                    if csv_residue == "X" and structure_residue != "X"
+                ]
+                if restored_positions:
+                    print(
+                        f"Restored {len(restored_positions)} X residue(s) in "
+                        f"row {row_index + 2} from the supplied structure: "
+                        f"positions {restored_positions}."
+                    )
+                    completed_sequence = list(sequence)
+                    for position in restored_positions:
+                        completed_sequence[position - 1] = parsed_sequence[
+                            position - 1
+                        ]
+                    sequence = "".join(completed_sequence)
             if parsed_sequence and parsed_sequence != sequence:
                 raise ValueError(
                     f"{context} does not match {sequence_column}: the CSV has "

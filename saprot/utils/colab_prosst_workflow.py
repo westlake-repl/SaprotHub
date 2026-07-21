@@ -780,7 +780,15 @@ class ColabProSSTWorkflow:
             "the referenced PDB/mmCIF files together as one Structure ZIP.\n\n"
             "Protein-pair files use sequence_1 and sequence_2. Their structure "
             "input also uses structure_file_1 and structure_file_2. Optional "
-            "chain, chain_1, and chain_2 columns select chains.\n"
+            "chain, chain_1, and chain_2 columns select chains.\n\n"
+            "Unknown residues:\n"
+            "- In sequence-only input, X residues are predicted automatically "
+            "with ESM-2 650M before structure prediction. ColabProSST logs each "
+            "predicted residue and confidence and saves a complete audit report. "
+            "Low-confidence predictions are marked for review.\n"
+            "- In sequence + structure-file input, X residues are restored from "
+            "matching residue identities in the supplied structure when possible.\n"
+            "- Other non-standard sequence characters are rejected.\n"
         )
         instructions_path.write_text(
             "".join(instructions),
