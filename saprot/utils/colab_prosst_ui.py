@@ -417,7 +417,7 @@ class _StructureInput:
         widgets = ui.widgets
         self.mode = widgets.RadioButtons(
             options=self._mode_options(),
-            value=self.SEQUENCE,
+            value=self.STRUCTURE,
             description="Input method:",
             style={"description_width": "initial"},
             layout=widgets.Layout(width="100%", max_width=ui.GUIDE_WIDTH),
@@ -506,7 +506,7 @@ class _StructureInput:
 
     def _mode_options(self):
         return [
-            ("Sequence + structure files", self.STRUCTURE),
+            ("Sequence + structure files (recommended)", self.STRUCTURE),
             ("Sequence only - prepare structure automatically", self.SEQUENCE),
         ]
 
@@ -637,19 +637,21 @@ class _StructureInput:
             selected_template = self._template_name(mode)
             self.home_help.value = (
                 f"<b>Templates for {self.task_label}:</b><br>"
-                f"Sequence only: <code>{sequence_template}</code><br>"
-                "Sequence + structure files: "
+                "Sequence + structure files (recommended): "
                 f"<code>{structure_template}</code><br>"
+                f"Sequence only: <code>{sequence_template}</code><br>"
                 f"Current selection: <b><code>{selected_template}</code></b>. "
                 "Download these files from <b>Input templates</b> on the "
                 "ColabProSST home page."
             )
         if self.pair_mode and mode == self.SEQUENCE:
             self.hint.value = (
-                "Upload a CSV with <code>sequence_1</code> and "
-                "<code>sequence_2</code>. Only these sequence columns are used; "
-                "structure-token columns are not required. ColabProSST predicts "
-                "both structures and generates matching tokens automatically. "
+                "Use this method only when no experimental or predicted "
+                "structure files are available. Upload a CSV with "
+                "<code>sequence_1</code> and <code>sequence_2</code>; no "
+                "structure files or Structure ZIP are required. ColabProSST "
+                "predicts both structures and generates matching tokens "
+                "automatically. "
                 "X residues are first completed with ESM-2 650M; predicted "
                 "residues and confidence values are logged. "
                 f"Each sequence must be at most {ESMFOLD_MAX_RESIDUES} residues."
@@ -667,8 +669,10 @@ class _StructureInput:
             )
         elif mode == self.SEQUENCE:
             self.hint.value = (
-                "Upload a CSV with <code>sequence</code>. Only this sequence "
-                "column is used; <code>structure_tokens</code> is not required. "
+                "Use this method only when no experimental or predicted "
+                "structure file is available. Upload a CSV with "
+                "<code>sequence</code>; no structure file or Structure ZIP is "
+                "required. "
                 "ColabProSST predicts each structure and generates tokens for "
                 "the selected model automatically. X residues are first "
                 "completed with ESM-2 650M; predicted residues and confidence "
@@ -1006,11 +1010,10 @@ class ColabProSSTUI:
             "</ol>"
             "<hr style='border:0;border-top:1px solid #dadce0;margin:18px 0 12px'>"
             "<h3 style='margin:0 0 8px'>Input templates</h3>"
-            "<p><b>Start here:</b> download ready-to-use input examples for "
+            "<p>Download ready-to-use input examples for "
             "every supported task. The package contains separate sequence-only "
             "and sequence + structure-file examples. These input formats work "
-            "with every official ProSST model; no model selection is required "
-            "before downloading.</p>",
+            "with every official ProSST model.</p>",
             width="100%",
             max_width=self.GUIDE_WIDTH,
             overflow="visible",

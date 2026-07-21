@@ -766,18 +766,20 @@ class ColabProSSTWorkflow:
                     [
                         f"{label}:\n",
                         "  "
-                        f"{get_input_template_name(group, task, 'sequence')}\n",
-                        "  "
                         f"{get_input_template_name(group, task, 'structure')}\n",
+                        "  "
+                        f"{get_input_template_name(group, task, 'sequence')}\n",
                     ]
                 )
             instructions.append("\n")
         instructions.append(
             "For each task, choose exactly one input method:\n"
-            "1. Sequence only: use the filename containing _sequence_.\n"
-            "2. Sequence + structure files: use the filename containing "
-            "_structure_, replace its example structure filenames, and upload "
-            "the referenced PDB/mmCIF files together as one Structure ZIP.\n\n"
+            "1. Sequence + structure files (recommended): use the filename "
+            "containing _structure_, replace its example structure filenames, "
+            "and upload the referenced PDB/mmCIF files together as one "
+            "Structure ZIP.\n"
+            "2. Sequence only: use the filename containing _sequence_ only "
+            "when no experimental or predicted structure file is available.\n\n"
             "Protein-pair files use sequence_1 and sequence_2. Their structure "
             "input also uses structure_file_1 and structure_file_2. Optional "
             "chain, chain_1, and chain_2 columns select chains.\n\n"
