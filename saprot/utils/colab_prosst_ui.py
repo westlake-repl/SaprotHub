@@ -654,7 +654,8 @@ class _StructureInput:
                 "automatically. "
                 "X residues are first completed with ESM-2 650M; predicted "
                 "residues and confidence values are logged. "
-                f"Each sequence must be at most {ESMFOLD_MAX_RESIDUES} residues."
+                f"Each sequence must be at most {ESMFOLD_MAX_RESIDUES} residues. "
+                "Generated structures are available for download after the task."
             )
         elif self.pair_mode and mode == self.STRUCTURE:
             self.hint.value = (
@@ -665,7 +666,8 @@ class _StructureInput:
                 "<code>chain_2</code> columns select a chain. ColabProSST "
                 "generates both token sequences automatically. Each ProSST "
                 "input supports up to 2046 residues. X positions are restored "
-                "from the supplied structure when possible."
+                "from the supplied structure when possible; any remaining X "
+                "positions are completed with ESM-2 650M."
             )
         elif mode == self.SEQUENCE:
             self.hint.value = (
@@ -678,7 +680,8 @@ class _StructureInput:
                 "completed with ESM-2 650M; predicted residues and confidence "
                 "values are logged, and values below 0.50 are marked for "
                 "review. Sequences must be at most "
-                f"{ESMFOLD_MAX_RESIDUES} residues."
+                f"{ESMFOLD_MAX_RESIDUES} residues. Generated structures are "
+                "available for download after the task."
             )
         else:
             self.hint.value = (
@@ -688,7 +691,8 @@ class _StructureInput:
                 "a structure contains multiple chains. ColabProSST validates "
                 "the sequence and generates tokens for the selected model. "
                 "X positions are restored from the supplied structure when "
-                "possible. ProSST inputs support up to 2046 residues."
+                "possible; any remaining X positions are completed with ESM-2 "
+                "650M. ProSST inputs support up to 2046 residues."
             )
 
 
@@ -773,8 +777,13 @@ class ColabProSSTUI:
         )
 
     def _result_downloads(self, files):
-        buttons = []
-        for label, path in files:
+        rows = []
+        for item in files:
+            if len(item) == 2:
+                label, path = item
+                description = ""
+            else:
+                label, path, description = item
             if not path or not Path(path).is_file():
                 continue
             button = self._button(
@@ -788,19 +797,66 @@ class ColabProSSTUI:
                 self._download_with_status(download_path)
 
             button.on_click(download_result)
-            buttons.append(button)
+            if description:
+                explanation = self.widgets.HTML(
+                    value=description,
+                    layout=self.widgets.Layout(
+                        width="380px",
+                        overflow="visible",
+                    ),
+                )
+                rows.append(
+                    self.widgets.HBox(
+                        [button, explanation],
+                        layout=self.widgets.Layout(
+                            width="100%",
+                            align_items="center",
+                            flex_flow="row wrap",
+                            grid_gap="12px",
+                            overflow="visible",
+                        ),
+                    )
+                )
+            else:
+                rows.append(button)
 
-        if not buttons:
+        if not rows:
             return None
         return self._widget_stack(
             self._heading("Download results", level=3),
-            *buttons,
+            *rows,
         )
 
     def _display_result_downloads(self, *files):
         downloads = self._result_downloads(files)
         if downloads is not None:
             self.display(downloads)
+
+    @staticmethod
+    def _preparation_download_files(result):
+        values = getattr(result, "attrs", result)
+        return [
+            (
+                "generated structures ZIP",
+                values.get("generated_structure_zip"),
+                "Generated PDB files for future Sequence + structure files runs.",
+            ),
+            (
+                "reusable structure-input CSV",
+                values.get("reusable_structure_input_csv"),
+                "Upload this CSV with the generated structure ZIP in a future run.",
+            ),
+            (
+                "completed sequences CSV",
+                values.get("completed_sequences_csv"),
+                "Sequences used by this task after every unknown X was completed.",
+            ),
+            (
+                "X-completion report CSV",
+                values.get("x_completion_report_csv"),
+                "Each ESM-2-completed X position and its confidence.",
+            ),
+        ]
 
     def _model_dropdown(self, value=None):
         selected = value or self.latest_model_path
@@ -1008,6 +1064,9 @@ class ColabProSSTUI:
             f"sequence to that service, and supports up to {ESMFOLD_MAX_RESIDUES} "
             "residues per sequence.</li>"
             "</ol>"
+            "<p>After a task finishes, sequence-only runs provide a reusable "
+            "structure ZIP and matching CSV. If either method handles X "
+            "residues, a completed sequence CSV is also provided.</p>"
             "<hr style='border:0;border-top:1px solid #dadce0;margin:18px 0 12px'>"
             "<h3 style='margin:0 0 8px'>Input templates</h3>"
             "<p>Download ready-to-use input examples for "
@@ -1518,6 +1577,7 @@ class ColabProSSTUI:
             self._display_result_downloads(
                 ("LoRA adapter ZIP", result["adapter_download_path"]),
                 ("test predictions CSV", result["test_result_csv"]),
+                *self._preparation_download_files(result),
             )
             finish_hint.value = (
                 "<h3>The training is completed. You can then:</h3>"
@@ -1731,6 +1791,7 @@ class ColabProSSTUI:
             self.display(result.head())
             self._display_result_downloads(
                 ("predictions CSV", result.attrs.get("output_csv")),
+                *self._preparation_download_files(result),
             )
 
         adapter.on_loaded(
@@ -1907,6 +1968,7 @@ class ColabProSSTUI:
                 ("embedding ZIP", result["archive_path"]),
                 ("embeddings PT", result["output_pt"]),
                 ("embedding index CSV", result["output_index_csv"]),
+                *self._preparation_download_files(result),
             )
             completion.value = (
                 "<b>Embedding extraction completed.</b><br>"
@@ -1993,6 +2055,7 @@ class ColabProSSTUI:
                 ("mutation scores CSV", result["output_csv"]),
                 ("score matrix CSV", result["output_matrix_csv"]),
                 ("heatmap PNG", result["output_heatmap_png"]),
+                *self._preparation_download_files(result),
             )
 
         start_button.on_click(
@@ -2058,6 +2121,7 @@ class ColabProSSTUI:
             self.display(result.head())
             self._display_result_downloads(
                 ("mutation scores CSV", result.attrs.get("output_csv")),
+                *self._preparation_download_files(result),
             )
 
         start_button.on_click(
