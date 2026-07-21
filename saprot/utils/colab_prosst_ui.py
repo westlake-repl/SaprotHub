@@ -21,6 +21,7 @@ from saprot.model.prosst.specs import (
     PROSST_HUB_URL,
     get_prosst_model_spec,
 )
+from saprot.utils.colab_prosst_templates import get_input_template_name
 
 
 COLAB_ENVIRONMENT_GENERATION = "2026-07-12-clean-kernel-v2"
@@ -386,7 +387,7 @@ class _ModelArtifactField:
         if not self.repo_id.value.strip():
             raise ValueError("Enter a Hugging Face repository ID.")
         print("Downloading and inspecting the Hub model...")
-        result = self.ui.workflow.download_community_checkpoint(
+        result = self.ui.workflow.download_community_adapter(
             repo_id=self.repo_id.value,
             revision=self.revision.value,
         )
@@ -403,11 +404,16 @@ class _ModelArtifactField:
 
 class _StructureInput:
     SEQUENCE = "sequence"
-    TOKENS = "tokens"
+    STRUCTURE = "structure"
 
     def __init__(self, ui):
         self.ui = ui
         self.pair_mode = False
+        self.template_group = None
+        self.template_task = None
+        self.task_label = "this task"
+        self.required_columns = set()
+        self.exact_rows = None
         widgets = ui.widgets
         self.mode = widgets.RadioButtons(
             options=self._mode_options(),
@@ -423,12 +429,17 @@ class _StructureInput:
                 overflow="visible",
             )
         )
+        self.structure_archive = _UploadField(
+            ui,
+            "Structure ZIP:",
+            "ZIP containing the PDB/mmCIF files named in the CSV",
+        )
         self.home_help = widgets.HTML(
             value=(
                 "<b>Need more guidance or an example?</b> Return to the "
                 "ColabProSST home page for the complete input instructions. "
-                "Choose your ProSST model there and click "
-                "<b>Download CSV templates</b> for ready-to-use examples."
+                "Click <b>Download input templates</b> there for ready-to-use "
+                "examples covering every supported task and input method."
             ),
             layout=widgets.Layout(
                 width="100%",
@@ -437,7 +448,12 @@ class _StructureInput:
                 margin="6px 0 0 0",
             ),
         )
-        self.items = [self.mode, self.hint, self.home_help]
+        self.items = [
+            self.mode,
+            self.hint,
+            *self.structure_archive.items,
+            self.home_help,
+        ]
         self.display_items = [
             widgets.VBox(
                 self.items,
@@ -453,10 +469,45 @@ class _StructureInput:
         self.mode.observe(self._update, names="value")
         self._update({"new": self.mode.value})
 
+    def set_context(
+        self,
+        template_group,
+        template_task,
+        task_label,
+        required_columns=(),
+        exact_rows=None,
+    ):
+        self.template_group = template_group
+        self.template_task = template_task
+        self.task_label = task_label
+        self.required_columns = {
+            str(column).strip().lower() for column in required_columns
+        }
+        self.exact_rows = exact_rows
+        self._update({"new": self.mode.value})
+
+    def _template_name(self, mode=None):
+        if not self.template_group or not self.template_task:
+            return ""
+        return get_input_template_name(
+            self.template_group,
+            self.template_task,
+            mode or self.mode.value,
+        )
+
+    def _expected_template_message(self):
+        template_name = self._template_name()
+        if not template_name:
+            return ""
+        return (
+            f" Use `{template_name}` from the home-page Input templates for "
+            "this task and input method."
+        )
+
     def _mode_options(self):
         return [
+            ("Sequence + structure files", self.STRUCTURE),
             ("Sequence only - prepare structure automatically", self.SEQUENCE),
-            ("Prepared CSV with structure_tokens", self.TOKENS),
         ]
 
     def set_pair_mode(self, enabled):
@@ -472,6 +523,10 @@ class _StructureInput:
     @property
     def input_mode(self):
         return self.mode.value
+
+    @property
+    def structure_zip(self):
+        return self.structure_archive.value
 
     def validate(self, csv_path, structure_vocab_size=None):
         path = Path(csv_path)
@@ -498,88 +553,131 @@ class _StructureInput:
         )
         missing_sequences = sorted(set(sequence_columns) - columns)
         if missing_sequences:
+            uploaded_shape = ""
+            if self.pair_mode and "sequence" in columns:
+                uploaded_shape = (
+                    " The uploaded file looks like a single-protein template, "
+                    "but the selected task is a protein-pair task."
+                )
+            elif not self.pair_mode and {
+                "sequence_1",
+                "sequence_2",
+            }.issubset(columns):
+                uploaded_shape = (
+                    " The uploaded file looks like a protein-pair template, "
+                    "but the selected task is a single-protein task."
+                )
             raise ValueError(
-                "The uploaded CSV is missing required sequence column(s): "
-                f"{missing_sequences}."
+                f"{self.task_label} is missing required sequence column(s): "
+                f"{missing_sequences}.{uploaded_shape}"
+                f"{self._expected_template_message()}"
             )
 
-        if self.mode.value == self.SEQUENCE:
-            for row_number, row in enumerate(rows, start=2):
-                for column in sequence_columns:
-                    normalize_protein_sequence(
-                        row.get(column, ""),
-                        context=f"row {row_number} {column}",
-                    )
+        missing_task_columns = sorted(self.required_columns - columns)
+        if missing_task_columns:
+            raise ValueError(
+                f"{self.task_label} requires CSV column(s) "
+                f"{missing_task_columns}, but they are missing."
+                f"{self._expected_template_message()}"
+            )
 
-        if self.pair_mode and self.mode.value == self.TOKENS:
-            required = {"structure_tokens_1", "structure_tokens_2"}
+        if self.exact_rows is not None and len(rows) != int(self.exact_rows):
+            raise ValueError(
+                f"{self.task_label} requires exactly {self.exact_rows} CSV "
+                f"row(s), but the uploaded file contains {len(rows)}."
+                f"{self._expected_template_message()}"
+            )
+
+        for row_number, row in enumerate(rows, start=2):
+            for column in sequence_columns:
+                normalize_protein_sequence(
+                    row.get(column, ""),
+                    context=f"row {row_number} {column}",
+                    max_residues=(
+                        ESMFOLD_MAX_RESIDUES
+                        if self.mode.value == self.SEQUENCE
+                        else None
+                    ),
+                )
+
+        if self.pair_mode and self.mode.value == self.STRUCTURE:
+            required = {"structure_file_1", "structure_file_2"}
             missing = sorted(required - columns)
             if missing:
                 raise ValueError(
-                    "Protein-pair token input requires both "
-                    "structure_tokens_1 and structure_tokens_2. Missing: "
-                    f"{missing}."
+                    "Protein-pair structure input requires both "
+                    "structure_file_1 and structure_file_2. Missing: "
+                    f"{missing}.{self._expected_template_message()}"
                 )
-        elif self.mode.value == self.TOKENS and "structure_tokens" not in columns:
+        elif self.mode.value == self.STRUCTURE and "structure_file" not in columns:
             raise ValueError(
-                "You selected `Prepared CSV with structure_tokens`, but the "
-                "uploaded CSV has no structure_tokens column. Upload a prepared "
-                "CSV or choose the sequence-only input method."
+                "You selected `Sequence + structure files`, but the uploaded "
+                "CSV has no structure_file column. Add the structure filenames "
+                "to the CSV or choose the sequence-only input method."
+                f"{self._expected_template_message()}"
             )
-        if self.mode.value == self.TOKENS:
-            if "structure_vocab_size" not in columns:
+        if self.mode.value == self.STRUCTURE:
+            if not self.structure_zip:
                 raise ValueError(
-                    "A prepared token CSV must include structure_vocab_size. "
-                    "Use the file downloaded from ColabProSST preparation."
+                    "Upload the Structure ZIP containing the PDB/mmCIF files "
+                    "named in the CSV."
                 )
-            try:
-                vocab_sizes = {
-                    int(str(row.get("structure_vocab_size", "")).strip())
-                    for row in rows
-                }
-            except ValueError as exc:
-                raise ValueError(
-                    "structure_vocab_size must be an integer in every CSV row."
-                ) from exc
-            if structure_vocab_size is not None and vocab_sizes != {
-                int(structure_vocab_size)
-            }:
-                raise ValueError(
-                    "The prepared CSV uses structure_vocab_size="
-                    f"{sorted(vocab_sizes)}, but the selected ProSST model uses "
-                    f"{structure_vocab_size}. Select the model used to prepare "
-                    "this CSV."
+            archive_path = Path(self.structure_zip)
+            if not archive_path.is_file():
+                raise FileNotFoundError(
+                    f"Structure ZIP does not exist: {archive_path}"
                 )
 
     def _update(self, change):
         mode = change["new"]
+        self.structure_archive.set_visible(mode == self.STRUCTURE)
+        if self.template_group and self.template_task:
+            sequence_template = self._template_name(self.SEQUENCE)
+            structure_template = self._template_name(self.STRUCTURE)
+            selected_template = self._template_name(mode)
+            self.home_help.value = (
+                f"<b>Templates for {self.task_label}:</b><br>"
+                f"Sequence only: <code>{sequence_template}</code><br>"
+                "Sequence + structure files: "
+                f"<code>{structure_template}</code><br>"
+                f"Current selection: <b><code>{selected_template}</code></b>. "
+                "Download these files from <b>Input templates</b> on the "
+                "ColabProSST home page."
+            )
         if self.pair_mode and mode == self.SEQUENCE:
             self.hint.value = (
                 "Upload a CSV with <code>sequence_1</code> and "
-                "<code>sequence_2</code>. ColabProSST predicts both structures "
-                "and generates matching tokens automatically. Each sequence "
-                f"must be at most {ESMFOLD_MAX_RESIDUES} residues."
+                "<code>sequence_2</code>. Only these sequence columns are used; "
+                "structure-token columns are not required. ColabProSST predicts "
+                "both structures and generates matching tokens automatically. "
+                f"Each sequence must be at most {ESMFOLD_MAX_RESIDUES} residues."
             )
-        elif self.pair_mode and mode == self.TOKENS:
+        elif self.pair_mode and mode == self.STRUCTURE:
             self.hint.value = (
-                "Upload a prepared CSV containing <code>structure_tokens_1</code> "
-                "and <code>structure_tokens_2</code>, aligned with "
-                "<code>sequence_1</code> and <code>sequence_2</code>. Select the "
-                "same ProSST model used to prepare the tokens."
+                "Upload a CSV with <code>sequence_1</code>, "
+                "<code>sequence_2</code>, <code>structure_file_1</code>, and "
+                "<code>structure_file_2</code>, plus one ZIP containing those "
+                "PDB/mmCIF files. Optional <code>chain_1</code> and "
+                "<code>chain_2</code> columns select a chain. ColabProSST "
+                "generates both token sequences automatically. Each ProSST "
+                "input supports up to 2046 residues."
             )
         elif mode == self.SEQUENCE:
             self.hint.value = (
-                "Upload a CSV with <code>sequence</code>. ColabProSST predicts "
-                "each structure and generates tokens for the selected model "
-                f"automatically. Sequences must be at most {ESMFOLD_MAX_RESIDUES} "
-                "residues. The prepared CSV can be downloaded after the task."
+                "Upload a CSV with <code>sequence</code>. Only this sequence "
+                "column is used; <code>structure_tokens</code> is not required. "
+                "ColabProSST predicts each structure and generates tokens for "
+                "the selected model automatically. Sequences must be at most "
+                f"{ESMFOLD_MAX_RESIDUES} residues."
             )
         else:
             self.hint.value = (
-                "Upload a prepared CSV containing <code>sequence</code>, "
-                "<code>structure_tokens</code>, and "
-                "<code>structure_vocab_size</code>. Select the same ProSST "
-                "model used to prepare the tokens."
+                "Upload a CSV containing <code>sequence</code> and "
+                "<code>structure_file</code>, plus one ZIP containing the named "
+                "PDB/mmCIF files. Add an optional <code>chain</code> column when "
+                "a structure contains multiple chains. ColabProSST validates "
+                "the sequence and generates tokens for the selected model. "
+                "ProSST inputs support up to 2046 residues."
             )
 
 
@@ -608,7 +706,7 @@ class ColabProSSTUI:
         self.current_page = None
         self.navigation_history = []
         self.active_thread = None
-        self.latest_checkpoint = ""
+        self.latest_adapter = ""
         self.latest_model_path = DEFAULT_PROSST_MODEL.model_path
         self.latest_task_type = "classification"
         self.latest_num_labels = 2
@@ -713,7 +811,6 @@ class ColabProSSTUI:
         task_widget,
         model_widget,
         num_labels_widget,
-        training_method_widget=None,
     ):
         task_values = {value for _label, value in task_widget.options}
         model_values = {value for _label, value in model_widget.options}
@@ -731,11 +828,7 @@ class ColabProSSTUI:
         model_widget.value = metadata["model_path"]
         if metadata.get("num_labels") is not None:
             num_labels_widget.value = int(metadata["num_labels"])
-        if training_method_widget is not None:
-            training_method_widget.value = (
-                "lora" if metadata["artifact_type"] == "lora" else "full"
-            )
-        self.latest_checkpoint = metadata["artifact_path"]
+        self.latest_adapter = metadata["artifact_path"]
         self.latest_model_path = metadata["model_path"]
         self.latest_task_type = metadata["task_type"]
         if metadata.get("num_labels") is not None:
@@ -754,6 +847,16 @@ class ColabProSSTUI:
             description="Task type:",
             layout=self.widgets.Layout(width=self.WIDTH, height=self.HEIGHT),
         )
+
+    @staticmethod
+    def _task_label(task_type):
+        return {
+            "classification": "Protein-level Classification",
+            "regression": "Protein-level Regression",
+            "token_classification": "Residue-level Classification",
+            "pair_classification": "Protein-pair Classification",
+            "pair_regression": "Protein-pair Regression",
+        }[task_type]
 
     @staticmethod
     def _task_intro(task_type):
@@ -814,8 +917,8 @@ class ColabProSSTUI:
             return (
                 "The CSV must contain <code>sequence_1</code>, "
                 "<code>sequence_2</code>, <code>label</code>, and "
-                "<code>stage</code>. ColabProSST can prepare both structures "
-                "automatically, or use tokens already stored in the CSV."
+                "<code>stage</code>. Then choose one of the two input methods "
+                "below."
             )
         return (
             "The CSV must contain <code>sequence</code>, <code>label</code>, "
@@ -861,28 +964,29 @@ class ColabProSSTUI:
             "ProSST structure tokens as input. Therefore, every protein must "
             "be prepared using one of the two methods below.</p>"
             "<ol>"
+            "<li><b>Sequence + structure files:</b> upload a CSV containing "
+            "amino-acid sequences and the corresponding PDB/mmCIF filenames, "
+            "then upload those files together as one Structure ZIP. Use "
+            "<code>structure_file</code> for single-protein tasks and "
+            "<code>structure_file_1</code>/<code>structure_file_2</code> for "
+            "protein-pair tasks. ColabProSST validates each sequence and "
+            "generates the model-specific structure tokens automatically. This "
+            "method is suitable when you already have experimental or predicted "
+            "structures, including proteins longer than the automatic service's "
+            "limit, up to the current ProSST input maximum of 2046 residues.</li>"
             "<li><b>Sequence only:</b> upload a CSV containing amino-acid "
             "sequences. ColabProSST predicts structures and generates tokens "
             "automatically. This uses the public ESMFold service, sends each "
             f"sequence to that service, and supports up to {ESMFOLD_MAX_RESIDUES} "
-            "residues per sequence. You can download the prepared token CSV "
-            "after the task.</li>"
-            "<li><b>Prepared token CSV:</b> first open <b>Prediction &gt; Prepare "
-            "reusable structure-token CSV</b>, generate and download the CSV, "
-            "or download the prepared input CSV after any sequence-only task. "
-            "Upload that file to later tasks. Select the same ProSST model "
-            "used during preparation. This avoids repeating structure "
-            "prediction and is recommended for repeated work.</li>"
+            "residues per sequence.</li>"
             "</ol>"
-            "<p>Protein-pair tasks use the same two methods with "
-            "<code>sequence_1</code> and <code>sequence_2</code>.</p>"
             "<hr style='border:0;border-top:1px solid #dadce0;margin:18px 0 12px'>"
-            "<h3 style='margin:0 0 8px'>CSV templates</h3>"
-            "<p><b>Start here:</b> choose your intended ProSST model below, "
-            "then download ready-to-use examples for every supported task. "
-            "Prepared-token templates contain the matching "
-            "<code>structure_vocab_size</code>; sequence-only templates can "
-            "be used directly.</p>",
+            "<h3 style='margin:0 0 8px'>Input templates</h3>"
+            "<p><b>Start here:</b> download ready-to-use input examples for "
+            "every supported task. The package contains separate sequence-only "
+            "and sequence + structure-file examples. These input formats work "
+            "with every official ProSST model; no model selection is required "
+            "before downloading.</p>",
             width="100%",
             max_width=self.GUIDE_WIDTH,
             overflow="visible",
@@ -1085,17 +1189,11 @@ class ColabProSSTUI:
             with self.system_status:
                 print("Task interrupted by user.")
 
-    def _download_templates(self, button, model_path=None):
+    def _download_input_templates(self, button):
         output = self.system_status
 
         def action():
-            spec = get_prosst_model_spec(
-                model_path or self.latest_model_path
-            )
-            self.workflow.create_csv_templates(
-                download=True,
-                structure_vocab_size=spec.structure_vocab_size,
-            )
+            self.workflow.create_input_templates(download=True)
 
         self._start_task(button, output, action)
 
@@ -1105,11 +1203,8 @@ class ColabProSSTUI:
             "Please choose what you want to do with ColabProSST"
         )
         input_guide = self._input_guide()
-        template_model = self._model_dropdown()
-        template_model.description = "Template model:"
-        template_model.style = {"description_width": "initial"}
-        template_button = self._button(
-            "Download CSV templates", width="280px", style="info"
+        input_template_button = self._button(
+            "Download input templates", width="280px", style="info"
         )
         train_button = self._button(
             "I want to train my own model", width="400px"
@@ -1126,8 +1221,8 @@ class ColabProSSTUI:
             lambda _button: self._navigate(self._prediction_menu_page)
         )
         share_button.on_click(lambda _button: self._navigate(self._share_page))
-        template_button.on_click(
-            lambda button: self._download_templates(button, template_model.value)
+        input_template_button.on_click(
+            lambda button: self._download_input_templates(button)
         )
 
         self._display_page(
@@ -1137,8 +1232,7 @@ class ColabProSSTUI:
             share_button,
             self._separator(),
             input_guide,
-            template_model,
-            template_button,
+            input_template_button,
         )
 
     def _training_page(self):
@@ -1156,15 +1250,15 @@ class ColabProSSTUI:
             self._task_intro("classification"), width=self.WIDTH
         )
         model = self._model_dropdown()
-        training_method = widgets.ToggleButtons(
-            options=[
-                ("Standard / full checkpoint", "full"),
-                ("LoRA / PEFT adapter", "lora"),
-            ],
-            value="full",
-            description="Training method:",
-            style={"description_width": "initial"},
-            layout=widgets.Layout(width=self.WIDTH, height=self.HEIGHT),
+        training_method_help = self._html(
+            "<b>Training method: LoRA fine-tuning.</b> ColabProSST trains the "
+            "complete task head and LoRA parameters inside the ProSST backbone. "
+            "The official backbone weights remain frozen. The result is a "
+            "compact PEFT adapter ZIP that ColabProSST can load together with "
+            "the selected official ProSST model.",
+            width="100%",
+            max_width=self.GUIDE_WIDTH,
+            overflow="visible",
         )
         lora_rank = widgets.BoundedIntText(
             value=8,
@@ -1195,10 +1289,9 @@ class ColabProSSTUI:
             layout=widgets.Layout(width=self.WIDTH, display="none"),
         )
         lora_help = self._html(
-            "LoRA trains low-rank adapters in ProSST attention/feed-forward "
-            "layers together with the task head. The output is a compact PEFT "
-            "adapter ZIP. When continuing an adapter, its saved r/alpha/dropout "
-            "configuration is reused.",
+            "These settings apply when starting from an official ProSST model. "
+            "When continuing an adapter, its saved rank, alpha, and dropout are "
+            "reused and training starts with a new optimizer.",
             width="100%",
             max_width=self.GUIDE_WIDTH,
             overflow="visible",
@@ -1206,43 +1299,29 @@ class ColabProSSTUI:
         )
         training_start = widgets.ToggleButtons(
             options=[
-                ("Fresh official model", "fresh"),
-                ("Continue from checkpoint", "checkpoint"),
+                ("Start from official ProSST", "fresh"),
+                ("Continue from a ColabProSST adapter", "adapter"),
             ],
             value="fresh",
             description="Training start:",
             style={"description_width": "initial"},
             layout=widgets.Layout(width=self.WIDTH, height=self.HEIGHT),
         )
-        initial_checkpoint = _ModelArtifactField(
+        initial_adapter = _ModelArtifactField(
             self,
-            "Initial checkpoint:",
-            "Path to a compatible ColabProSST .pt checkpoint",
+            "Initial adapter:",
+            "Path to a ColabProSST adapter directory or ZIP",
         )
-        initial_checkpoint.value = self.latest_checkpoint
-        resume_optimizer_state = widgets.Checkbox(
-            value=False,
-            description="Restore optimizer and scheduler (exact resume)",
-            style={"description_width": "initial"},
-            layout=widgets.Layout(display="none"),
-        )
-        full_checkpoint_help = (
-            "<b>Weight-only fine-tuning:</b> leave exact resume unchecked to "
-            "load model weights and start a new optimizer. The checkpoint must "
-            "use the same task, base model, structure vocabulary, and category "
-            "count.<br><b>Exact resume:</b> also restores optimizer, scheduler, "
-            "epoch, and best validation value; it requires a checkpoint saved "
-            "with training state. The Epoch setting specifies how many "
-            "additional epochs to run."
-        )
-        lora_checkpoint_help = (
-            "Upload a ColabProSST LoRA adapter ZIP or enter an extracted adapter "
-            "directory. Adapter weights are continued with a new optimizer; "
+        initial_adapter.value = self.latest_adapter
+        adapter_help = (
+            "Upload a ColabProSST adapter ZIP, enter an extracted adapter "
+            "directory, or load a compatible ProSSTHub repository. The adapter "
+            "and its saved task head are continued with a new optimizer; "
             "the task, base model, structure vocabulary, and category count "
             "must match."
         )
-        checkpoint_help = self._html(
-            full_checkpoint_help,
+        adapter_help_widget = self._html(
+            adapter_help,
             width="100%",
             max_width=self.GUIDE_WIDTH,
             overflow="visible",
@@ -1251,7 +1330,7 @@ class ColabProSSTUI:
         csv_input = _UploadField(
             self,
             "Training CSV:",
-            "CSV with sequence, label, and stage; tokens are optional",
+            "CSV with sequence, label, and stage",
         )
         dataset_help = self._html(
             self._training_dataset_help("classification"),
@@ -1280,21 +1359,9 @@ class ColabProSSTUI:
             layout=widgets.Layout(width=self.WIDTH, height=self.HEIGHT),
         )
         advanced_button = self._button("Show advanced settings")
-        freeze_backbone = widgets.Checkbox(
-            value=True,
-            description="Freeze ProSST backbone",
-            style={"description_width": "initial"},
-            layout=widgets.Layout(display="none"),
-        )
         gradient_checkpointing = widgets.Checkbox(
             value=True,
             description="Use gradient checkpointing",
-            style={"description_width": "initial"},
-            layout=widgets.Layout(display="none"),
-        )
-        save_training_state = widgets.Checkbox(
-            value=False,
-            description="Save optimizer state for future exact resume (larger file)",
             style={"description_width": "initial"},
             layout=widgets.Layout(display="none"),
         )
@@ -1316,6 +1383,17 @@ class ColabProSSTUI:
             task_intro.value = self._task_intro(selected_task)
             dataset_help.value = self._training_dataset_help(selected_task)
             structure_input.set_pair_mode(self._is_pair_task(selected_task))
+            required_columns = (
+                {"residue_labels", "stage"}
+                if selected_task == "token_classification"
+                else {"label", "stage"}
+            )
+            structure_input.set_context(
+                "training",
+                selected_task,
+                f"{self._task_label(selected_task)} training",
+                required_columns=required_columns,
+            )
             if selected_task == "token_classification":
                 placeholder = (
                     "CSV with sequence, residue_labels, and stage"
@@ -1330,49 +1408,25 @@ class ColabProSSTUI:
 
         def toggle_advanced(_button):
             show = advanced_button.description == "Show advanced settings"
-            mode = None if show else "none"
-            use_lora = training_method.value == "lora"
-            freeze_backbone.layout.display = "none" if use_lora else mode
-            gradient_checkpointing.layout.display = mode
-            save_training_state.layout.display = "none" if use_lora else mode
             advanced_button.description = (
                 "Hide advanced settings" if show else "Show advanced settings"
             )
+            update_training_controls()
 
         def update_training_controls(_change=None):
-            use_lora = training_method.value == "lora"
-            use_checkpoint = training_start.value == "checkpoint"
-            initial_checkpoint.set_visible(use_checkpoint)
-            resume_optimizer_state.layout.display = (
-                None if use_checkpoint and not use_lora else "none"
+            continue_adapter = training_start.value == "adapter"
+            initial_adapter.set_visible(continue_adapter)
+            adapter_help_widget.layout.display = (
+                None if continue_adapter else "none"
             )
-            checkpoint_help.layout.display = None if use_checkpoint else "none"
-            checkpoint_help.value = (
-                lora_checkpoint_help if use_lora else full_checkpoint_help
-            )
-            initial_checkpoint.set_local_copy(
-                "Initial adapter:" if use_lora else "Initial checkpoint:",
-                "Path to a LoRA adapter directory or ZIP"
-                if use_lora
-                else "Path to a compatible ColabProSST .pt checkpoint",
-            )
-            show_new_lora_config = use_lora and not use_checkpoint
+            advanced_visible = advanced_button.description == "Hide advanced settings"
+            show_new_lora_config = advanced_visible and not continue_adapter
             for item in [lora_rank, lora_alpha, lora_dropout]:
                 item.layout.display = None if show_new_lora_config else "none"
-            lora_help.layout.display = None if use_lora else "none"
-            if use_lora:
-                freeze_backbone.value = False
-                save_training_state.value = False
-                resume_optimizer_state.value = False
-            advanced_visible = advanced_button.description == "Hide advanced settings"
-            freeze_backbone.layout.display = (
-                None if advanced_visible and not use_lora else "none"
+            gradient_checkpointing.layout.display = (
+                None if advanced_visible else "none"
             )
-            save_training_state.layout.display = (
-                None if advanced_visible and not use_lora else "none"
-            )
-            if not use_checkpoint:
-                resume_optimizer_state.value = False
+            lora_help.layout.display = None if advanced_visible else "none"
 
         def apply_initial_artifact(metadata):
             self._apply_artifact_metadata(
@@ -1380,17 +1434,16 @@ class ColabProSSTUI:
                 task_type,
                 model,
                 num_labels,
-                training_method,
             )
-            training_start.value = "checkpoint"
+            training_start.value = "adapter"
 
         def train():
             if not csv_input.value:
                 raise ValueError("Upload a training CSV or enter its path.")
-            use_checkpoint = training_start.value == "checkpoint"
-            if use_checkpoint and not initial_checkpoint.value:
+            continue_adapter = training_start.value == "adapter"
+            if continue_adapter and not initial_adapter.value:
                 raise ValueError(
-                    "Upload an initial checkpoint or enter its path."
+                    "Upload an initial ColabProSST adapter or enter its path."
                 )
             clean_task_name = task_name.value.strip()
             if not clean_task_name or Path(clean_task_name).name != clean_task_name:
@@ -1403,18 +1456,14 @@ class ColabProSSTUI:
                 structure_vocab_size=model_spec.structure_vocab_size,
             )
             print("Start training...")
-            if use_checkpoint:
-                print("Selected checkpoint:", initial_checkpoint.value)
-                print(
-                    "Continuation mode:",
-                    "exact resume"
-                    if resume_optimizer_state.value
-                    else "weight-only fine-tuning",
-                )
+            if continue_adapter:
+                print("Continuing adapter:", initial_adapter.value)
+                print("Optimizer state: new optimizer")
             result = self.workflow.train_downstream(
                 task_type=task_type.value,
                 input_csv=csv_input.value,
                 input_mode=structure_input.input_mode,
+                structure_zip=structure_input.structure_zip,
                 task_name=clean_task_name,
                 num_labels=num_labels.value,
                 max_epochs=epochs.value,
@@ -1422,45 +1471,26 @@ class ColabProSSTUI:
                 learning_rate=learning_rate.value,
                 model_path=model.value,
                 structure_vocab_size=model_spec.structure_vocab_size,
-                freeze_backbone=freeze_backbone.value,
                 gradient_checkpointing=gradient_checkpointing.value,
-                initial_checkpoint=(
-                    initial_checkpoint.value if use_checkpoint else ""
+                initial_adapter=(
+                    initial_adapter.value if continue_adapter else ""
                 ),
-                resume_optimizer_state=(
-                    resume_optimizer_state.value if use_checkpoint else False
-                ),
-                save_training_state=save_training_state.value,
-                training_method=training_method.value,
                 lora_rank=lora_rank.value,
                 lora_alpha=lora_alpha.value,
                 lora_dropout=lora_dropout.value,
                 download=False,
             )
-            self.latest_checkpoint = result["checkpoint_path"]
+            self.latest_adapter = result["adapter_path"]
             self.latest_model_path = result["model_path"]
             self.latest_task_type = result["task_type"]
             self.latest_num_labels = num_labels.value
             print("Training finished.")
-            print("Model artifact:", result["checkpoint_path"])
-            print("Download artifact:", result["checkpoint_download_path"])
+            print("Adapter:", result["adapter_path"])
+            print("Adapter ZIP:", result["adapter_download_path"])
             print("Test predictions:", result["test_result_csv"])
-            if result["training_method"] == "full":
-                print(
-                    "Checkpoint training state:",
-                    "included"
-                    if result["save_training_state"]
-                    else "weights only",
-                )
-            artifact_label = (
-                "LoRA adapter ZIP"
-                if result["training_method"] == "lora"
-                else "model checkpoint"
-            )
             self._display_result_downloads(
-                (artifact_label, result["checkpoint_download_path"]),
+                ("LoRA adapter ZIP", result["adapter_download_path"]),
                 ("test predictions CSV", result["test_result_csv"]),
-                ("prepared input CSV", result.get("prepared_input_csv")),
             )
             finish_hint.value = (
                 "<h3>The training is completed. You can then:</h3>"
@@ -1469,7 +1499,7 @@ class ColabProSSTUI:
                 "settings, and start a new task.</li>"
                 "<li><b>Use this model for prediction:</b> click <b>Go back</b>, "
                 "choose <b>I want to use existing models to make prediction</b>, "
-                "then choose <b>Protein property prediction</b>. The checkpoint "
+                "then choose <b>Protein property prediction</b>. The adapter "
                 "is selected automatically in this session.</li>"
                 "<li><b>Share this model:</b> click <b>Go back</b> and choose "
                 "<b>I want to share my model publicly</b>.</li>"
@@ -1479,10 +1509,9 @@ class ColabProSSTUI:
 
         update_task({"new": task_type.value})
         task_type.observe(update_task, names="value")
-        initial_checkpoint.on_loaded(apply_initial_artifact)
+        initial_adapter.on_loaded(apply_initial_artifact)
         update_training_controls()
         training_start.observe(update_training_controls, names="value")
-        training_method.observe(update_training_controls, names="value")
         advanced_button.on_click(toggle_advanced)
         start_button.on_click(
             lambda _button: self._start_task(start_button, output, train)
@@ -1497,15 +1526,10 @@ class ColabProSSTUI:
             task_intro,
             self._heading("Model setting:", level=3),
             model,
-            training_method,
-            lora_rank,
-            lora_alpha,
-            lora_dropout,
-            lora_help,
+            training_method_help,
             training_start,
-            *initial_checkpoint.items,
-            resume_optimizer_state,
-            checkpoint_help,
+            *initial_adapter.items,
+            adapter_help_widget,
             self._heading("Dataset setting:", level=3),
             dataset_help,
             *csv_input.items,
@@ -1515,9 +1539,11 @@ class ColabProSSTUI:
             epochs,
             learning_rate,
             advanced_button,
-            freeze_backbone,
+            lora_rank,
+            lora_alpha,
+            lora_dropout,
+            lora_help,
             gradient_checkpointing,
-            save_training_state,
             self._separator(),
             start_button,
             output,
@@ -1538,9 +1564,6 @@ class ColabProSSTUI:
         embedding_button = self._button(
             "Extract protein embeddings", style="info"
         )
-        structure_button = self._button(
-            "Prepare reusable structure-token CSV", style="info"
-        )
         property_button.on_click(
             lambda _button: self._navigate(self._property_prediction_page)
         )
@@ -1553,9 +1576,6 @@ class ColabProSSTUI:
         embedding_button.on_click(
             lambda _button: self._navigate(self._embedding_page)
         )
-        structure_button.on_click(
-            lambda _button: self._navigate(self._structure_page)
-        )
         self._display_page(
             self._heading(
                 "ColabProSST supports multiple prediction tasks, which one "
@@ -1564,7 +1584,7 @@ class ColabProSSTUI:
             self._separator(),
             property_button,
             self._html(
-                "Use a trained ProSST checkpoint for protein-level "
+                "Use a trained ColabProSST adapter for protein-level "
                 "classification/regression, residue-level classification, or "
                 "protein-pair classification/regression."
             ),
@@ -1572,7 +1592,8 @@ class ColabProSSTUI:
             embedding_button,
             self._html(
                 "Extract final-layer protein-level vectors, residue-level "
-                "vectors, or both from an official ProSST model."
+                "vectors, or both from an official ProSST model or a trained "
+                "ColabProSST adapter."
             ),
             self._separator(),
             mutation_button,
@@ -1585,12 +1606,6 @@ class ColabProSSTUI:
             self._html(
                 "Score all 20 amino acids at every position and generate a "
                 "20-by-length matrix plus a zero-centered heatmap."
-            ),
-            self._separator(),
-            structure_button,
-            self._html(
-                "Convert one PDB/mmCIF structure into a durable CSV containing "
-                "its sequence and ProSST structure tokens."
             ),
         )
 
@@ -1615,16 +1630,16 @@ class ColabProSSTUI:
             overflow="visible",
         )
         model = self._model_dropdown()
-        checkpoint = _ModelArtifactField(
+        adapter = _ModelArtifactField(
             self,
-            "Model or adapter:",
-            "Path to a .pt checkpoint, LoRA adapter directory, or LoRA ZIP",
+            "Fine-tuned adapter:",
+            "Path to a ColabProSST adapter directory or ZIP",
         )
-        checkpoint.value = self.latest_checkpoint
+        adapter.value = self.latest_adapter
         csv_input = _UploadField(
             self,
             "Prediction CSV:",
-            "CSV with sequence; prepared structure tokens are optional",
+            "CSV with sequence or sequence pairs",
         )
         structure_input = _StructureInput(self)
         structure_input.set_pair_mode(
@@ -1647,6 +1662,11 @@ class ColabProSSTUI:
             task_intro.value = self._task_intro(selected_task)
             prediction_help.value = self._prediction_output_help(selected_task)
             structure_input.set_pair_mode(self._is_pair_task(selected_task))
+            structure_input.set_context(
+                "prediction",
+                "pair" if self._is_pair_task(selected_task) else "single",
+                f"{self._task_label(selected_task)} prediction",
+            )
             csv_input.path.placeholder = (
                 "CSV with sequence_1 and sequence_2"
                 if self._is_pair_task(selected_task)
@@ -1654,9 +1674,9 @@ class ColabProSSTUI:
             )
 
         def predict():
-            if not checkpoint.value:
+            if not adapter.value:
                 raise ValueError(
-                    "Upload a model checkpoint/adapter or enter its path."
+                    "Upload a ColabProSST adapter or enter its path."
                 )
             if not csv_input.value:
                 raise ValueError("Upload a prediction CSV or enter its path.")
@@ -1669,8 +1689,9 @@ class ColabProSSTUI:
             result = self.workflow.predict_downstream(
                 task_type=task_type.value,
                 input_csv=csv_input.value,
-                checkpoint_path=checkpoint.value,
+                adapter_path=adapter.value,
                 input_mode=structure_input.input_mode,
+                structure_zip=structure_input.structure_zip,
                 num_labels=num_labels.value,
                 batch_size=batch_size.value,
                 model_path=model.value,
@@ -1683,10 +1704,9 @@ class ColabProSSTUI:
             self.display(result.head())
             self._display_result_downloads(
                 ("predictions CSV", result.attrs.get("output_csv")),
-                ("prepared input CSV", result.attrs.get("prepared_input_csv")),
             )
 
-        checkpoint.on_loaded(
+        adapter.on_loaded(
             lambda metadata: self._apply_artifact_metadata(
                 metadata,
                 task_type,
@@ -1708,12 +1728,12 @@ class ColabProSSTUI:
             prediction_help,
             self._heading("Choose the model for prediction:", level=3),
             model,
-            *checkpoint.items,
+            *adapter.items,
             self._html(
-                "Use a full ColabProSST <code>.pt</code> checkpoint, an "
-                "extracted LoRA adapter directory, or a downloaded LoRA "
-                "adapter ZIP. Select the checkpoint's original task and base "
-                "model."
+                "Use an extracted ColabProSST adapter directory, a downloaded "
+                "adapter ZIP, or a compatible ProSSTHub repository. The task "
+                "head is included in the adapter. Select the adapter's original "
+                "task and official ProSST base model."
             ),
             self._heading("Input proteins:", level=3),
             *csv_input.items,
@@ -1748,7 +1768,7 @@ class ColabProSSTUI:
         embedding_model_source = widgets.ToggleButtons(
             options=[
                 ("Official ProSST", "official"),
-                ("Fine-tuned / community artifact", "artifact"),
+                ("Fine-tuned / community adapter", "artifact"),
             ],
             value="official",
             description="Embedding model:",
@@ -1757,17 +1777,22 @@ class ColabProSSTUI:
         )
         embedding_artifact = _ModelArtifactField(
             self,
-            "Model or adapter:",
-            "Path to a .pt checkpoint, LoRA adapter directory, or LoRA ZIP",
+            "Fine-tuned adapter:",
+            "Path to a ColabProSST adapter directory or ZIP",
         )
-        embedding_artifact.value = self.latest_checkpoint
+        embedding_artifact.value = self.latest_adapter
         embedding_artifact.set_visible(False)
         csv_input = _UploadField(
             self,
             "Protein CSV:",
-            "CSV with sequence; prepared structure tokens are optional",
+            "CSV with sequence",
         )
         structure_input = _StructureInput(self)
+        structure_input.set_context(
+            "embedding",
+            "single",
+            "Embedding extraction",
+        )
         batch_size = widgets.Dropdown(
             options=[1, 2, 4, 8, 16, 32],
             value=1,
@@ -1804,7 +1829,7 @@ class ColabProSSTUI:
                     f"base model; found {metadata['model_path']}."
                 )
             model.value = metadata["model_path"]
-            self.latest_checkpoint = metadata["artifact_path"]
+            self.latest_adapter = metadata["artifact_path"]
             self.latest_model_path = metadata["model_path"]
 
         def extract():
@@ -1815,7 +1840,7 @@ class ColabProSSTUI:
             use_artifact = embedding_model_source.value == "artifact"
             if use_artifact and not embedding_artifact.value:
                 raise ValueError(
-                    "Upload a fine-tuned model/adapter, enter its path, or load "
+                    "Upload a fine-tuned adapter, enter its path, or load "
                     "a Hugging Face repository."
                 )
             model_spec = get_prosst_model_spec(model.value)
@@ -1827,12 +1852,13 @@ class ColabProSSTUI:
             result = self.workflow.extract_embeddings(
                 input_csv=csv_input.value,
                 input_mode=structure_input.input_mode,
+                structure_zip=structure_input.structure_zip,
                 model_path=model.value,
                 structure_vocab_size=model_spec.structure_vocab_size,
                 level=level.value,
                 batch_size=batch_size.value,
                 max_length=max_length.value,
-                checkpoint_path=(
+                adapter_path=(
                     embedding_artifact.value if use_artifact else ""
                 ),
                 download=False,
@@ -1854,7 +1880,6 @@ class ColabProSSTUI:
                 ("embedding ZIP", result["archive_path"]),
                 ("embeddings PT", result["output_pt"]),
                 ("embedding index CSV", result["output_index_csv"]),
-                ("prepared input CSV", result.get("prepared_input_csv")),
             )
             completion.value = (
                 "<b>Embedding extraction completed.</b><br>"
@@ -1899,9 +1924,15 @@ class ColabProSSTUI:
         csv_input = _UploadField(
             self,
             "Protein CSV:",
-            "One-row CSV with sequence; prepared structure tokens are optional",
+            "One-row CSV with sequence",
         )
         structure_input = _StructureInput(self)
+        structure_input.set_context(
+            "saturation",
+            "single",
+            "Single-site saturation mutagenesis",
+            exact_rows=1,
+        )
         start_button = self._button(
             "Start saturation mutagenesis",
             style="info",
@@ -1920,6 +1951,7 @@ class ColabProSSTUI:
             result = self.workflow.run_saturation_mutagenesis(
                 input_csv=csv_input.value,
                 input_mode=structure_input.input_mode,
+                structure_zip=structure_input.structure_zip,
                 model_path=model.value,
                 structure_vocab_size=model_spec.structure_vocab_size,
                 download=False,
@@ -1934,7 +1966,6 @@ class ColabProSSTUI:
                 ("mutation scores CSV", result["output_csv"]),
                 ("score matrix CSV", result["output_matrix_csv"]),
                 ("heatmap PNG", result["output_heatmap_png"]),
-                ("prepared input CSV", result.get("prepared_input_csv")),
             )
 
         start_button.on_click(
@@ -1967,9 +1998,15 @@ class ColabProSSTUI:
         csv_input = _UploadField(
             self,
             "Mutation CSV:",
-            "CSV with sequence and mutant; prepared structure tokens are optional",
+            "CSV with sequence and mutant",
         )
         structure_input = _StructureInput(self)
+        structure_input.set_context(
+            "zero_shot",
+            "single",
+            "Mutational effect prediction",
+            required_columns={"mutant"},
+        )
         start_button = self._button("Start prediction", style="info")
         output = self._output()
 
@@ -1985,6 +2022,7 @@ class ColabProSSTUI:
             result = self.workflow.run_zero_shot(
                 input_csv=csv_input.value,
                 input_mode=structure_input.input_mode,
+                structure_zip=structure_input.structure_zip,
                 model_path=model.value,
                 structure_vocab_size=model_spec.structure_vocab_size,
                 download=False,
@@ -1993,7 +2031,6 @@ class ColabProSSTUI:
             self.display(result.head())
             self._display_result_downloads(
                 ("mutation scores CSV", result.attrs.get("output_csv")),
-                ("prepared input CSV", result.attrs.get("prepared_input_csv")),
             )
 
         start_button.on_click(
@@ -2007,7 +2044,7 @@ class ColabProSSTUI:
                 "<b>Zero-shot model note:</b> This task calculates "
                 "<code>log P(mutant) - log P(wild type)</code> from an official "
                 "pretrained ProSST masked-language model. Protein-level "
-                "classification and regression checkpoints do not provide this "
+                "classification and regression adapters do not provide this "
                 "mutation score; use them under <b>Protein property "
                 "prediction</b> instead.",
                 width="100%",
@@ -2017,163 +2054,16 @@ class ColabProSSTUI:
             self._heading("Mutation data:", level=3),
             self._html(
                 "The CSV must contain <code>sequence</code> and "
-                "<code>mutant</code>. Choose automatic preparation or upload a "
-                "prepared token CSV. Zero-shot mutation scoring uses official "
-                "ProSST family models, not downstream fine-tuned checkpoints."
+                "<code>mutant</code>. Then choose sequence + structure files or "
+                "automatic sequence-only preparation. Zero-shot mutation "
+                "scoring uses official "
+                "ProSST family models, not downstream fine-tuned adapters."
             ),
             *csv_input.items,
             *structure_input.display_items,
             self._separator(),
             start_button,
             output,
-        )
-
-    def _structure_page(self):
-        self.current_page = self._structure_page
-        widgets = self.widgets
-        model = self._model_dropdown()
-        source = widgets.ToggleButtons(
-            options=[
-                ("Sequence CSV - automatic", "sequence"),
-                ("One PDB/mmCIF file", "structure"),
-            ],
-            value="sequence",
-            description="Preparation source:",
-            style={"description_width": "initial"},
-            layout=widgets.Layout(width=self.WIDTH, height=self.HEIGHT),
-        )
-        source_help = self._html(
-            "",
-            width="100%",
-            max_width=self.GUIDE_WIDTH,
-            overflow="visible",
-        )
-        sequence_csv = _UploadField(
-            self,
-            "Sequence CSV:",
-            "CSV with sequence, or sequence_1 and sequence_2",
-        )
-        structure = _UploadField(
-            self,
-            "Structure file:",
-            "Path to one PDB or mmCIF file",
-        )
-        chain = widgets.Text(
-            value="",
-            placeholder="Leave empty to use all chains",
-            description="Chain:",
-            layout=widgets.Layout(width=self.WIDTH, height=self.HEIGHT),
-        )
-        vocab = widgets.IntText(
-            value=get_prosst_model_spec(model.value).structure_vocab_size,
-            description="Structure vocab:",
-            disabled=True,
-            style={"description_width": "initial"},
-            layout=widgets.Layout(width=self.WIDTH, height=self.HEIGHT),
-        )
-        start_button = self._button("Convert structure", style="info")
-        output = self._output()
-        next_steps = self._html(
-            "",
-            width="100%",
-            max_width=self.GUIDE_WIDTH,
-            overflow="visible",
-            display="none",
-        )
-
-        def update_model(change):
-            vocab.value = get_prosst_model_spec(
-                change["new"]
-            ).structure_vocab_size
-
-        def update_source(change):
-            use_sequence = change["new"] == "sequence"
-            sequence_csv.set_visible(use_sequence)
-            structure.set_visible(not use_sequence)
-            chain.layout.display = "none" if use_sequence else None
-            start_button.description = (
-                "Prepare token CSV" if use_sequence else "Convert structure"
-            )
-            source_help.value = (
-                "ColabProSST sends each sequence to the public ESMFold service, "
-                f"which accepts at most {ESMFOLD_MAX_RESIDUES} residues per "
-                "sequence. Results are cached in this runtime."
-                if use_sequence
-                else "The uploaded coordinates are quantized directly and are "
-                "not sent to the ESMFold service."
-            )
-
-        def convert():
-            if source.value == "sequence":
-                if not sequence_csv.value:
-                    raise ValueError("Upload a sequence CSV or enter its path.")
-                print("Preparing structures and ProSST tokens from sequences...")
-                result = self.workflow.prepare_sequence_input_csv(
-                    input_csv=sequence_csv.value,
-                    structure_vocab_size=vocab.value,
-                    download=False,
-                )
-            else:
-                if not structure.value:
-                    raise ValueError("Upload a PDB/mmCIF file or enter its path.")
-                print("Converting structure to ProSST tokens...")
-                result = self.workflow.convert_structure(
-                    structure_path=structure.value,
-                    chain_id=chain.value,
-                    structure_vocab_size=vocab.value,
-                    download=False,
-                )
-            self.latest_model_path = model.value
-            self.display(result.head())
-            self._display_result_downloads(
-                ("prepared token CSV", result.attrs.get("output_csv")),
-            )
-            next_steps.value = (
-                "<h3>Your reusable input CSV is ready</h3>"
-                "<ol>"
-                "<li>Download the <b>prepared token CSV</b> above.</li>"
-                "<li>Open training or the prediction task you need and upload "
-                "that downloaded CSV.</li>"
-                f"<li>Keep <b>{get_prosst_model_spec(model.value).display_name}</b> "
-                "selected, because tokens are specific to its structure "
-                "vocabulary.</li>"
-                "<li>Select <b>Prepared CSV with structure_tokens</b>.</li>"
-                "</ol>"
-                "The downloaded file already contains <code>sequence</code>, "
-                "<code>structure_tokens</code>, and "
-                "<code>structure_vocab_size</code>, so it can also be reused in "
-                "future Colab sessions. Add task-specific columns such as "
-                "<code>label</code>, <code>stage</code>, or <code>mutant</code> "
-                "when needed."
-            )
-            next_steps.layout.display = None
-
-        model.observe(update_model, names="value")
-        source.observe(update_source, names="value")
-        update_source({"new": source.value})
-        start_button.on_click(
-            lambda _button: self._start_task(start_button, output, convert)
-        )
-        self._display_page(
-            self._heading("Prepare reusable structure-token CSV"),
-            self._html(
-                "Use a sequence CSV for automatic batch preparation, or use an "
-                "existing experimental/predicted PDB or mmCIF structure for one "
-                "protein. All original CSV columns are kept in the output."
-            ),
-            self._heading("Model setting:", level=3),
-            model,
-            self._heading("Preparation input:", level=3),
-            source,
-            source_help,
-            *sequence_csv.items,
-            *structure.items,
-            chain,
-            vocab,
-            self._separator(),
-            start_button,
-            output,
-            next_steps,
         )
 
     def _share_page(self):
@@ -2226,12 +2116,12 @@ class ColabProSSTUI:
             max_width=self.GUIDE_WIDTH,
             overflow="visible",
         )
-        checkpoint = _UploadField(
+        adapter = _ModelArtifactField(
             self,
-            "Model or adapter:",
-            "Path to a ColabProSST .pt, LoRA directory, or LoRA ZIP",
+            "ColabProSST adapter:",
+            "Path to a ColabProSST adapter directory or ZIP",
         )
-        checkpoint.value = self.latest_checkpoint
+        adapter.value = self.latest_adapter
         model = self._model_dropdown()
         task_type = self._task_dropdown(self.latest_task_type)
         num_labels = self._num_labels()
@@ -2253,7 +2143,7 @@ class ColabProSSTUI:
             layout=widgets.Layout(width=self.WIDTH, height=self.HEIGHT),
         )
         description = widgets.Textarea(
-            value="A ProSST checkpoint trained with ColabProSST.",
+            value="A ProSST adapter trained with ColabProSST.",
             description="Description:",
             style={"description_width": "initial"},
             layout=widgets.Layout(width=self.WIDTH, height="90px"),
@@ -2317,9 +2207,9 @@ class ColabProSSTUI:
                 login_button.disabled = False
 
         def upload():
-            if not checkpoint.value:
+            if not adapter.value:
                 raise ValueError(
-                    "Upload a model checkpoint/adapter or enter its path."
+                    "Upload a ColabProSST adapter or enter its path."
                 )
             clean_repo_name = repo_name.value.strip()
             if not clean_repo_name:
@@ -2328,9 +2218,9 @@ class ColabProSSTUI:
             print("Uploading model to your Hugging Face account...")
             print("Target repository:", repo_id)
             model_spec = get_prosst_model_spec(model.value)
-            package = self.workflow.upload_checkpoint_to_hf(
+            package = self.workflow.upload_adapter_to_hf(
                 repo_id=repo_id,
-                checkpoint_path=checkpoint.value,
+                adapter_path=adapter.value,
                 task_type=task_type.value,
                 num_labels=num_labels.value,
                 model_path=model.value,
@@ -2354,6 +2244,14 @@ class ColabProSSTUI:
             contribution_hint.layout.display = None
 
         task_type.observe(update_task, names="value")
+        adapter.on_loaded(
+            lambda metadata: self._apply_artifact_metadata(
+                metadata,
+                task_type,
+                model,
+                num_labels,
+            )
+        )
         login_button.on_click(log_in)
         start_button.on_click(
             lambda _button: self._start_task(start_button, output, upload)
@@ -2369,7 +2267,7 @@ class ColabProSSTUI:
             login_status,
             self._separator(),
             self._heading("2. Choose the model to share", level=3),
-            *checkpoint.items,
+            *adapter.items,
             model,
             task_type,
             num_labels,

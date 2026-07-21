@@ -43,11 +43,6 @@ def my_load_model(config):
 
         return ProSSTPairRegressionModel(**model_config)
 
-    if model_type == "prosst/prosst_mutation_model":
-        from saprot.model.prosst.prosst_mutation_model import ProSSTMutationModel
-
-        return ProSSTMutationModel(**model_config)
-
     raise ValueError(f"Unsupported ProSST model type: {model_type}")
 
 
@@ -90,10 +85,5 @@ def my_load_dataset(config):
         )
 
         return ProSSTPairRegressionDataset(**dataset_config)
-
-    if dataset_type == "prosst/prosst_mutation_dataset":
-        from saprot.dataset.prosst.prosst_mutation_dataset import ProSSTMutationDataset
-
-        return ProSSTMutationDataset(**dataset_config)
 
     raise ValueError(f"Unsupported ProSST dataset type: {dataset_type}")

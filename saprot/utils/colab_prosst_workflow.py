@@ -10,10 +10,6 @@ import pandas as pd
 import torch
 from easydict import EasyDict
 
-from saprot.data.pdb2prosst import (
-    load_or_quantize_structure,
-    serialize_structure_tokens,
-)
 from saprot.data.prosst_labels import (
     RESIDUE_LABEL_IGNORE_INDEX,
     parse_residue_labels,
@@ -21,6 +17,9 @@ from saprot.data.prosst_labels import (
 )
 from saprot.data.sequence_to_prosst import (
     prepare_sequence_csv_with_structure_tokens,
+)
+from saprot.data.structure_to_prosst import (
+    prepare_structure_csv_with_structure_tokens,
 )
 from saprot.scripts.mutation_zeroshot_prosst import score_mutants
 from saprot.scripts.saturation_mutagenesis_prosst import (
@@ -35,7 +34,7 @@ from saprot.scripts.predict_prosst import (
     PAIR_TASK_TYPES,
     SUPPORTED_TASK_TYPES,
     predict_csv,
-    validate_checkpoint_compatibility,
+    validate_adapter_compatibility,
 )
 from saprot.model.prosst.specs import (
     DEFAULT_PROSST_MODEL,
@@ -49,20 +48,16 @@ from saprot.utils.prosst_module_loader import (
     my_load_dataset,
     my_load_model,
 )
+from saprot.utils.colab_prosst_templates import (
+    INPUT_TEMPLATE_GUIDE,
+    get_input_template_name,
+)
 
 
-RESUMABLE_CHECKPOINT_KEYS = {
-    "model",
-    "global_step",
-    "epoch",
-    "best_value",
-    "lr_scheduler",
-    "optimizer",
-}
 HF_REPO_COMPONENT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$")
 INPUT_MODE_SEQUENCE = "sequence"
-INPUT_MODE_TOKENS = "tokens"
-INPUT_MODES = {INPUT_MODE_SEQUENCE, INPUT_MODE_TOKENS}
+INPUT_MODE_STRUCTURE = "structure"
+INPUT_MODES = {INPUT_MODE_SEQUENCE, INPUT_MODE_STRUCTURE}
 
 
 class ColabProSSTWorkflow:
@@ -264,6 +259,10 @@ class ColabProSSTWorkflow:
         archive_path = Path(zip_path)
         if not archive_path.exists():
             raise FileNotFoundError(f"Structure asset zip does not exist: {archive_path}")
+        if not archive_path.is_file() or not zipfile.is_zipfile(archive_path):
+            raise ValueError(
+                f"Structure assets must be uploaded as a valid ZIP file: {archive_path}"
+            )
 
         target_dir = self.asset_dir / archive_path.stem
         shutil.rmtree(target_dir, ignore_errors=True)
@@ -284,30 +283,30 @@ class ColabProSSTWorkflow:
                     raise ValueError(f"Unsafe zip member path: {member.filename}")
                 archive.extract(member, target_dir)
 
-    def resolve_lora_adapter(self, checkpoint_path: str) -> str:
-        checkpoint = Path(str(checkpoint_path).strip())
-        if checkpoint.is_file() and checkpoint.suffix.lower() == ".zip":
-            target_dir = self.saprothub_dir / "loaded_lora" / checkpoint.stem
+    def resolve_lora_adapter(self, adapter_path: str) -> str:
+        adapter = Path(str(adapter_path).strip())
+        if adapter.is_file() and adapter.suffix.lower() == ".zip":
+            target_dir = self.saprothub_dir / "loaded_lora" / adapter.stem
             shutil.rmtree(target_dir, ignore_errors=True)
             target_dir.mkdir(parents=True, exist_ok=True)
-            self._extract_zip_archive(checkpoint, target_dir)
+            self._extract_zip_archive(adapter, target_dir)
             candidates = sorted(target_dir.rglob("adapter_config.json"))
             if len(candidates) != 1:
                 raise ValueError(
                     "A LoRA ZIP must contain exactly one adapter_config.json; "
                     f"found {len(candidates)}."
                 )
-            checkpoint = candidates[0].parent
+            adapter = candidates[0].parent
 
-        if not checkpoint.is_dir():
+        if not adapter.is_dir():
             raise FileNotFoundError(
-                f"LoRA adapter directory or ZIP does not exist: {checkpoint}"
+                f"LoRA adapter directory or ZIP does not exist: {adapter}"
             )
-        if not (checkpoint / "adapter_config.json").is_file():
+        if not (adapter / "adapter_config.json").is_file():
             raise ValueError(
-                f"LoRA adapter has no adapter_config.json: {checkpoint}"
+                f"LoRA adapter has no adapter_config.json: {adapter}"
             )
-        return str(checkpoint)
+        return str(adapter)
 
     @staticmethod
     def _normalize_artifact_metadata(metadata: dict) -> dict:
@@ -337,7 +336,7 @@ class ColabProSSTWorkflow:
             )
         if normalized["task_type"] not in SUPPORTED_TASK_TYPES:
             raise ValueError(
-                "Unsupported community checkpoint task: "
+                "Unsupported community adapter task: "
                 f"{normalized['task_type']!r}."
             )
         normalized["structure_vocab_size"] = int(
@@ -354,61 +353,37 @@ class ColabProSSTWorkflow:
             )
         return normalized
 
-    def inspect_model_artifact(self, checkpoint_path: str) -> dict:
-        checkpoint = Path(str(checkpoint_path).strip())
-        if checkpoint.is_file() and checkpoint.suffix.lower() == ".zip":
-            checkpoint = Path(self.resolve_lora_adapter(str(checkpoint)))
-
-        if checkpoint.is_dir():
-            metadata_path = checkpoint / "colabprosst.json"
-            if not metadata_path.is_file():
-                raise ValueError(
-                    "LoRA adapter is missing colabprosst.json metadata."
-                )
-            try:
-                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as exc:
-                raise ValueError(
-                    f"Could not read LoRA metadata: {metadata_path}"
-                ) from exc
-            artifact_type = "lora"
-        elif checkpoint.is_file():
-            try:
-                state = torch.load(checkpoint, map_location="cpu")
-            except Exception as exc:
-                raise ValueError(
-                    f"Could not read ColabProSST checkpoint: {checkpoint}"
-                ) from exc
-            metadata = state.get("colabprosst") if isinstance(state, dict) else None
-            if not isinstance(metadata, dict):
-                sidecar = checkpoint.parent / "metadata.json"
-                if sidecar.is_file():
-                    try:
-                        metadata = json.loads(sidecar.read_text(encoding="utf-8"))
-                    except (OSError, json.JSONDecodeError) as exc:
-                        raise ValueError(
-                            f"Could not read checkpoint metadata: {sidecar}"
-                        ) from exc
-            if not isinstance(metadata, dict):
-                raise ValueError(
-                    "Full checkpoint is missing ColabProSST metadata."
-                )
-            artifact_type = "full"
-        else:
-            raise FileNotFoundError(
-                f"Model checkpoint or adapter does not exist: {checkpoint}"
+    def inspect_model_artifact(self, adapter_path: str) -> dict:
+        adapter = Path(self.resolve_lora_adapter(adapter_path))
+        metadata_path = adapter / "colabprosst.json"
+        if not metadata_path.is_file():
+            raise ValueError(
+                "ColabProSST adapter is missing colabprosst.json metadata."
             )
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(
+                f"Could not read ColabProSST adapter metadata: {metadata_path}"
+            ) from exc
 
         result = self._normalize_artifact_metadata(metadata)
+        validate_adapter_compatibility(
+            str(adapter),
+            result["task_type"],
+            result["model_path"],
+            result["structure_vocab_size"],
+            result.get("num_labels"),
+        )
         result.update(
             {
-                "artifact_path": str(checkpoint),
-                "artifact_type": artifact_type,
+                "artifact_path": str(adapter),
+                "artifact_type": "lora",
             }
         )
         return result
 
-    def download_community_checkpoint(
+    def download_community_adapter(
         self,
         repo_id: str,
         revision: str = "",
@@ -445,22 +420,13 @@ class ColabProSSTWorkflow:
             for path in snapshot_path.rglob("adapter_config.json")
             if ".cache" not in path.parts
         ]
-        full_candidates = [
-            path
-            for path in snapshot_path.rglob("model.pt")
-            if ".cache" not in path.parts
-        ]
-        artifact_candidates = [
-            *[("lora", path) for path in adapter_candidates],
-            *[("full", path) for path in full_candidates],
-        ]
-        if len(artifact_candidates) != 1:
+        if len(adapter_candidates) != 1:
             raise ValueError(
                 "A community repository must contain exactly one "
-                "ColabProSST model.pt or PEFT adapter; found "
-                f"{len(artifact_candidates)} artifacts."
+                "ColabProSST PEFT adapter; found "
+                f"{len(adapter_candidates)} adapters."
             )
-        _artifact_type, artifact_path = artifact_candidates[0]
+        artifact_path = adapter_candidates[0]
         result = self.inspect_model_artifact(str(artifact_path))
         result.update(
             {
@@ -471,34 +437,46 @@ class ColabProSSTWorkflow:
         )
         return result
 
-    def create_csv_templates(
+    def create_input_templates(
         self,
-        template_dir: str = "/content/prosst_templates",
+        template_dir: str = "/content/prosst_input_templates",
         download: bool = False,
-        structure_vocab_size: int = 2048,
     ) -> Path:
         template_home = Path(template_dir)
         template_home.mkdir(parents=True, exist_ok=True)
         for old_template in template_home.glob("prosst_*_template.csv"):
             old_template.unlink()
+        for old_name in [
+            "README.txt",
+            "00_README_FIRST.txt",
+            "prosst_input_templates.zip",
+        ]:
+            old_path = template_home / old_name
+            if old_path.is_file():
+                old_path.unlink()
+
+        def template_path(group, task, input_mode):
+            return template_home / get_input_template_name(
+                group,
+                task,
+                input_mode,
+            )
 
         pd.DataFrame(
             [
                 {
                     "sequence": "ACD",
                     "mutant": "D3A",
-                    "structure_tokens": "0 1 2",
-                    "structure_vocab_size": structure_vocab_size,
+                    "structure_file": "protein_1.pdb",
                 },
                 {
                     "sequence": "ACDE",
                     "mutant": "D3A:E4A",
-                    "structure_tokens": "0 1 2 3",
-                    "structure_vocab_size": structure_vocab_size,
+                    "structure_file": "protein_2.cif",
                 },
             ]
         ).to_csv(
-            template_home / "prosst_zero_shot_prepared_template.csv", index=False
+            template_path("zero_shot", "single", "structure"), index=False
         )
 
         pd.DataFrame(
@@ -509,7 +487,7 @@ class ColabProSSTWorkflow:
                 }
             ]
         ).to_csv(
-            template_home / "prosst_zero_shot_sequence_template.csv", index=False
+            template_path("zero_shot", "single", "sequence"), index=False
         )
 
         pd.DataFrame(
@@ -518,26 +496,23 @@ class ColabProSSTWorkflow:
                     "sequence": "ACD",
                     "label": 1,
                     "stage": "train",
-                    "structure_tokens": "0 1 2",
-                    "structure_vocab_size": structure_vocab_size,
+                    "structure_file": "train_protein.pdb",
                 },
                 {
                     "sequence": "ACE",
                     "label": 0,
                     "stage": "valid",
-                    "structure_tokens": "0 1 3",
-                    "structure_vocab_size": structure_vocab_size,
+                    "structure_file": "valid_protein.pdb",
                 },
                 {
                     "sequence": "ACF",
                     "label": 1,
                     "stage": "test",
-                    "structure_tokens": "0 1 4",
-                    "structure_vocab_size": structure_vocab_size,
+                    "structure_file": "test_protein.pdb",
                 },
             ]
         ).to_csv(
-            template_home / "prosst_classification_prepared_template.csv",
+            template_path("training", "classification", "structure"),
             index=False,
         )
 
@@ -560,7 +535,7 @@ class ColabProSSTWorkflow:
                 },
             ]
         ).to_csv(
-            template_home / "prosst_classification_sequence_template.csv",
+            template_path("training", "classification", "sequence"),
             index=False,
         )
 
@@ -570,26 +545,23 @@ class ColabProSSTWorkflow:
                     "sequence": "ACD",
                     "residue_labels": "0 1 0",
                     "stage": "train",
-                    "structure_tokens": "0 1 2",
-                    "structure_vocab_size": structure_vocab_size,
+                    "structure_file": "train_protein.pdb",
                 },
                 {
                     "sequence": "ACE",
                     "residue_labels": "1 -100 0",
                     "stage": "valid",
-                    "structure_tokens": "0 1 3",
-                    "structure_vocab_size": structure_vocab_size,
+                    "structure_file": "valid_protein.pdb",
                 },
                 {
                     "sequence": "ACF",
                     "residue_labels": "0 1 1",
                     "stage": "test",
-                    "structure_tokens": "0 1 4",
-                    "structure_vocab_size": structure_vocab_size,
+                    "structure_file": "test_protein.pdb",
                 },
             ]
         ).to_csv(
-            template_home / "prosst_token_classification_prepared_template.csv",
+            template_path("training", "token_classification", "structure"),
             index=False,
         )
 
@@ -612,7 +584,7 @@ class ColabProSSTWorkflow:
                 },
             ]
         ).to_csv(
-            template_home / "prosst_token_classification_sequence_template.csv",
+            template_path("training", "token_classification", "sequence"),
             index=False,
         )
 
@@ -622,26 +594,23 @@ class ColabProSSTWorkflow:
                     "sequence": "ACD",
                     "label": 0.5,
                     "stage": "train",
-                    "structure_tokens": "0 1 2",
-                    "structure_vocab_size": structure_vocab_size,
+                    "structure_file": "train_protein.pdb",
                 },
                 {
                     "sequence": "ACE",
                     "label": 0.2,
                     "stage": "valid",
-                    "structure_tokens": "0 1 3",
-                    "structure_vocab_size": structure_vocab_size,
+                    "structure_file": "valid_protein.pdb",
                 },
                 {
                     "sequence": "ACF",
                     "label": 0.8,
                     "stage": "test",
-                    "structure_tokens": "0 1 4",
-                    "structure_vocab_size": structure_vocab_size,
+                    "structure_file": "test_protein.pdb",
                 },
             ]
         ).to_csv(
-            template_home / "prosst_regression_prepared_template.csv", index=False
+            template_path("training", "regression", "structure"), index=False
         )
 
         pd.DataFrame(
@@ -663,7 +632,7 @@ class ColabProSSTWorkflow:
                 },
             ]
         ).to_csv(
-            template_home / "prosst_regression_sequence_template.csv", index=False
+            template_path("training", "regression", "sequence"), index=False
         )
 
         pair_examples = [
@@ -671,22 +640,22 @@ class ColabProSSTWorkflow:
                 "sequence_1": "ACD",
                 "sequence_2": "AC",
                 "stage": "train",
-                "structure_tokens_1": "0 1 2",
-                "structure_tokens_2": "3 4",
+                "structure_file_1": "train_protein_1.pdb",
+                "structure_file_2": "train_protein_2.pdb",
             },
             {
                 "sequence_1": "ACE",
                 "sequence_2": "AD",
                 "stage": "valid",
-                "structure_tokens_1": "0 1 3",
-                "structure_tokens_2": "0 2",
+                "structure_file_1": "valid_protein_1.pdb",
+                "structure_file_2": "valid_protein_2.pdb",
             },
             {
                 "sequence_1": "ACF",
                 "sequence_2": "AE",
                 "stage": "test",
-                "structure_tokens_1": "0 1 4",
-                "structure_tokens_2": "0 3",
+                "structure_file_1": "test_protein_1.pdb",
+                "structure_file_2": "test_protein_2.pdb",
             },
         ]
         pair_labels = {
@@ -706,56 +675,53 @@ class ColabProSSTWorkflow:
                 token_rows.append(
                     {
                         **common,
-                        "structure_tokens_1": example["structure_tokens_1"],
-                        "structure_tokens_2": example["structure_tokens_2"],
-                        "structure_vocab_size": structure_vocab_size,
+                        "structure_file_1": example["structure_file_1"],
+                        "structure_file_2": example["structure_file_2"],
                     }
                 )
                 sequence_rows.append(common)
 
             pd.DataFrame(token_rows).to_csv(
-                template_home / f"prosst_{task_type}_prepared_template.csv",
+                template_path("training", task_type, "structure"),
                 index=False,
             )
             pd.DataFrame(sequence_rows).to_csv(
-                template_home / f"prosst_{task_type}_sequence_template.csv",
+                template_path("training", task_type, "sequence"),
                 index=False,
             )
 
-        single_input_tokens = pd.DataFrame(
+        single_input_structures = pd.DataFrame(
             [
                 {
                     "sequence": "ACD",
-                    "structure_tokens": "0 1 2",
-                    "structure_vocab_size": structure_vocab_size,
+                    "structure_file": "protein_1.pdb",
                 },
                 {
                     "sequence": "ACE",
-                    "structure_tokens": "0 1 3",
-                    "structure_vocab_size": structure_vocab_size,
+                    "structure_file": "protein_2.pdb",
                 },
             ]
         )
-        for template_name in ["prediction", "embedding"]:
-            single_input_tokens.to_csv(
-                template_home / f"prosst_{template_name}_prepared_template.csv",
+        for group in ["prediction", "embedding"]:
+            single_input_structures.to_csv(
+                template_path(group, "single", "structure"),
                 index=False,
             )
-        single_input_tokens.iloc[[0]].to_csv(
-            template_home / "prosst_saturation_prepared_template.csv",
+        single_input_structures.iloc[[0]].to_csv(
+            template_path("saturation", "single", "structure"),
             index=False,
         )
 
         single_input_sequences = pd.DataFrame(
             [{"sequence": "ACD"}, {"sequence": "ACE"}]
         )
-        for template_name in ["prediction", "embedding"]:
+        for group in ["prediction", "embedding"]:
             single_input_sequences.to_csv(
-                template_home / f"prosst_{template_name}_sequence_template.csv",
+                template_path(group, "single", "sequence"),
                 index=False,
             )
         single_input_sequences.iloc[[0]].to_csv(
-            template_home / "prosst_saturation_sequence_template.csv",
+            template_path("saturation", "single", "sequence"),
             index=False,
         )
 
@@ -764,14 +730,13 @@ class ColabProSSTWorkflow:
                 {
                     "sequence_1": example["sequence_1"],
                     "sequence_2": example["sequence_2"],
-                    "structure_tokens_1": example["structure_tokens_1"],
-                    "structure_tokens_2": example["structure_tokens_2"],
-                    "structure_vocab_size": structure_vocab_size,
+                    "structure_file_1": example["structure_file_1"],
+                    "structure_file_2": example["structure_file_2"],
                 }
                 for example in pair_examples[:2]
             ]
         ).to_csv(
-            template_home / "prosst_pair_prediction_prepared_template.csv",
+            template_path("prediction", "pair", "structure"),
             index=False,
         )
         pd.DataFrame(
@@ -783,103 +748,56 @@ class ColabProSSTWorkflow:
                 for example in pair_examples[:2]
             ]
         ).to_csv(
-            template_home / "prosst_pair_prediction_sequence_template.csv",
+            template_path("prediction", "pair", "sequence"),
             index=False,
         )
 
-        template_zip = template_home / "prosst_csv_templates.zip"
+        instructions_path = template_home / "00_README_FIRST.txt"
+        instructions = [
+            "ColabProSST input templates\n\n"
+            "IMPORTANT: first choose the task in ColabProSST, then use the "
+            "matching template below. Do not use a protein-pair template for "
+            "a single-protein task, or a training template for prediction.\n\n"
+        ]
+        for section, entries in INPUT_TEMPLATE_GUIDE:
+            instructions.append(f"{section}\n")
+            for group, task, label in entries:
+                instructions.extend(
+                    [
+                        f"{label}:\n",
+                        "  "
+                        f"{get_input_template_name(group, task, 'sequence')}\n",
+                        "  "
+                        f"{get_input_template_name(group, task, 'structure')}\n",
+                    ]
+                )
+            instructions.append("\n")
+        instructions.append(
+            "For each task, choose exactly one input method:\n"
+            "1. Sequence only: use the filename containing _sequence_.\n"
+            "2. Sequence + structure files: use the filename containing "
+            "_structure_, replace its example structure filenames, and upload "
+            "the referenced PDB/mmCIF files together as one Structure ZIP.\n\n"
+            "Protein-pair files use sequence_1 and sequence_2. Their structure "
+            "input also uses structure_file_1 and structure_file_2. Optional "
+            "chain, chain_1, and chain_2 columns select chains.\n"
+        )
+        instructions_path.write_text(
+            "".join(instructions),
+            encoding="utf-8",
+        )
+        template_zip = template_home / "prosst_input_templates.zip"
         with zipfile.ZipFile(template_zip, "w") as archive:
             for csv_path in sorted(template_home.glob("*.csv")):
                 archive.write(csv_path, arcname=csv_path.name)
+            archive.write(instructions_path, arcname=instructions_path.name)
 
-        print("template directory:", template_home)
-        print("template zip:", template_zip)
+        print("input template directory:", template_home)
+        print("input template package:", template_zip)
         if download:
             self._download(template_zip)
 
         return template_zip
-
-    def prepare_sequence_input_csv(
-        self,
-        input_csv: str,
-        upload_csv: bool = False,
-        structure_vocab_size: int = 2048,
-        output_csv: Optional[str] = None,
-        download: bool = True,
-    ) -> pd.DataFrame:
-        input_csv = self.maybe_upload_path(input_csv, upload_csv)
-        columns = {
-            str(column).strip().lower()
-            for column in pd.read_csv(input_csv, nrows=0).columns
-        }
-        pair_columns = {"sequence_1", "sequence_2"}
-        if columns.intersection(pair_columns) and not pair_columns.issubset(columns):
-            raise ValueError(
-                "Protein-pair preparation requires both sequence_1 and sequence_2."
-            )
-        pair_mode = pair_columns.issubset(columns)
-        if not pair_mode and "sequence" not in columns and "protein" not in columns:
-            raise ValueError(
-                "Sequence preparation requires a sequence column, or both "
-                "sequence_1 and sequence_2 for protein pairs."
-            )
-
-        output_path = (
-            Path(output_csv)
-            if output_csv
-            else self.output_dir / "prosst_prepared_input.csv"
-        )
-        prepared_csv = prepare_sequence_csv_with_structure_tokens(
-            input_csv=input_csv,
-            output_csv=str(output_path),
-            cache_dir=str(self.cache_dir),
-            structure_vocab_size=int(structure_vocab_size),
-            pair_mode=pair_mode,
-        )
-        result = pd.read_csv(prepared_csv)
-        result.attrs["output_csv"] = prepared_csv
-        if download:
-            self._download(Path(prepared_csv))
-        return result
-
-    def convert_structure(
-        self,
-        structure_path: str,
-        upload_structure: bool = False,
-        chain_id: str = "",
-        structure_vocab_size: int = 2048,
-        output_csv: Optional[str] = None,
-        download: bool = True,
-    ) -> pd.DataFrame:
-        structure_path = self.maybe_upload_path(structure_path, upload_structure)
-        chain = chain_id.strip() or None
-        result = load_or_quantize_structure(
-            structure_path,
-            cache_dir=str(self.cache_dir),
-            chain_id=chain,
-            structure_vocab_size=structure_vocab_size,
-        )
-        output_path = Path(output_csv) if output_csv else self.output_dir / "prosst_structure_tokens.csv"
-        df = pd.DataFrame(
-            [
-                {
-                    "sequence": result["sequence"],
-                    "structure_tokens": serialize_structure_tokens(result["structure_tokens"]),
-                    "structure_vocab_size": int(result["structure_vocab_size"]),
-                }
-            ]
-        )
-        df.to_csv(output_path, index=False)
-        df.attrs["output_csv"] = str(output_path)
-
-        print("sequence length:", len(result["sequence"]))
-        print("structure token length:", len(result["structure_tokens"]))
-        print("first 20 tokens:", result["structure_tokens"][:20])
-        print("saved structure token csv:", output_path)
-        if download:
-            self._download(output_path)
-
-        return df
 
     def _prepare_input_csv(
         self,
@@ -887,9 +805,10 @@ class ColabProSSTWorkflow:
         upload_csv: bool,
         suffix: str,
         structure_vocab_size: Optional[int] = None,
-        input_mode: str = INPUT_MODE_TOKENS,
+        input_mode: str = INPUT_MODE_SEQUENCE,
         pair_mode: bool = False,
-    ) -> tuple[str, Optional[str]]:
+        structure_zip: str = "",
+    ) -> str:
         input_csv = self.maybe_upload_path(input_csv, upload_csv)
         input_mode = str(input_mode).strip().lower()
         if input_mode not in INPUT_MODES:
@@ -903,8 +822,24 @@ class ColabProSSTWorkflow:
                 structure_vocab_size=int(structure_vocab_size),
                 pair_mode=pair_mode,
             )
-            return prepared_csv, prepared_csv
-        return input_csv, None
+            return prepared_csv
+        if input_mode == INPUT_MODE_STRUCTURE:
+            structure_dir = self.maybe_extract_asset_zip(structure_zip)
+            if structure_dir is None:
+                raise ValueError(
+                    "Sequence + structure files input requires a structure ZIP."
+                )
+            output_path = self.output_dir / f"prosst_{suffix}_prepared.csv"
+            prepared_csv = prepare_structure_csv_with_structure_tokens(
+                input_csv=input_csv,
+                structure_dir=structure_dir,
+                output_csv=str(output_path),
+                cache_dir=str(self.cache_dir),
+                structure_vocab_size=int(structure_vocab_size),
+                pair_mode=pair_mode,
+            )
+            return prepared_csv
+        raise AssertionError(f"Unhandled input mode: {input_mode}")
 
     @staticmethod
     def _validate_category_ids(labels, num_labels: int, task_name: str) -> None:
@@ -1003,47 +938,6 @@ class ColabProSSTWorkflow:
             )
 
     @staticmethod
-    def _load_training_checkpoint(
-        checkpoint_path: str,
-        require_training_state: bool = False,
-    ) -> dict:
-        checkpoint = Path(str(checkpoint_path).strip())
-        if not checkpoint.is_file():
-            raise FileNotFoundError(
-                f"Training checkpoint does not exist: {checkpoint}"
-            )
-        try:
-            state = torch.load(checkpoint, map_location="cpu")
-        except Exception as exc:
-            raise ValueError(
-                f"Could not read ColabProSST checkpoint: {checkpoint}"
-            ) from exc
-        if not isinstance(state, dict) or not isinstance(
-            state.get("model"),
-            dict,
-        ):
-            raise ValueError(
-                "A ColabProSST training checkpoint must be a .pt dictionary "
-                "containing model weights under `model`."
-            )
-        missing = sorted(RESUMABLE_CHECKPOINT_KEYS - set(state))
-        print("initial checkpoint:", checkpoint)
-        print(
-            "checkpoint training state:",
-            "complete (exact resume available)"
-            if not missing
-            else "weights only (exact resume unavailable)",
-        )
-        if require_training_state and missing:
-            raise ValueError(
-                "Exact resume requires a checkpoint saved with optimizer "
-                f"state. Checkpoint: {checkpoint}. Missing fields: {missing}. "
-                "Upload the training-state checkpoint produced by the prior "
-                "run, or uncheck exact resume for weight-only fine-tuning."
-            )
-        return state
-
-    @staticmethod
     def _validate_task_name(task_name: str) -> str:
         task_name = str(task_name).strip()
         if (
@@ -1074,18 +968,20 @@ class ColabProSSTWorkflow:
         structure_vocab_size: Optional[int] = None,
         output_csv: Optional[str] = None,
         download: bool = True,
-        input_mode: str = INPUT_MODE_TOKENS,
+        input_mode: str = INPUT_MODE_SEQUENCE,
+        structure_zip: str = "",
     ) -> pd.DataFrame:
         structure_vocab_size = resolve_structure_vocab_size(
             model_path,
             structure_vocab_size,
         )
-        input_csv, prepared_input_csv = self._prepare_input_csv(
+        input_csv = self._prepare_input_csv(
             input_csv,
             upload_csv,
             "mutation",
             structure_vocab_size,
             input_mode=input_mode,
+            structure_zip=structure_zip,
         )
         output_path = Path(output_csv) if output_csv else self.output_dir / "prosst_mutation_scores.csv"
 
@@ -1098,7 +994,6 @@ class ColabProSSTWorkflow:
             structure_base_dir=None,
         )
         df.attrs["output_csv"] = str(output_path)
-        df.attrs["prepared_input_csv"] = prepared_input_csv
         print("saved mutation scores:", output_path)
         if download:
             self._download(output_path)
@@ -1114,18 +1009,20 @@ class ColabProSSTWorkflow:
         output_matrix_csv: Optional[str] = None,
         output_heatmap_png: Optional[str] = None,
         download: bool = True,
-        input_mode: str = INPUT_MODE_TOKENS,
+        input_mode: str = INPUT_MODE_SEQUENCE,
+        structure_zip: str = "",
     ) -> dict:
         structure_vocab_size = resolve_structure_vocab_size(
             model_path,
             structure_vocab_size,
         )
-        input_csv, prepared_input_csv = self._prepare_input_csv(
+        input_csv = self._prepare_input_csv(
             input_csv,
             upload_csv,
             "saturation",
             structure_vocab_size,
             input_mode=input_mode,
+            structure_zip=structure_zip,
         )
         score_path = (
             Path(output_csv)
@@ -1162,7 +1059,6 @@ class ColabProSSTWorkflow:
             for path in [score_path, matrix_path, heatmap_path]:
                 archive.write(path, arcname=path.name)
         result["archive_path"] = str(archive_path)
-        result["prepared_input_csv"] = prepared_input_csv
 
         print("saved saturation scores:", score_path)
         print("saved saturation matrix:", matrix_path)
@@ -1183,9 +1079,10 @@ class ColabProSSTWorkflow:
         max_length: int = 2046,
         output_pt: Optional[str] = None,
         output_index_csv: Optional[str] = None,
-        checkpoint_path: str = "",
+        adapter_path: str = "",
         download: bool = True,
-        input_mode: str = INPUT_MODE_TOKENS,
+        input_mode: str = INPUT_MODE_SEQUENCE,
+        structure_zip: str = "",
     ) -> dict:
         level = str(level).strip().lower()
         if level not in EMBEDDING_LEVELS:
@@ -1196,11 +1093,11 @@ class ColabProSSTWorkflow:
             model_path,
             structure_vocab_size,
         )
-        checkpoint_path = str(checkpoint_path or "").strip()
+        adapter_path = str(adapter_path or "").strip()
         artifact_metadata = None
-        if checkpoint_path:
-            artifact_metadata = self.inspect_model_artifact(checkpoint_path)
-            checkpoint_path = artifact_metadata["artifact_path"]
+        if adapter_path:
+            artifact_metadata = self.inspect_model_artifact(adapter_path)
+            adapter_path = artifact_metadata["artifact_path"]
             if artifact_metadata["model_path"] != model_path:
                 raise ValueError(
                     "Embedding artifact base model does not match the selected "
@@ -1214,12 +1111,13 @@ class ColabProSSTWorkflow:
                     "Embedding artifact structure vocabulary does not match "
                     "the selected model."
                 )
-        input_csv, prepared_input_csv = self._prepare_input_csv(
+        input_csv = self._prepare_input_csv(
             input_csv,
             upload_csv,
             "embedding",
             structure_vocab_size,
             input_mode=input_mode,
+            structure_zip=structure_zip,
         )
 
         embedding_path = (
@@ -1243,11 +1141,11 @@ class ColabProSSTWorkflow:
             batch_size=batch_size,
             max_length=max_length,
             structure_base_dir=None,
-            checkpoint_path=checkpoint_path,
-            checkpoint_task_type=(
+            adapter_path=adapter_path,
+            adapter_task_type=(
                 artifact_metadata["task_type"] if artifact_metadata else None
             ),
-            checkpoint_num_labels=(
+            adapter_num_labels=(
                 artifact_metadata.get("num_labels") or 2
                 if artifact_metadata
                 else 2
@@ -1263,7 +1161,6 @@ class ColabProSSTWorkflow:
             archive.write(embedding_path, arcname=embedding_path.name)
             archive.write(index_path, arcname=index_path.name)
         result["archive_path"] = str(archive_path)
-        result["prepared_input_csv"] = prepared_input_csv
 
         print("saved embeddings:", embedding_path)
         print("saved embedding index:", index_path)
@@ -1283,28 +1180,20 @@ class ColabProSSTWorkflow:
         batch_size: int = 1,
         model_path: str = MODEL_PROSST_2048,
         structure_vocab_size: Optional[int] = None,
-        freeze_backbone: bool = True,
         gradient_checkpointing: bool = True,
-        load_pretrained: bool = True,
-        initial_checkpoint: str = "",
-        resume_optimizer_state: bool = False,
-        save_training_state: bool = False,
-        training_method: str = "full",
+        initial_adapter: str = "",
         lora_rank: int = 8,
         lora_alpha: int = 16,
         lora_dropout: float = 0.05,
         learning_rate: float = 2.0e-5,
         download: bool = True,
-        input_mode: str = INPUT_MODE_TOKENS,
+        input_mode: str = INPUT_MODE_SEQUENCE,
+        structure_zip: str = "",
     ) -> dict:
         if task_type not in SUPPORTED_TASK_TYPES:
             raise ValueError(f"Unsupported ProSST task_type: {task_type}.")
         if learning_rate <= 0:
             raise ValueError("learning_rate must be greater than zero.")
-        training_method = str(training_method).strip().lower()
-        if training_method not in {"full", "lora"}:
-            raise ValueError("training_method must be `full` or `lora`.")
-        use_lora = training_method == "lora"
         if lora_rank < 1:
             raise ValueError("LoRA rank must be at least 1.")
         if lora_alpha < 1:
@@ -1316,54 +1205,25 @@ class ColabProSSTWorkflow:
             model_path,
             structure_vocab_size,
         )
-        initial_checkpoint = str(initial_checkpoint or "").strip()
-        if resume_optimizer_state and not initial_checkpoint:
-            raise ValueError(
-                "Exact resume requires an initial ColabProSST checkpoint."
-            )
-        if use_lora and resume_optimizer_state:
-            raise ValueError(
-                "LoRA continuation reloads adapter weights with a new "
-                "optimizer; exact optimizer resume is available only for full "
-                "ColabProSST .pt checkpoints."
-            )
-        if use_lora and save_training_state:
-            raise ValueError(
-                "LoRA training saves a PEFT adapter rather than optimizer "
-                "state. Disable save_training_state."
-            )
-        if use_lora:
-            load_pretrained = True
-        if use_lora and initial_checkpoint:
-            initial_checkpoint = self.resolve_lora_adapter(initial_checkpoint)
-            validate_checkpoint_compatibility(
-                initial_checkpoint,
+        initial_adapter = str(initial_adapter or "").strip()
+        if initial_adapter:
+            initial_adapter = self.resolve_lora_adapter(initial_adapter)
+            validate_adapter_compatibility(
+                initial_adapter,
                 task_type,
                 model_path,
                 structure_vocab_size,
                 num_labels,
             )
-        elif initial_checkpoint:
-            self._load_training_checkpoint(
-                initial_checkpoint,
-                require_training_state=resume_optimizer_state,
-            )
-            validate_checkpoint_compatibility(
-                initial_checkpoint,
-                task_type,
-                model_path,
-                structure_vocab_size,
-                num_labels,
-            )
-            load_pretrained = False
 
-        input_csv, prepared_input_csv = self._prepare_input_csv(
+        input_csv = self._prepare_input_csv(
             input_csv,
             upload_csv,
             f"{task_type}_train",
             structure_vocab_size,
             input_mode=input_mode,
             pair_mode=task_type in PAIR_TASK_TYPES,
+            structure_zip=structure_zip,
         )
         self._validate_training_labels(input_csv, task_type, num_labels)
 
@@ -1398,20 +1258,15 @@ class ColabProSSTWorkflow:
             "pair_regression": "prosst/prosst_pair_regression_dataset",
         }[task_type]
 
-        checkpoint_path = (
-            self.weight_dir / f"{task_name}_lora"
-            if use_lora
-            else self.weight_dir / f"{task_name}.pt"
-        )
+        adapter_path = self.weight_dir / f"{task_name}_lora"
         test_result_csv = self.output_dir / f"{task_name}_{task_type}_test_predictions.csv"
         model_kwargs = {
             "config_path": model_path,
             "structure_vocab_size": structure_vocab_size,
-            "load_pretrained": load_pretrained,
-            "freeze_backbone": False if use_lora else freeze_backbone,
+            "load_pretrained": True,
             "gradient_checkpointing": gradient_checkpointing,
-            "save_path": str(checkpoint_path),
-            "save_weights_only": not save_training_state,
+            "save_path": str(adapter_path),
+            "save_weights_only": True,
             "test_result_path": str(test_result_csv),
             "lr_scheduler_kwargs": {
                 "class": "ConstantLRScheduler",
@@ -1421,22 +1276,18 @@ class ColabProSSTWorkflow:
         }
         if task_type in CLASSIFICATION_TASK_TYPES:
             model_kwargs["num_labels"] = num_labels
-        if use_lora:
-            model_kwargs["lora_kwargs"] = {
-                "is_trainable": True,
-                "num_lora": 1,
-                "config_list": (
-                    [{"lora_config_path": initial_checkpoint}]
-                    if initial_checkpoint
-                    else []
-                ),
-                "r": int(lora_rank),
-                "lora_alpha": int(lora_alpha),
-                "lora_dropout": float(lora_dropout),
-            }
-        elif initial_checkpoint:
-            model_kwargs["from_checkpoint"] = initial_checkpoint
-            model_kwargs["load_prev_scheduler"] = resume_optimizer_state
+        model_kwargs["lora_kwargs"] = {
+            "is_trainable": True,
+            "num_lora": 1,
+            "config_list": (
+                [{"lora_config_path": initial_adapter}]
+                if initial_adapter
+                else []
+            ),
+            "r": int(lora_rank),
+            "lora_alpha": int(lora_alpha),
+            "lora_dropout": float(lora_dropout),
+        }
 
         config = EasyDict(
             {
@@ -1473,80 +1324,62 @@ class ColabProSSTWorkflow:
         data_module = my_load_dataset(config.dataset)
         trainer = load_trainer(config)
 
+        # The initial adapter is already loaded into memory at this point.
+        # Remove same-name outputs so a previous run cannot be mistaken for the
+        # best adapter or test predictions from this run.
+        if adapter_path.exists():
+            shutil.rmtree(adapter_path)
+        if test_result_csv.exists():
+            test_result_csv.unlink()
+
         try:
             trainer.fit(model=model, datamodule=data_module)
-
-            saved_final_resume_checkpoint = False
-            if (
-                resume_optimizer_state
-                and not use_lora
-                and not checkpoint_path.exists()
-            ):
+            if not adapter_path.exists():
                 print(
-                    "validation did not improve the previous best value; "
-                    "saving the final exact-resume state to",
-                    checkpoint_path,
+                    "validation did not save an adapter; saving the final "
+                    "training state to",
+                    adapter_path,
                 )
-                model.save_checkpoint(
-                    str(checkpoint_path),
-                    save_weights_only=not save_training_state,
-                )
-                saved_final_resume_checkpoint = True
-
-            if checkpoint_path.exists() and use_lora:
-                print("loading best LoRA adapter from", checkpoint_path)
-                model.load_lora_adapter(str(checkpoint_path))
-            elif checkpoint_path.exists() and not saved_final_resume_checkpoint:
-                print("loading best checkpoint from", checkpoint_path)
-                model.load_checkpoint(str(checkpoint_path))
-            elif saved_final_resume_checkpoint:
-                print("testing the final exact-resume model state")
-            else:
-                print("best checkpoint was not found; testing the current model state")
+                model.save_checkpoint(str(adapter_path), save_weights_only=True)
+            print("loading best LoRA adapter from", adapter_path)
+            model.load_lora_adapter(str(adapter_path))
 
             trainer.test(model=model, datamodule=data_module)
         finally:
             self._close_lmdb_datamodule(data_module)
 
         print("test predictions:", test_result_csv)
-        artifact_label = "LoRA adapter" if use_lora else "model checkpoint"
-        print(f"{artifact_label}:", checkpoint_path)
+        print("LoRA adapter:", adapter_path)
 
-        checkpoint_download_path = checkpoint_path
-        if use_lora and checkpoint_path.exists():
-            checkpoint_download_path = Path(
-                shutil.make_archive(
-                    str(checkpoint_path),
-                    "zip",
-                    root_dir=checkpoint_path,
-                )
+        adapter_download_path = Path(
+            shutil.make_archive(
+                str(adapter_path),
+                "zip",
+                root_dir=adapter_path,
             )
+        )
 
         if download:
             if test_result_csv.exists():
                 self._download(test_result_csv)
-            if checkpoint_download_path.exists():
-                self._download(checkpoint_download_path)
+            if adapter_download_path.exists():
+                self._download(adapter_download_path)
 
         return {
-            "checkpoint_path": str(checkpoint_path),
-            "checkpoint_download_path": str(checkpoint_download_path),
+            "adapter_path": str(adapter_path),
+            "adapter_download_path": str(adapter_download_path),
             "test_result_csv": str(test_result_csv),
             "task_type": task_type,
             "model_path": model_path,
             "structure_vocab_size": structure_vocab_size,
-            "initial_checkpoint": initial_checkpoint,
-            "resume_optimizer_state": bool(resume_optimizer_state),
-            "save_training_state": bool(save_training_state),
-            "training_method": training_method,
-            "prepared_input_csv": prepared_input_csv,
+            "initial_adapter": initial_adapter,
         }
 
     def predict_downstream(
         self,
         task_type: str,
         input_csv: str,
-        checkpoint_path: str,
+        adapter_path: str,
         upload_csv: bool = False,
         num_labels: int = 2,
         batch_size: int = 1,
@@ -1554,7 +1387,8 @@ class ColabProSSTWorkflow:
         structure_vocab_size: Optional[int] = None,
         output_csv: Optional[str] = None,
         download: bool = True,
-        input_mode: str = INPUT_MODE_TOKENS,
+        input_mode: str = INPUT_MODE_SEQUENCE,
+        structure_zip: str = "",
     ) -> pd.DataFrame:
         if task_type not in SUPPORTED_TASK_TYPES:
             raise ValueError(f"Unsupported ProSST task_type: {task_type}.")
@@ -1562,17 +1396,16 @@ class ColabProSSTWorkflow:
             model_path,
             structure_vocab_size,
         )
-        checkpoint = Path(str(checkpoint_path).strip())
-        if checkpoint.is_dir() or checkpoint.suffix.lower() == ".zip":
-            checkpoint_path = self.resolve_lora_adapter(str(checkpoint))
+        adapter_path = self.resolve_lora_adapter(adapter_path)
 
-        input_csv, prepared_input_csv = self._prepare_input_csv(
+        input_csv = self._prepare_input_csv(
             input_csv,
             upload_csv,
             f"{task_type}_predict",
             structure_vocab_size,
             input_mode=input_mode,
             pair_mode=task_type in PAIR_TASK_TYPES,
+            structure_zip=structure_zip,
         )
         output_path = Path(output_csv) if output_csv else self.output_dir / f"prosst_{task_type}_predictions.csv"
 
@@ -1580,7 +1413,7 @@ class ColabProSSTWorkflow:
             input_csv=input_csv,
             output_csv=str(output_path),
             task_type=task_type,
-            checkpoint_path=checkpoint_path,
+            adapter_path=adapter_path,
             model_path=model_path,
             num_labels=num_labels,
             batch_size=batch_size,
@@ -1589,17 +1422,16 @@ class ColabProSSTWorkflow:
             structure_base_dir=None,
         )
         df.attrs["output_csv"] = str(output_path)
-        df.attrs["prepared_input_csv"] = prepared_input_csv
 
         print("saved predictions:", output_path)
         if download:
             self._download(output_path)
         return df
 
-    def upload_checkpoint_to_hf(
+    def upload_adapter_to_hf(
         self,
         repo_id: str,
-        checkpoint_path: str,
+        adapter_path: str,
         task_type: str,
         num_labels: int = 2,
         model_path: str = MODEL_PROSST_2048,
@@ -1607,7 +1439,7 @@ class ColabProSSTWorkflow:
         private: bool = False,
         run_login: bool = True,
         title: str = "ColabProSST model",
-        description: str = "A ProSST checkpoint trained with ColabProSST.",
+        description: str = "A ProSST adapter trained with ColabProSST.",
         download_package: bool = False,
         allow_update: bool = False,
     ) -> Path:
@@ -1619,13 +1451,9 @@ class ColabProSSTWorkflow:
             structure_vocab_size,
         )
 
-        checkpoint = Path(checkpoint_path)
-        if checkpoint.is_dir() or checkpoint.suffix.lower() == ".zip":
-            checkpoint = Path(self.resolve_lora_adapter(str(checkpoint)))
-        if not checkpoint.exists():
-            raise FileNotFoundError(f"Checkpoint does not exist: {checkpoint}")
-        validate_checkpoint_compatibility(
-            str(checkpoint),
+        adapter = Path(self.resolve_lora_adapter(adapter_path))
+        validate_adapter_compatibility(
+            str(adapter),
             task_type,
             model_path,
             structure_vocab_size,
@@ -1647,21 +1475,12 @@ class ColabProSSTWorkflow:
         shutil.rmtree(package_dir, ignore_errors=True)
         package_dir.mkdir(parents=True, exist_ok=True)
 
-        is_lora = checkpoint.is_dir()
-        if is_lora:
-            for source in checkpoint.iterdir():
-                destination = package_dir / source.name
-                if source.is_dir():
-                    shutil.copytree(source, destination)
-                else:
-                    shutil.copy2(source, destination)
-        else:
-            shutil.copy2(checkpoint, package_dir / "model.pt")
-        checkpoint_format = (
-            "SaprotHub/ColabProSST PEFT adapter"
-            if is_lora
-            else "SaprotHub/ColabProSST torch checkpoint"
-        )
+        for source in adapter.iterdir():
+            destination = package_dir / source.name
+            if source.is_dir():
+                shutil.copytree(source, destination)
+            else:
+                shutil.copy2(source, destination)
         input_format = "amino-acid input_ids + ProSST ss_input_ids"
         if task_type in PAIR_TASK_TYPES:
             input_format = f"two sets of {input_format}"
@@ -1669,8 +1488,8 @@ class ColabProSSTWorkflow:
             "schema_version": 1,
             "model_family": "ProSST",
             "base_model": model_path,
-            "artifact_type": "lora" if is_lora else "full",
-            "checkpoint_format": checkpoint_format,
+            "artifact_type": "lora",
+            "checkpoint_format": "SaprotHub/ColabProSST PEFT adapter",
             "task_type": task_type,
             "input_format": input_format,
             "structure_vocab_size": structure_vocab_size,
@@ -1699,14 +1518,14 @@ tags:
 - prosst
 - colabprosst
 - prossthub
-{"- peft" if is_lora else "- pytorch"}
+- peft
 ---
 
 # {title}
 
 {description}
 
-This repository contains a SaprotHub/ColabProSST {"PEFT adapter" if is_lora else "checkpoint (`model.pt`)"} and metadata for a ProSST downstream model.
+This repository contains a SaprotHub/ColabProSST PEFT adapter and metadata for a ProSST downstream model. The task head is saved with the adapter, while the official ProSST backbone is loaded from `{model_path}`.
 
 ## Input Format
 
@@ -1717,13 +1536,13 @@ This repository contains a SaprotHub/ColabProSST {"PEFT adapter" if is_lora else
 - Task type: `{task_type}`
 - Base model: `{model_path}`
 - Structure vocabulary: `{structure_vocab_size}`
-- Artifact type: `{"LoRA / PEFT adapter" if is_lora else "full checkpoint"}`
+- Artifact type: `LoRA / PEFT adapter`
 
 In ColabProSST, choose **Hugging Face repository** as the model source and
 enter `{repo_id}`. The interface reads `metadata.json`, selects the matching
 official ProSST base model, and validates the task and structure vocabulary.
 
-Use `saprot/scripts/predict_prosst.py` from the ColabProSST `prosst` branch
+Use `saprot/scripts/predict_prosst.py` from SaprotHub
 to run prediction with this artifact outside the notebook.
 """
         (package_dir / "README.md").write_text(readme, encoding="utf-8")

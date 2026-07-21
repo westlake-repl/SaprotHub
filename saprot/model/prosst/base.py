@@ -22,7 +22,6 @@ class ProSSTBaseModel(AbstractModel):
         structure_vocab_size: Optional[int] = None,
         extra_config: dict = None,
         load_pretrained: bool = True,
-        freeze_backbone: bool = False,
         gradient_checkpointing: bool = False,
         lora_kwargs: dict = None,
         **kwargs,
@@ -44,7 +43,6 @@ class ProSSTBaseModel(AbstractModel):
         )
         self.extra_config = extra_config or {}
         self.load_pretrained = load_pretrained
-        self.freeze_backbone = freeze_backbone
         self.gradient_checkpointing = gradient_checkpointing
         self.lora_kwargs = lora_kwargs
 
@@ -55,7 +53,6 @@ class ProSSTBaseModel(AbstractModel):
         super().__init__(**kwargs)
 
         if self.lora_kwargs is not None:
-            self.freeze_backbone = False
             self.lora_kwargs = EasyDict(lora_kwargs)
             self._init_lora()
 
@@ -205,10 +202,6 @@ class ProSSTBaseModel(AbstractModel):
 
         if self.gradient_checkpointing:
             self._enable_gradient_checkpointing()
-
-        if self.freeze_backbone:
-            for param in self.model.parameters():
-                param.requires_grad = False
 
     def initialize_metrics(self, stage: str) -> Dict:
         return {}
@@ -385,10 +378,9 @@ class ProSSTBaseModel(AbstractModel):
             checkpoint_info.update(save_info)
 
         if not self.lora_kwargs:
-            return super().save_checkpoint(
-                save_path,
-                checkpoint_info,
-                save_weights_only,
+            raise RuntimeError(
+                "ColabProSST downstream training requires LoRA. Configure "
+                "lora_kwargs before saving an adapter."
             )
 
         try:

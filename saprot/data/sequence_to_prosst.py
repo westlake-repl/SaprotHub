@@ -25,7 +25,13 @@ class ESMFoldPredictionError(RuntimeError):
     """Raised when automatic sequence-to-structure prediction fails."""
 
 
-def normalize_protein_sequence(value, context: str = "sequence") -> str:
+def normalize_protein_sequence(
+    value,
+    context: str = "sequence",
+    max_residues: Optional[int] = ESMFOLD_MAX_RESIDUES,
+) -> str:
+    if value is None or bool(pd.isna(value)):
+        raise ValueError(f"{context} is empty.")
     sequence = "".join(str(value).split()).upper()
     if not sequence:
         raise ValueError(f"{context} is empty.")
@@ -36,11 +42,11 @@ def normalize_protein_sequence(value, context: str = "sequence") -> str:
             "Automatic structure prediction accepts the 20 standard amino "
             "acids and X."
         )
-    if len(sequence) > ESMFOLD_MAX_RESIDUES:
+    if max_residues is not None and len(sequence) > int(max_residues):
         raise ValueError(
             f"{context} has {len(sequence)} residues, but the automatic "
-            f"ESMFold service accepts at most {ESMFOLD_MAX_RESIDUES}. Prepare "
-            "a structure-token CSV separately for longer proteins."
+            f"ESMFold service accepts at most {int(max_residues)}. Use the "
+            "sequence + structure files input method for longer proteins."
         )
     return sequence
 
@@ -118,7 +124,7 @@ def predict_structure_with_esmfold(
     raise ESMFoldPredictionError(
         "Automatic structure prediction failed after "
         f"{max_retries + 1} attempts. The public ESMFold service may be busy; "
-        "retry later or use a prepared structure-token CSV."
+        "retry later or use the sequence + structure files input method."
     ) from last_error
 
 
@@ -205,5 +211,5 @@ def prepare_sequence_csv_with_structure_tokens(
     output_path = Path(output_csv)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
-    print("saved prepared structure-token CSV:", output_path)
+    print("Structure tokens are ready for this task.")
     return str(output_path)
