@@ -16,6 +16,7 @@ from saprot.data.prosst_labels import (
     validate_residue_labels,
 )
 from saprot.data.sequence_to_prosst import (
+    preparation_artifact_paths,
     prepare_sequence_csv_with_structure_tokens,
 )
 from saprot.data.structure_to_prosst import (
@@ -95,6 +96,7 @@ class ColabProSSTWorkflow:
             path.mkdir(parents=True, exist_ok=True)
 
         self._pending_downloads = queue.SimpleQueue()
+        self._last_preparation_artifacts = {}
 
     def set_output_dir(self, output_dir: str) -> None:
         self.output_dir = Path(output_dir)
@@ -122,6 +124,20 @@ class ColabProSSTWorkflow:
             return self._pending_downloads.get_nowait()
         except queue.Empty:
             return None
+
+    def _collect_preparation_artifacts(self, output_csv: str) -> None:
+        self._last_preparation_artifacts = {
+            name: str(path)
+            for name, path in preparation_artifact_paths(output_csv).items()
+            if path.is_file()
+        }
+
+    def _attach_preparation_artifacts(self, result):
+        if isinstance(result, pd.DataFrame):
+            result.attrs.update(self._last_preparation_artifacts)
+        elif isinstance(result, dict):
+            result.update(self._last_preparation_artifacts)
+        return result
 
     @staticmethod
     def normalize_hf_model_repo_id(
@@ -790,7 +806,13 @@ class ColabProSSTWorkflow:
             "Low-confidence predictions are marked for review.\n"
             "- In sequence + structure-file input, X residues are restored from "
             "matching residue identities in the supplied structure when possible.\n"
-            "- Other non-standard sequence characters are rejected.\n"
+            "- Other non-standard sequence characters are rejected.\n\n"
+            "Downloads after a successful task:\n"
+            "- Sequence-only runs provide a generated structure ZIP and a "
+            "matching reusable structure-input CSV. Upload both with "
+            "Sequence + structure files next time.\n"
+            "- If either input method handles X residues, a completed sequence "
+            "CSV is provided. ESM-2 predictions also include a confidence report.\n"
         )
         instructions_path.write_text(
             "".join(instructions),
@@ -820,6 +842,7 @@ class ColabProSSTWorkflow:
         structure_zip: str = "",
     ) -> str:
         input_csv = self.maybe_upload_path(input_csv, upload_csv)
+        self._last_preparation_artifacts = {}
         input_mode = str(input_mode).strip().lower()
         if input_mode not in INPUT_MODES:
             raise ValueError(f"input_mode must be one of {sorted(INPUT_MODES)}.")
@@ -832,6 +855,7 @@ class ColabProSSTWorkflow:
                 structure_vocab_size=int(structure_vocab_size),
                 pair_mode=pair_mode,
             )
+            self._collect_preparation_artifacts(str(output_path))
             return prepared_csv
         if input_mode == INPUT_MODE_STRUCTURE:
             structure_dir = self.maybe_extract_asset_zip(structure_zip)
@@ -848,6 +872,7 @@ class ColabProSSTWorkflow:
                 structure_vocab_size=int(structure_vocab_size),
                 pair_mode=pair_mode,
             )
+            self._collect_preparation_artifacts(str(output_path))
             return prepared_csv
         raise AssertionError(f"Unhandled input mode: {input_mode}")
 
@@ -1007,7 +1032,7 @@ class ColabProSSTWorkflow:
         print("saved mutation scores:", output_path)
         if download:
             self._download(output_path)
-        return df
+        return self._attach_preparation_artifacts(df)
 
     def run_saturation_mutagenesis(
         self,
@@ -1076,7 +1101,7 @@ class ColabProSSTWorkflow:
         print("saved saturation package:", archive_path)
         if download:
             self._download(archive_path)
-        return result
+        return self._attach_preparation_artifacts(result)
 
     def extract_embeddings(
         self,
@@ -1177,7 +1202,7 @@ class ColabProSSTWorkflow:
         print("saved embedding package:", archive_path)
         if download:
             self._download(archive_path)
-        return result
+        return self._attach_preparation_artifacts(result)
 
     def train_downstream(
         self,
@@ -1375,7 +1400,7 @@ class ColabProSSTWorkflow:
             if adapter_download_path.exists():
                 self._download(adapter_download_path)
 
-        return {
+        result = {
             "adapter_path": str(adapter_path),
             "adapter_download_path": str(adapter_download_path),
             "test_result_csv": str(test_result_csv),
@@ -1384,6 +1409,7 @@ class ColabProSSTWorkflow:
             "structure_vocab_size": structure_vocab_size,
             "initial_adapter": initial_adapter,
         }
+        return self._attach_preparation_artifacts(result)
 
     def predict_downstream(
         self,
@@ -1436,7 +1462,7 @@ class ColabProSSTWorkflow:
         print("saved predictions:", output_path)
         if download:
             self._download(output_path)
-        return df
+        return self._attach_preparation_artifacts(df)
 
     def upload_adapter_to_hf(
         self,

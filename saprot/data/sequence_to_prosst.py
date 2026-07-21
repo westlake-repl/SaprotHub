@@ -2,6 +2,7 @@ import hashlib
 import os
 import tempfile
 import time
+import zipfile
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -20,6 +21,33 @@ ESMFOLD_API_URL = "https://api.esmatlas.com/foldSequence/v1/pdb/"
 ESMFOLD_MAX_RESIDUES = 400
 ESMFOLD_CACHE_VERSION = "esmfold-v1-api"
 SUPPORTED_SEQUENCE_CHARACTERS = frozenset("ACDEFGHIKLMNPQRSTVWYX")
+
+
+def preparation_artifact_paths(output_csv: str) -> dict[str, Path]:
+    output_path = Path(output_csv)
+    stem = output_path.stem
+    return {
+        "generated_structure_zip": output_path.with_name(
+            f"{stem}_generated_structures.zip"
+        ),
+        "reusable_structure_input_csv": output_path.with_name(
+            f"{stem}_reusable_structure_input.csv"
+        ),
+        "completed_sequences_csv": output_path.with_name(
+            f"{stem}_completed_sequences.csv"
+        ),
+        "x_completion_report_csv": output_path.with_name(
+            f"{stem}_x_completion_report.csv"
+        ),
+    }
+
+
+def clear_preparation_artifacts(output_csv: str) -> dict[str, Path]:
+    paths = preparation_artifact_paths(output_csv)
+    for path in paths.values():
+        if path.is_file():
+            path.unlink()
+    return paths
 
 
 class ESMFoldPredictionError(RuntimeError):
@@ -142,6 +170,9 @@ def prepare_sequence_csv_with_structure_tokens(
     df = pd.read_csv(input_csv)
     if df.empty:
         raise ValueError("The uploaded CSV is empty.")
+    original_columns = list(df.columns)
+    artifact_paths = clear_preparation_artifacts(output_csv)
+    Path(output_csv).parent.mkdir(parents=True, exist_ok=True)
 
     lower_columns = {column.lower(): column for column in df.columns}
     if pair_mode:
@@ -184,9 +215,7 @@ def prepare_sequence_csv_with_structure_tokens(
         ordered_sequences,
         cache_dir=str(cache_dir),
     )
-    report_path = Path(output_csv).with_name(
-        f"{Path(output_csv).stem}_x_completion_report.csv"
-    )
+    report_path = artifact_paths["x_completion_report_csv"]
     if completion_audit:
         for sequence_column, _token_column in sequence_columns:
             df[sequence_column] = [
@@ -199,18 +228,22 @@ def prepare_sequence_csv_with_structure_tokens(
         report_path.parent.mkdir(parents=True, exist_ok=True)
         pd.DataFrame(completion_audit).to_csv(report_path, index=False)
         print("X-completion audit report:", report_path)
-    elif report_path.exists():
-        report_path.unlink()
-
     total = len(ordered_sequences)
+    predicted_structure_paths = {}
     for index, sequence in enumerate(ordered_sequences, start=1):
         print(
             f"Preparing structure {index}/{total}: "
             f"{len(sequence)} residues"
         )
         pdb_path = structure_predictor(sequence, cache_dir=str(cache_dir))
+        pdb_path = Path(pdb_path)
+        if not pdb_path.is_file():
+            raise FileNotFoundError(
+                f"ESMFold structure file does not exist: {pdb_path}"
+            )
+        predicted_structure_paths[sequence] = pdb_path
         result = structure_quantizer(
-            pdb_path,
+            str(pdb_path),
             cache_dir=str(cache_dir),
             structure_vocab_size=int(structure_vocab_size),
         )
@@ -233,7 +266,50 @@ def prepare_sequence_csv_with_structure_tokens(
     df["structure_vocab_size"] = int(structure_vocab_size)
 
     output_path = Path(output_csv)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
+
+    user_input_df = df[original_columns].copy()
+    if completion_audit:
+        user_input_df.to_csv(
+            artifact_paths["completed_sequences_csv"],
+            index=False,
+        )
+        print(
+            "Completed sequence CSV:",
+            artifact_paths["completed_sequences_csv"],
+        )
+
+    structure_names = {
+        sequence: f"prosst_structure_{index:04d}.pdb"
+        for index, sequence in enumerate(ordered_sequences, start=1)
+    }
+    reusable_df = user_input_df.copy()
+    for sequence_column, _token_column in sequence_columns:
+        suffix = sequence_column[len("sequence"):]
+        reusable_df[f"structure_file{suffix}"] = [
+            structure_names[sequence] for sequence in reusable_df[sequence_column]
+        ]
+    reusable_df.to_csv(
+        artifact_paths["reusable_structure_input_csv"],
+        index=False,
+    )
+    with zipfile.ZipFile(
+        artifact_paths["generated_structure_zip"],
+        "w",
+        compression=zipfile.ZIP_DEFLATED,
+    ) as archive:
+        for sequence in ordered_sequences:
+            archive.write(
+                predicted_structure_paths[sequence],
+                arcname=structure_names[sequence],
+            )
+    print(
+        "Reusable structure-input CSV:",
+        artifact_paths["reusable_structure_input_csv"],
+    )
+    print(
+        "Generated structure ZIP:",
+        artifact_paths["generated_structure_zip"],
+    )
     print("Structure tokens are ready for this task.")
     return str(output_path)

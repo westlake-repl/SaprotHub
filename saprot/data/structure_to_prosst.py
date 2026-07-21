@@ -8,7 +8,11 @@ from saprot.data.pdb2prosst import (
     serialize_structure_tokens,
     validate_sequence_and_structure,
 )
-from saprot.data.sequence_to_prosst import normalize_protein_sequence
+from saprot.data.sequence_completion import complete_unknown_residues
+from saprot.data.sequence_to_prosst import (
+    clear_preparation_artifacts,
+    normalize_protein_sequence,
+)
 
 
 SUPPORTED_STRUCTURE_SUFFIXES = {".pdb", ".ent", ".cif", ".mmcif"}
@@ -68,11 +72,15 @@ def prepare_structure_csv_with_structure_tokens(
     structure_vocab_size: int,
     pair_mode: bool = False,
     structure_quantizer: Callable = load_or_quantize_structure,
+    sequence_completer: Callable = complete_unknown_residues,
 ) -> str:
     """Quantize structures referenced by a task CSV and preserve all columns."""
     df = pd.read_csv(input_csv)
     if df.empty:
         raise ValueError("The uploaded CSV is empty.")
+    original_columns = list(df.columns)
+    artifact_paths = clear_preparation_artifacts(output_csv)
+    Path(output_csv).parent.mkdir(parents=True, exist_ok=True)
 
     lower_columns = {str(column).strip().lower(): column for column in df.columns}
     indexes = (1, 2) if pair_mode else (None,)
@@ -97,6 +105,7 @@ def prepare_structure_csv_with_structure_tokens(
     result_cache = {}
     total = len(df) * len(inputs)
     completed = 0
+    had_unknown_residues = False
     for sequence_column, structure_column, chain_column, token_column in inputs:
         normalized_sequences = []
         serialized_tokens = []
@@ -108,6 +117,7 @@ def prepare_structure_csv_with_structure_tokens(
                 context=f"row {row_index + 2} {sequence_column}",
                 max_residues=None,
             )
+            had_unknown_residues = had_unknown_residues or "X" in sequence
             structure_path = _resolve_structure_file(
                 row[structure_column],
                 structure_dir,
@@ -177,9 +187,51 @@ def prepare_structure_csv_with_structure_tokens(
         df[sequence_column] = normalized_sequences
         df[token_column] = serialized_tokens
 
+    remaining_sequences = list(
+        dict.fromkeys(
+            sequence
+            for sequence_column, _structure_column, _chain_column, _token_column
+            in inputs
+            for sequence in df[sequence_column]
+            if "X" in sequence
+        )
+    )
+    if remaining_sequences:
+        completion_map, completion_audit = sequence_completer(
+            remaining_sequences,
+            cache_dir=str(cache_dir),
+        )
+        for (
+            sequence_column,
+            _structure_column,
+            _chain_column,
+            _token_column,
+        ) in inputs:
+            df[sequence_column] = [
+                completion_map.get(sequence, sequence)
+                for sequence in df[sequence_column]
+            ]
+        if completion_audit:
+            pd.DataFrame(completion_audit).to_csv(
+                artifact_paths["x_completion_report_csv"],
+                index=False,
+            )
+            print(
+                "X-completion audit report:",
+                artifact_paths["x_completion_report_csv"],
+            )
+
     df["structure_vocab_size"] = int(structure_vocab_size)
     output_path = Path(output_csv)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
+    if had_unknown_residues:
+        df[original_columns].to_csv(
+            artifact_paths["completed_sequences_csv"],
+            index=False,
+        )
+        print(
+            "Completed sequence CSV:",
+            artifact_paths["completed_sequences_csv"],
+        )
     print("Structure tokens are ready for this task.")
     return str(output_path)
