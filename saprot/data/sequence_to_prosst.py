@@ -13,6 +13,7 @@ from saprot.data.pdb2prosst import (
     serialize_structure_tokens,
     validate_sequence_and_structure,
 )
+from saprot.data.sequence_completion import complete_unknown_residues
 
 
 ESMFOLD_API_URL = "https://api.esmatlas.com/foldSequence/v1/pdb/"
@@ -136,6 +137,7 @@ def prepare_sequence_csv_with_structure_tokens(
     pair_mode: bool = False,
     structure_predictor: Callable = predict_structure_with_esmfold,
     structure_quantizer: Callable = load_or_quantize_structure,
+    sequence_completer: Callable = complete_unknown_residues,
 ) -> str:
     df = pd.read_csv(input_csv)
     if df.empty:
@@ -177,6 +179,28 @@ def prepare_sequence_csv_with_structure_tokens(
                 normalized[sequence] = None
                 ordered_sequences.append(sequence)
         df[sequence_column] = values
+
+    completion_map, completion_audit = sequence_completer(
+        ordered_sequences,
+        cache_dir=str(cache_dir),
+    )
+    report_path = Path(output_csv).with_name(
+        f"{Path(output_csv).stem}_x_completion_report.csv"
+    )
+    if completion_audit:
+        for sequence_column, _token_column in sequence_columns:
+            df[sequence_column] = [
+                completion_map[sequence] for sequence in df[sequence_column]
+            ]
+        ordered_sequences = list(
+            dict.fromkeys(completion_map[sequence] for sequence in ordered_sequences)
+        )
+        normalized = {sequence: None for sequence in ordered_sequences}
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(completion_audit).to_csv(report_path, index=False)
+        print("X-completion audit report:", report_path)
+    elif report_path.exists():
+        report_path.unlink()
 
     total = len(ordered_sequences)
     for index, sequence in enumerate(ordered_sequences, start=1):
