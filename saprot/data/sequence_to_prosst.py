@@ -124,7 +124,9 @@ def _build_esmfold_batches(sequences: list[str]) -> list[list[str]]:
     batches = []
     current = []
     current_max_length = 0
-    for sequence in sorted(sequences, key=len):
+    # Run the most memory-intensive batches first so CUDA reaches its peak
+    # early instead of growing its cache throughout the task.
+    for sequence in sorted(sequences, key=len, reverse=True):
         next_max_length = max(current_max_length, len(sequence))
         next_size = len(current) + 1
         if (
@@ -284,6 +286,8 @@ def predict_structures_with_esmfold(
             attention_mask = encoded.get("attention_mask")
             if attention_mask is not None:
                 attention_mask = attention_mask.to(device)
+            outputs = None
+            pdbs = None
             try:
                 with torch.inference_mode():
                     outputs = model(
@@ -291,6 +295,14 @@ def predict_structures_with_esmfold(
                         attention_mask=attention_mask,
                     )
                 pdbs = _convert_esmfold_outputs_to_pdb(outputs, lengths)
+
+                for sequence, pdb_text in zip(batch, pdbs):
+                    _write_cached_pdb(pdb_text, output_paths[sequence])
+                    completed += 1
+                logger(
+                    f"Local ESMFold v1 progress: {completed}/"
+                    f"{len(missing_sequences)} structure(s) saved."
+                )
             except torch.cuda.OutOfMemoryError as exc:
                 raise ESMFoldPredictionError(
                     "Local ESMFold v1 ran out of GPU memory. Retry with a "
@@ -298,18 +310,17 @@ def predict_structures_with_esmfold(
                     "files for this protein."
                 ) from exc
             finally:
-                del input_ids, attention_mask
+                del encoded, input_ids, attention_mask, outputs, pdbs
+                gc.collect()
                 if device.type == "cuda":
                     torch.cuda.empty_cache()
-
-            for sequence, pdb_text in zip(batch, pdbs):
-                _write_cached_pdb(pdb_text, output_paths[sequence])
-                completed += 1
-            logger(
-                f"Local ESMFold v1 progress: {completed}/"
-                f"{len(missing_sequences)} structure(s) saved."
-            )
-            del outputs, pdbs
+                    allocated_gib = torch.cuda.memory_allocated(device) / 1024**3
+                    reserved_gib = torch.cuda.memory_reserved(device) / 1024**3
+                    logger(
+                        "GPU memory after batch cleanup: "
+                        f"{allocated_gib:.2f} GiB allocated, "
+                        f"{reserved_gib:.2f} GiB reserved."
+                    )
     except ESMFoldPredictionError:
         raise
     except Exception as exc:
