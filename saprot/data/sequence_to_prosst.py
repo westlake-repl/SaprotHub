@@ -1,13 +1,12 @@
+import gc
 import hashlib
 import os
 import tempfile
-import time
 import zipfile
 from pathlib import Path
 from typing import Callable, Optional
 
 import pandas as pd
-import requests
 
 from saprot.data.pdb2prosst import (
     load_or_quantize_structure,
@@ -17,9 +16,12 @@ from saprot.data.pdb2prosst import (
 from saprot.data.sequence_completion import complete_unknown_residues
 
 
-ESMFOLD_API_URL = "https://api.esmatlas.com/foldSequence/v1/pdb/"
-ESMFOLD_MAX_RESIDUES = 400
-ESMFOLD_CACHE_VERSION = "esmfold-v1-api"
+ESMFOLD_MODEL = "facebook/esmfold_v1"
+ESMFOLD_MAX_RESIDUES = 1024
+ESMFOLD_CACHE_VERSION = "esmfold-v1-local"
+ESMFOLD_TRUNK_CHUNK_SIZE = 64
+ESMFOLD_BATCH_SQUARE_BUDGET = ESMFOLD_MAX_RESIDUES**2
+ESMFOLD_MAX_BATCH_SIZE = 4
 SUPPORTED_SEQUENCE_CHARACTERS = frozenset("ACDEFGHIKLMNPQRSTVWYX")
 
 
@@ -74,7 +76,8 @@ def normalize_protein_sequence(
     if max_residues is not None and len(sequence) > int(max_residues):
         raise ValueError(
             f"{context} has {len(sequence)} residues, but the automatic "
-            f"ESMFold service accepts at most {int(max_residues)}. Use the "
+            f"local ESMFold v1 workflow accepts at most {int(max_residues)}. "
+            "Use the "
             "sequence + structure files input method for longer proteins."
         )
     return sequence
@@ -96,65 +99,217 @@ def _validate_pdb_response(pdb_text: str) -> None:
         )
 
 
+def _write_cached_pdb(pdb_text: str, output_path: Path) -> None:
+    _validate_pdb_response(pdb_text)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        suffix=".pdb.tmp",
+        prefix=f"{output_path.stem}-",
+        dir=output_path.parent,
+        delete=False,
+    )
+    temp_path = Path(handle.name)
+    try:
+        with handle:
+            handle.write(pdb_text)
+        os.replace(temp_path, output_path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
+def _build_esmfold_batches(sequences: list[str]) -> list[list[str]]:
+    batches = []
+    current = []
+    current_max_length = 0
+    for sequence in sorted(sequences, key=len):
+        next_max_length = max(current_max_length, len(sequence))
+        next_size = len(current) + 1
+        if (
+            current
+            and (
+                next_size > ESMFOLD_MAX_BATCH_SIZE
+                or next_size * next_max_length * next_max_length
+                > ESMFOLD_BATCH_SQUARE_BUDGET
+            )
+        ):
+            batches.append(current)
+            current = []
+            current_max_length = 0
+        current.append(sequence)
+        current_max_length = max(current_max_length, len(sequence))
+    if current:
+        batches.append(current)
+    return batches
+
+
+def _convert_esmfold_outputs_to_pdb(outputs, sequence_lengths: list[int]) -> list[str]:
+    from transformers.models.esm.openfold_utils.feats import atom14_to_atom37
+    from transformers.models.esm.openfold_utils.protein import (
+        Protein as OFProtein,
+        to_pdb,
+    )
+
+    final_atom_positions = atom14_to_atom37(outputs["positions"][-1], outputs)
+    final_atom_positions = final_atom_positions.detach().cpu().numpy()
+    final_atom_mask = outputs["atom37_atom_exists"].detach().cpu().numpy()
+    aatype = outputs["aatype"].detach().cpu().numpy()
+    residue_index = outputs["residue_index"].detach().cpu().numpy()
+    plddt = outputs["plddt"].detach().float().cpu().numpy() * 100
+    chain_index = outputs.get("chain_index")
+    if chain_index is not None:
+        chain_index = chain_index.detach().cpu().numpy()
+
+    pdbs = []
+    for index, length in enumerate(sequence_lengths):
+        prediction = OFProtein(
+            aatype=aatype[index, :length],
+            atom_positions=final_atom_positions[index, :length],
+            atom_mask=final_atom_mask[index, :length],
+            residue_index=residue_index[index, :length] + 1,
+            b_factors=plddt[index, :length],
+            chain_index=(
+                chain_index[index, :length] if chain_index is not None else None
+            ),
+        )
+        pdbs.append(to_pdb(prediction))
+    return pdbs
+
+
+def predict_structures_with_esmfold(
+    sequences: list[str],
+    cache_dir: str,
+    logger: Callable[[str], None] = print,
+) -> dict[str, str]:
+    normalized_sequences = list(
+        dict.fromkeys(normalize_protein_sequence(sequence) for sequence in sequences)
+    )
+    output_paths = {
+        sequence: _esmfold_cache_path(sequence, cache_dir)
+        for sequence in normalized_sequences
+    }
+    missing_sequences = [
+        sequence
+        for sequence in normalized_sequences
+        if not output_paths[sequence].is_file()
+        or output_paths[sequence].stat().st_size == 0
+    ]
+    if not missing_sequences:
+        logger(
+            f"Local ESMFold v1: reused {len(normalized_sequences)} cached "
+            "structure(s)."
+        )
+        return {sequence: str(path) for sequence, path in output_paths.items()}
+
+    try:
+        import torch
+        from transformers import AutoTokenizer, EsmForProteinFolding
+    except ImportError as exc:
+        raise ESMFoldPredictionError(
+            "Local ESMFold v1 requires torch and transformers. Run the "
+            "ColabProSST installation cell before using sequence-only input."
+        ) from exc
+
+    if not torch.cuda.is_available():
+        logger(
+            "Local ESMFold v1 is running on CPU. This is supported but can be "
+            "very slow; a Colab GPU runtime is strongly recommended."
+        )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    tokenizer = None
+    model = None
+    try:
+        logger(
+            f"Loading local ESMFold v1 on {device.type}: {ESMFOLD_MODEL}"
+        )
+        tokenizer = AutoTokenizer.from_pretrained(ESMFOLD_MODEL)
+        model = EsmForProteinFolding.from_pretrained(
+            ESMFOLD_MODEL,
+            low_cpu_mem_usage=True,
+        )
+        if device.type == "cuda":
+            model.esm = model.esm.half()
+        model.trunk.set_chunk_size(ESMFOLD_TRUNK_CHUNK_SIZE)
+        model = model.to(device).eval()
+
+        batches = _build_esmfold_batches(missing_sequences)
+        cached_count = len(normalized_sequences) - len(missing_sequences)
+        logger(
+            "Local ESMFold v1: "
+            f"{len(missing_sequences)} structure(s) to predict in "
+            f"{len(batches)} batch(es); {cached_count} cached."
+        )
+        completed = 0
+        for batch_index, batch in enumerate(batches, start=1):
+            lengths = [len(sequence) for sequence in batch]
+            logger(
+                f"ESMFold batch {batch_index}/{len(batches)}: "
+                f"{len(batch)} protein(s), {min(lengths)}-{max(lengths)} residues."
+            )
+            encoded = tokenizer(
+                batch,
+                return_tensors="pt",
+                add_special_tokens=False,
+                padding=True,
+            )
+            input_ids = encoded["input_ids"].to(device)
+            attention_mask = encoded.get("attention_mask")
+            if attention_mask is not None:
+                attention_mask = attention_mask.to(device)
+            try:
+                with torch.inference_mode():
+                    outputs = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                    )
+                pdbs = _convert_esmfold_outputs_to_pdb(outputs, lengths)
+            except torch.cuda.OutOfMemoryError as exc:
+                raise ESMFoldPredictionError(
+                    "Local ESMFold v1 ran out of GPU memory. Retry with a "
+                    "higher-memory Colab GPU, or use sequence + structure "
+                    "files for this protein."
+                ) from exc
+            finally:
+                del input_ids, attention_mask
+                if device.type == "cuda":
+                    torch.cuda.empty_cache()
+
+            for sequence, pdb_text in zip(batch, pdbs):
+                _write_cached_pdb(pdb_text, output_paths[sequence])
+                completed += 1
+            logger(
+                f"Local ESMFold v1 progress: {completed}/"
+                f"{len(missing_sequences)} structure(s) saved."
+            )
+            del outputs, pdbs
+    except ESMFoldPredictionError:
+        raise
+    except Exception as exc:
+        raise ESMFoldPredictionError(
+            "Local ESMFold v1 structure prediction failed. Retry in a fresh "
+            "GPU runtime, or use sequence + structure files."
+        ) from exc
+    finally:
+        del model, tokenizer
+        gc.collect()
+        if "torch" in locals() and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    logger("Local ESMFold v1 finished and released its model memory.")
+    return {sequence: str(path) for sequence, path in output_paths.items()}
+
+
 def predict_structure_with_esmfold(
     sequence: str,
     cache_dir: str,
-    timeout: int = 300,
-    max_retries: int = 2,
-    request_post: Optional[Callable] = None,
 ) -> str:
     sequence = normalize_protein_sequence(sequence)
-    output_path = _esmfold_cache_path(sequence, cache_dir)
-    if output_path.is_file() and output_path.stat().st_size > 0:
-        return str(output_path)
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    post = request_post or requests.post
-    last_error = None
-    for attempt in range(max_retries + 1):
-        try:
-            response = post(
-                ESMFOLD_API_URL,
-                data=sequence,
-                headers={"Content-Type": "text/plain"},
-                timeout=timeout,
-            )
-            if response.status_code != 200:
-                detail = str(getattr(response, "text", "")).strip()[:300]
-                raise ESMFoldPredictionError(
-                    "ESMFold request failed with HTTP "
-                    f"{response.status_code}: {detail or 'no error message'}"
-                )
-            pdb_text = response.text
-            _validate_pdb_response(pdb_text)
-
-            handle = tempfile.NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                suffix=".pdb.tmp",
-                prefix=f"{output_path.stem}-",
-                dir=output_path.parent,
-                delete=False,
-            )
-            temp_path = Path(handle.name)
-            try:
-                with handle:
-                    handle.write(pdb_text)
-                os.replace(temp_path, output_path)
-            finally:
-                if temp_path.exists():
-                    temp_path.unlink()
-            return str(output_path)
-        except (requests.RequestException, ESMFoldPredictionError) as exc:
-            last_error = exc
-            if attempt < max_retries:
-                time.sleep(2**attempt)
-
-    raise ESMFoldPredictionError(
-        "Automatic structure prediction failed after "
-        f"{max_retries + 1} attempts. The public ESMFold service may be busy; "
-        "retry later or use the sequence + structure files input method."
-    ) from last_error
+    return predict_structures_with_esmfold(
+        [sequence],
+        cache_dir=cache_dir,
+    )[sequence]
 
 
 def prepare_sequence_csv_with_structure_tokens(
@@ -229,14 +384,28 @@ def prepare_sequence_csv_with_structure_tokens(
         pd.DataFrame(completion_audit).to_csv(report_path, index=False)
         print("X-completion audit report:", report_path)
     total = len(ordered_sequences)
-    predicted_structure_paths = {}
+    if structure_predictor is predict_structure_with_esmfold:
+        predicted_structure_paths = {
+            sequence: Path(path)
+            for sequence, path in predict_structures_with_esmfold(
+                ordered_sequences,
+                cache_dir=str(cache_dir),
+            ).items()
+        }
+    else:
+        predicted_structure_paths = {}
+        for index, sequence in enumerate(ordered_sequences, start=1):
+            print(
+                f"Preparing structure {index}/{total}: "
+                f"{len(sequence)} residues"
+            )
+            predicted_structure_paths[sequence] = Path(
+                structure_predictor(sequence, cache_dir=str(cache_dir))
+            )
+
     for index, sequence in enumerate(ordered_sequences, start=1):
-        print(
-            f"Preparing structure {index}/{total}: "
-            f"{len(sequence)} residues"
-        )
-        pdb_path = structure_predictor(sequence, cache_dir=str(cache_dir))
-        pdb_path = Path(pdb_path)
+        print(f"Generating ProSST tokens {index}/{total}.")
+        pdb_path = predicted_structure_paths[sequence]
         if not pdb_path.is_file():
             raise FileNotFoundError(
                 f"ESMFold structure file does not exist: {pdb_path}"
