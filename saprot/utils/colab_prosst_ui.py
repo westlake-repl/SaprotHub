@@ -655,6 +655,8 @@ class _StructureInput:
                 "X residues are first completed with ESMC-600M; predicted "
                 "residues and confidence values are logged. "
                 f"Each sequence must be at most {ESMFOLD_MAX_RESIDUES} residues. "
+                "Longer sequences take considerably more time to fold, so use "
+                "Sequence + structure files whenever a structure is available. "
                 "Generated structures are available for download after the task."
             )
         elif self.pair_mode and mode == self.STRUCTURE:
@@ -681,7 +683,9 @@ class _StructureInput:
                 "completed with ESMC-600M; predicted residues and confidence "
                 "values are logged, and values below 0.50 are marked for "
                 "review. Sequences must be at most "
-                f"{ESMFOLD_MAX_RESIDUES} residues. Generated structures are "
+                f"{ESMFOLD_MAX_RESIDUES} residues. Longer sequences take "
+                "considerably more time to fold, so use Sequence + structure "
+                "files whenever a structure is available. Generated structures are "
                 "available for download after the task."
             )
         else:
@@ -1070,7 +1074,9 @@ class ColabProSSTUI:
             "locally in the Colab runtime to predict each structure. The model "
             "is downloaded on first use and supports up to "
             f"{ESMFOLD_MAX_RESIDUES} residues per sequence. A GPU runtime is "
-            "strongly recommended.</li>"
+            "strongly recommended. Predicting longer sequences can take "
+            "considerably more time, so the first input method remains "
+            "recommended whenever a structure file is available.</li>"
             "</ol>"
             "<p>After a task finishes, sequence-only runs provide a reusable "
             "structure ZIP and matching CSV. If either method handles X "
