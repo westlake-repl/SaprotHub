@@ -973,24 +973,31 @@ class ColabProSSTUI:
 
     @staticmethod
     def _training_dataset_help(task_type):
+        stage_help = (
+            " <b>stage is optional:</b> omit the entire column to split the "
+            "dataset automatically into train, valid, and test (8:1:1). If "
+            "provided, every row must contain <code>train</code>, "
+            "<code>valid</code>, or <code>test</code>."
+        )
         if task_type == "token_classification":
             return (
-                "The CSV must contain <code>sequence</code>, "
-                "<code>residue_labels</code>, and <code>stage</code>. "
+                "The CSV must contain <code>sequence</code> and "
+                "<code>residue_labels</code>. "
                 "<code>residue_labels</code> must contain one integer category "
                 "per residue; use <code>-100</code> only to ignore an unlabeled "
-                "residue. Then choose one of the two input methods below."
+                "residue." + stage_help + " Then choose one input method below."
             )
         if ColabProSSTUI._is_pair_task(task_type):
             return (
                 "The CSV must contain <code>sequence_1</code>, "
-                "<code>sequence_2</code>, <code>label</code>, and "
-                "<code>stage</code>. Then choose one of the two input methods "
-                "below."
+                "<code>sequence_2</code>, and <code>label</code>."
+                + stage_help
+                + " Then choose one input method below."
             )
         return (
-            "The CSV must contain <code>sequence</code>, <code>label</code>, "
-            "and <code>stage</code>. Then choose one of the two input methods below."
+            "The CSV must contain <code>sequence</code> and <code>label</code>."
+            + stage_help
+            + " Then choose one input method below."
         )
 
     @staticmethod
@@ -1417,7 +1424,7 @@ class ColabProSSTUI:
         csv_input = _UploadField(
             self,
             "Training CSV:",
-            "CSV with sequence, label, and stage",
+            "CSV with sequence and label; stage is optional",
         )
         dataset_help = self._html(
             self._training_dataset_help("classification"),
@@ -1471,9 +1478,9 @@ class ColabProSSTUI:
             dataset_help.value = self._training_dataset_help(selected_task)
             structure_input.set_pair_mode(self._is_pair_task(selected_task))
             required_columns = (
-                {"residue_labels", "stage"}
+                {"residue_labels"}
                 if selected_task == "token_classification"
-                else {"label", "stage"}
+                else {"label"}
             )
             structure_input.set_context(
                 "training",
@@ -1483,14 +1490,14 @@ class ColabProSSTUI:
             )
             if selected_task == "token_classification":
                 placeholder = (
-                    "CSV with sequence, residue_labels, and stage"
+                    "CSV with sequence and residue_labels; optional stage"
                 )
             elif self._is_pair_task(selected_task):
                 placeholder = (
-                    "CSV with sequence_1, sequence_2, label, and stage"
+                    "CSV with sequence_1, sequence_2, and label; optional stage"
                 )
             else:
-                placeholder = "CSV with sequence, label, and stage"
+                placeholder = "CSV with sequence and label; stage is optional"
             csv_input.path.placeholder = placeholder
 
         def toggle_advanced(_button):
