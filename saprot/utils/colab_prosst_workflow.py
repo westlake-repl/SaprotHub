@@ -60,6 +60,8 @@ HF_REPO_COMPONENT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$")
 INPUT_MODE_SEQUENCE = "sequence"
 INPUT_MODE_STRUCTURE = "structure"
 INPUT_MODES = {INPUT_MODE_SEQUENCE, INPUT_MODE_STRUCTURE}
+TRAINING_STAGES = ("train", "valid", "test")
+AUTO_SPLIT_SEED = 20000812
 
 
 class ColabProSSTWorkflow:
@@ -775,6 +777,12 @@ class ColabProSSTWorkflow:
             "IMPORTANT: first choose the task in ColabProSST, then use the "
             "matching template below. Do not use a protein-pair template for "
             "a single-protein task, or a training template for prediction.\n\n"
+            "Training data split:\n"
+            "- The stage column is optional. Delete the entire column to let "
+            "ColabProSST split the dataset into train, valid, and test (8:1:1).\n"
+            "- If stage is included, every row must be train, valid, or test, "
+            "and all three values must appear. The training templates include "
+            "this manual form as an example.\n\n"
         ]
         for section, entries in INPUT_TEMPLATE_GUIDE:
             instructions.append(f"{section}\n")
@@ -879,6 +887,75 @@ class ColabProSSTWorkflow:
             self._collect_preparation_artifacts(str(output_path))
             return prepared_csv
         raise AssertionError(f"Unhandled input mode: {input_mode}")
+
+    def _prepare_training_stages(self, input_csv: str, suffix: str) -> str:
+        df = pd.read_csv(input_csv)
+        if len(df) < 3:
+            raise ValueError(
+                "Training requires at least 3 rows so train, valid, and test "
+                "each contain at least one sample."
+            )
+
+        if "stage" in df.columns:
+            missing = df["stage"].isna() | df["stage"].astype(str).str.strip().eq("")
+            if missing.any():
+                rows = [int(index) + 2 for index in df.index[missing][:10]]
+                raise ValueError(
+                    "The stage column contains empty values at CSV row(s) "
+                    f"{rows}. Fill every row with train, valid, or test; or "
+                    "delete the entire stage column to use automatic 8:1:1 splitting."
+                )
+            df["stage"] = df["stage"].astype(str).str.strip().str.lower()
+            observed = set(df["stage"])
+            invalid = observed - set(TRAINING_STAGES)
+            if invalid:
+                raise ValueError(
+                    f"Invalid stage values: {sorted(invalid)}. Use only train, "
+                    "valid, and test."
+                )
+            absent = set(TRAINING_STAGES) - observed
+            if absent:
+                raise ValueError(
+                    "The stage column must include at least one train, valid, "
+                    f"and test row. Missing: {sorted(absent)}."
+                )
+            split_source = "provided stage column"
+        else:
+            train_count = max(1, int(len(df) * 0.8))
+            valid_count = max(1, int(len(df) * 0.1))
+            test_count = len(df) - train_count - valid_count
+            if test_count < 1:
+                train_count -= 1 - test_count
+                test_count = 1
+
+            shuffled_indices = df.sample(
+                frac=1,
+                random_state=AUTO_SPLIT_SEED,
+            ).index.tolist()
+            df["stage"] = ""
+            df.loc[shuffled_indices[:train_count], "stage"] = "train"
+            df.loc[
+                shuffled_indices[train_count : train_count + valid_count],
+                "stage",
+            ] = "valid"
+            df.loc[shuffled_indices[train_count + valid_count :], "stage"] = "test"
+            split_source = "automatic 8:1:1 split"
+
+        counts = df["stage"].value_counts()
+        split_details = (
+            f"{split_source}, seed={AUTO_SPLIT_SEED}"
+            if split_source.startswith("automatic")
+            else split_source
+        )
+        print(
+            f"Dataset split ({split_details}): "
+            + ", ".join(
+                f"{stage}={int(counts.get(stage, 0))}" for stage in TRAINING_STAGES
+            )
+        )
+        output_path = self.output_dir / f"prosst_{suffix}_staged.csv"
+        df.to_csv(output_path, index=False)
+        return str(output_path)
 
     @staticmethod
     def _validate_category_ids(labels, num_labels: int, task_name: str) -> None:
@@ -1255,16 +1332,21 @@ class ColabProSSTWorkflow:
                 num_labels,
             )
 
+        input_csv = self.maybe_upload_path(input_csv, upload_csv)
+        self._validate_training_labels(input_csv, task_type, num_labels)
+        input_csv = self._prepare_training_stages(
+            input_csv,
+            f"{task_type}_train",
+        )
         input_csv = self._prepare_input_csv(
             input_csv,
-            upload_csv,
+            False,
             f"{task_type}_train",
             structure_vocab_size,
             input_mode=input_mode,
             pair_mode=task_type in PAIR_TASK_TYPES,
             structure_zip=structure_zip,
         )
-        self._validate_training_labels(input_csv, task_type, num_labels)
 
         construct_prosst_lmdb(
             input_csv,
