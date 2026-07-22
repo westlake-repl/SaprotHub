@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Callable, Iterable, Optional
 
 
-ESM2_COMPLETION_MODEL = "facebook/esm2_t33_650M_UR50D"
-ESM2_COMPLETION_CACHE_VERSION = "esm2-650m-x-completion-v1"
+ESMC_COMPLETION_MODEL = "esmc_600m"
+ESMC_COMPLETION_CACHE_VERSION = "esmc-600m-x-completion-v1"
 STANDARD_AMINO_ACIDS = tuple("ACDEFGHIKLMNPQRSTVWY")
 LOW_CONFIDENCE_THRESHOLD = 0.5
 HIGH_X_COUNT_THRESHOLD = 10
@@ -18,7 +18,7 @@ MAX_LOGGED_PREDICTIONS = 20
 def _cache_path(sequence: str, cache_dir: str, model_name: str) -> Path:
     digest = hashlib.sha256(
         (
-            f"{ESM2_COMPLETION_CACHE_VERSION}|{model_name}|{sequence}"
+            f"{ESMC_COMPLETION_CACHE_VERSION}|{model_name}|{sequence}"
         ).encode("ascii")
     ).hexdigest()
     return Path(cache_dir) / "sequence_completion" / f"{digest}.json"
@@ -37,7 +37,7 @@ def _load_cached_completion(
     except (OSError, json.JSONDecodeError):
         return None
     if (
-        payload.get("cache_version") != ESM2_COMPLETION_CACHE_VERSION
+        payload.get("cache_version") != ESMC_COMPLETION_CACHE_VERSION
         or payload.get("model") != model_name
         or payload.get("original_sequence") != sequence
     ):
@@ -121,13 +121,9 @@ def _predict_batch(
         padding=True,
         add_special_tokens=True,
     )
-    model_inputs = {
-        key: value.to(device)
-        for key, value in encoded.items()
-        if key in {"input_ids", "attention_mask"}
-    }
+    sequence_tokens = encoded["input_ids"].to(device)
     with torch.inference_mode():
-        logits = model(**model_inputs).logits
+        logits = model(sequence_tokens=sequence_tokens).sequence_logits
 
     amino_acid_ids = torch.tensor(
         tokenizer.convert_tokens_to_ids(list(STANDARD_AMINO_ACIDS)),
@@ -137,7 +133,7 @@ def _predict_batch(
     results = []
     for row_index, sequence in enumerate(sequences):
         mask_positions = torch.nonzero(
-            model_inputs["input_ids"][row_index] == tokenizer.mask_token_id,
+            sequence_tokens[row_index] == tokenizer.mask_token_id,
             as_tuple=False,
         ).flatten()
         sequence_positions = [
@@ -145,7 +141,7 @@ def _predict_batch(
         ]
         if len(mask_positions) != len(sequence_positions):
             raise RuntimeError(
-                "ESM-2 tokenization did not preserve every X position in the "
+                "ESMC tokenization did not preserve every X position in the "
                 "protein sequence."
             )
 
@@ -173,7 +169,7 @@ def _predict_batch(
             )
         results.append(
             {
-                "cache_version": ESM2_COMPLETION_CACHE_VERSION,
+                "cache_version": ESMC_COMPLETION_CACHE_VERSION,
                 "model": model_name,
                 "original_sequence": sequence,
                 "completed_sequence": "".join(completed),
@@ -186,12 +182,12 @@ def _predict_batch(
 def complete_unknown_residues(
     sequences: Iterable[str],
     cache_dir: str,
-    model_name: str = ESM2_COMPLETION_MODEL,
+    model_name: str = ESMC_COMPLETION_MODEL,
     max_batch_size: int = 8,
     max_padded_residues: int = 1200,
     logger: Callable[[str], None] = print,
 ) -> tuple[dict[str, str], list[dict]]:
-    """Replace X residues with ESM-2 predictions and return an audit trail."""
+    """Replace X residues with ESMC predictions and return an audit trail."""
     unique_sequences = list(dict.fromkeys(str(item) for item in sequences))
     completion_map = {sequence: sequence for sequence in unique_sequences}
     affected = [sequence for sequence in unique_sequences if "X" in sequence]
@@ -234,25 +230,27 @@ def complete_unknown_residues(
 
     if uncached:
         import torch
-        from transformers import AutoModelForMaskedLM, AutoTokenizer
+        from esm.models.esmc import ESMC
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        dtype = torch.float16 if device == "cuda" else torch.float32
         logger(
             f"Loading {model_name} for X completion on {device}. "
             "The model is loaded only for sequences containing X."
         )
         if device == "cpu":
-            logger("Warning: ESM-2 650M X completion is much faster on a GPU.")
-        tokenizer = AutoTokenizer.from_pretrained(
+            logger("Warning: ESMC-600M X completion is much faster on a GPU.")
+        model = ESMC.from_pretrained(
             model_name,
-            cache_dir=str(Path(cache_dir) / "huggingface"),
+            device=torch.device("cpu"),
         )
-        model = AutoModelForMaskedLM.from_pretrained(
-            model_name,
-            cache_dir=str(Path(cache_dir) / "huggingface"),
-            torch_dtype=dtype,
-        ).to(device)
+        if device == "cuda":
+            dtype = (
+                torch.bfloat16
+                if torch.cuda.is_bf16_supported()
+                else torch.float16
+            )
+            model = model.to(device=device, dtype=dtype)
+        tokenizer = model.tokenizer
         model.eval()
 
         effective_batch_size = max_batch_size if device == "cuda" else 1
@@ -285,7 +283,7 @@ def complete_unknown_residues(
             del tokenizer
             if device == "cuda":
                 torch.cuda.empty_cache()
-        logger("ESM-2 X-completion model released from memory.")
+        logger("ESMC-600M X-completion model released from memory.")
 
     payload_by_sequence = {
         payload["original_sequence"]: payload for payload in payloads

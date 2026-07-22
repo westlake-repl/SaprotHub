@@ -801,7 +801,7 @@ class ColabProSSTWorkflow:
             "chain, chain_1, and chain_2 columns select chains.\n\n"
             "Unknown residues:\n"
             "- In sequence-only input, X residues are predicted automatically "
-            "with ESM-2 650M before structure prediction. ColabProSST logs each "
+            "with ESMC-600M before structure prediction. ColabProSST logs each "
             "predicted residue and confidence and saves a complete audit report. "
             "Low-confidence predictions are marked for review.\n"
             "- In sequence + structure-file input, X residues are restored from "
@@ -812,7 +812,7 @@ class ColabProSSTWorkflow:
             "matching reusable structure-input CSV. Upload both with "
             "Sequence + structure files next time.\n"
             "- If either input method handles X residues, a completed sequence "
-            "CSV is provided. ESM-2 predictions also include a confidence report.\n"
+            "CSV is provided. ESMC predictions also include a confidence report.\n"
         )
         instructions_path.write_text(
             "".join(instructions),

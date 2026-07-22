@@ -24,7 +24,7 @@ from saprot.model.prosst.specs import (
 from saprot.utils.colab_prosst_templates import get_input_template_name
 
 
-COLAB_ENVIRONMENT_GENERATION = "2026-07-12-clean-kernel-v2"
+COLAB_ENVIRONMENT_GENERATION = "2026-07-22-esmc-completion-v1"
 COLAB_ENVIRONMENT_MARKER = Path(
     "/content/.cache/colabprosst/environment_generation"
 )
@@ -652,7 +652,7 @@ class _StructureInput:
                 "structure files or Structure ZIP are required. ColabProSST "
                 "predicts both structures and generates matching tokens "
                 "automatically. "
-                "X residues are first completed with ESM-2 650M; predicted "
+                "X residues are first completed with ESMC-600M; predicted "
                 "residues and confidence values are logged. "
                 f"Each sequence must be at most {ESMFOLD_MAX_RESIDUES} residues. "
                 "Generated structures are available for download after the task."
@@ -667,7 +667,7 @@ class _StructureInput:
                 "generates both token sequences automatically. Each ProSST "
                 "input supports up to 2046 residues. X positions are restored "
                 "from the supplied structure when possible; any remaining X "
-                "positions are completed with ESM-2 650M."
+                "positions are completed with ESMC-600M."
             )
         elif mode == self.SEQUENCE:
             self.hint.value = (
@@ -677,7 +677,7 @@ class _StructureInput:
                 "required. "
                 "ColabProSST predicts each structure and generates tokens for "
                 "the selected model automatically. X residues are first "
-                "completed with ESM-2 650M; predicted residues and confidence "
+                "completed with ESMC-600M; predicted residues and confidence "
                 "values are logged, and values below 0.50 are marked for "
                 "review. Sequences must be at most "
                 f"{ESMFOLD_MAX_RESIDUES} residues. Generated structures are "
@@ -691,8 +691,8 @@ class _StructureInput:
                 "a structure contains multiple chains. ColabProSST validates "
                 "the sequence and generates tokens for the selected model. "
                 "X positions are restored from the supplied structure when "
-                "possible; any remaining X positions are completed with ESM-2 "
-                "650M. ProSST inputs support up to 2046 residues."
+                "possible; any remaining X positions are completed with "
+                "ESMC-600M. ProSST inputs support up to 2046 residues."
             )
 
 
@@ -854,7 +854,7 @@ class ColabProSSTUI:
             (
                 "X-completion report CSV",
                 values.get("x_completion_report_csv"),
-                "Each ESM-2-completed X position and its confidence.",
+                "Each ESMC-completed X position and its confidence.",
             ),
         ]
 
@@ -1055,7 +1055,7 @@ class ColabProSSTUI:
             "or predicted structure file is available. Upload a CSV containing "
             "amino-acid sequences. ColabProSST predicts structures and generates "
             "tokens automatically. If a sequence contains X, ColabProSST first uses "
-            "ESM-2 650M to predict each missing residue and reports its "
+            "ESMC-600M to predict each missing residue and reports its "
             "confidence; the model is loaded only when needed. These are "
             "model predictions rather than experimentally confirmed residues. "
             "Confidence below 0.50 and sequences with many X residues are "
