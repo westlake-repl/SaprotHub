@@ -2,8 +2,11 @@ import base64
 import collections
 import csv
 import ctypes
+import importlib
 import json
 import pkgutil
+import subprocess
+import sys
 import threading
 import time
 import traceback
@@ -25,12 +28,66 @@ from saprot.utils.colab_prosst_templates import get_input_template_name
 
 
 COLAB_ENVIRONMENT_GENERATION = "2026-07-22-local-esmfold-v1"
-COLAB_COMPATIBLE_ENVIRONMENT_GENERATIONS = frozenset(
-    {"2026-07-22-esmc-completion-v1"}
+COLAB_UPGRADABLE_ENVIRONMENT_GENERATIONS = frozenset(
+    {
+        "2026-07-12-clean-kernel-v1",
+        "2026-07-12-clean-kernel-v2",
+        "2026-07-22-esmc-completion-v1",
+    }
 )
 COLAB_ENVIRONMENT_MARKER = Path(
     "/content/.cache/colabprosst/environment_generation"
 )
+
+
+def _probe_colab_environment() -> str:
+    existing_esm_modules = {
+        name for name in sys.modules if name == "esm" or name.startswith("esm.")
+    }
+    try:
+        from esm.models.esmc import ESMC  # noqa: F401
+        from esm.tokenization import EsmSequenceTokenizer
+        from transformers import EsmForProteinFolding  # noqa: F401
+        from transformers.models.esm.openfold_utils.feats import (  # noqa: F401
+            atom14_to_atom37,
+        )
+
+        EsmSequenceTokenizer()
+    except Exception as exc:
+        for name in list(sys.modules):
+            if (
+                (name == "esm" or name.startswith("esm."))
+                and name not in existing_esm_modules
+            ):
+                sys.modules.pop(name, None)
+        return f"{type(exc).__name__}: {exc}"
+    return ""
+
+
+def _install_colab_environment_upgrade() -> None:
+    if any(name == "esm" or name.startswith("esm.") for name in sys.modules):
+        raise RuntimeError(
+            "An older esm package is already loaded in this Python kernel."
+        )
+    print("Updating the ColabProSST runtime for ESMC-600M...", flush=True)
+    commands = [
+        ["esm==3.1.3", "--no-deps"],
+        [
+            "einops==0.8.1",
+            "msgpack-numpy==0.4.8",
+            "attrs==26.1.0",
+            "cloudpathlib==0.24.0",
+            "tenacity==9.1.4",
+            "zstd==1.5.7.2",
+            "brotli==1.2.0",
+        ],
+    ]
+    for packages in commands:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", *packages],
+            check=True,
+        )
+    importlib.invalidate_caches()
 
 
 def _validate_colab_environment():
@@ -44,20 +101,38 @@ def _validate_colab_environment():
         if COLAB_ENVIRONMENT_MARKER.is_file()
         else ""
     )
-    if actual_generation in COLAB_COMPATIBLE_ENVIRONMENT_GENERATIONS:
+    if actual_generation == COLAB_ENVIRONMENT_GENERATION:
+        return
+
+    probe_error = _probe_colab_environment()
+    if (
+        probe_error
+        and actual_generation in COLAB_UPGRADABLE_ENVIRONMENT_GENERATIONS
+    ):
+        try:
+            _install_colab_environment_upgrade()
+        except Exception as exc:
+            probe_error = f"{type(exc).__name__}: {exc}"
+        else:
+            probe_error = _probe_colab_environment()
+
+    if not probe_error:
+        COLAB_ENVIRONMENT_MARKER.parent.mkdir(parents=True, exist_ok=True)
         COLAB_ENVIRONMENT_MARKER.write_text(
             COLAB_ENVIRONMENT_GENERATION,
             encoding="utf-8",
         )
         print("ColabProSST environment upgraded in place; no restart is needed.")
         return
-    if actual_generation != COLAB_ENVIRONMENT_GENERATION:
-        raise RuntimeError(
-            "This Colab tab is running an outdated ColabProSST bootstrap. "
-            "Open a new notebook tab from the current GitHub Colab URL, "
-            "run its code cell, wait for the one-time Python kernel restart, "
-            "and then run that cell once more."
-        )
+
+    marker_label = actual_generation or "<missing>"
+    raise RuntimeError(
+        "This Colab tab is running an outdated ColabProSST bootstrap "
+        f"({marker_label}). Automatic upgrade failed: {probe_error}. "
+        "Open a new notebook tab from the current GitHub Colab URL, run its "
+        "code cell, wait for the one-time Python kernel restart, and then run "
+        "that cell once more."
+    )
 
 
 class _UploadField:
