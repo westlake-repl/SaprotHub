@@ -24,7 +24,7 @@ from saprot.model.prosst.specs import (
 from saprot.utils.colab_prosst_templates import get_input_template_name
 
 
-COLAB_ENVIRONMENT_GENERATION = "2026-07-22-esmc-completion-v1"
+COLAB_ENVIRONMENT_GENERATION = "2026-07-22-local-esmfold-v1"
 COLAB_ENVIRONMENT_MARKER = Path(
     "/content/.cache/colabprosst/environment_generation"
 )
@@ -507,7 +507,7 @@ class _StructureInput:
     def _mode_options(self):
         return [
             ("Sequence + structure files (recommended)", self.STRUCTURE),
-            ("Sequence only - prepare structure automatically", self.SEQUENCE),
+            ("Sequence only - local ESMFold", self.SEQUENCE),
         ]
 
     def set_pair_mode(self, enabled):
@@ -650,8 +650,8 @@ class _StructureInput:
                 "structure files are available. Upload a CSV with "
                 "<code>sequence_1</code> and <code>sequence_2</code>; no "
                 "structure files or Structure ZIP are required. ColabProSST "
-                "predicts both structures and generates matching tokens "
-                "automatically. "
+                "runs ESMFold v1 locally to predict both structures, then "
+                "generates matching tokens automatically. "
                 "X residues are first completed with ESMC-600M; predicted "
                 "residues and confidence values are logged. "
                 f"Each sequence must be at most {ESMFOLD_MAX_RESIDUES} residues. "
@@ -675,8 +675,9 @@ class _StructureInput:
                 "structure file is available. Upload a CSV with "
                 "<code>sequence</code>; no structure file or Structure ZIP is "
                 "required. "
-                "ColabProSST predicts each structure and generates tokens for "
-                "the selected model automatically. X residues are first "
+                "ColabProSST runs ESMFold v1 locally to predict each structure, "
+                "then generates tokens for the selected model automatically. "
+                "X residues are first "
                 "completed with ESMC-600M; predicted residues and confidence "
                 "values are logged, and values below 0.50 are marked for "
                 "review. Sequences must be at most "
@@ -1060,9 +1061,11 @@ class ColabProSSTUI:
             "model predictions rather than experimentally confirmed residues. "
             "Confidence below 0.50 and sequences with many X residues are "
             "marked for review in the audit report. Structure "
-            "prediction then uses the public ESMFold service, sends each "
-            f"sequence to that service, and supports up to {ESMFOLD_MAX_RESIDUES} "
-            "residues per sequence.</li>"
+            "prediction then runs ESMFold v1 locally in the Colab runtime; "
+            "sequences are not sent to a folding service. The model is downloaded "
+            "on first use and supports up to "
+            f"{ESMFOLD_MAX_RESIDUES} residues per sequence. A GPU runtime is "
+            "strongly recommended.</li>"
             "</ol>"
             "<p>After a task finishes, sequence-only runs provide a reusable "
             "structure ZIP and matching CSV. If either method handles X "

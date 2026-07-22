@@ -16,6 +16,7 @@ from saprot.data.prosst_labels import (
     validate_residue_labels,
 )
 from saprot.data.sequence_to_prosst import (
+    ESMFOLD_MAX_RESIDUES,
     preparation_artifact_paths,
     prepare_sequence_csv_with_structure_tokens,
 )
@@ -795,7 +796,10 @@ class ColabProSSTWorkflow:
             "and upload the referenced PDB/mmCIF files together as one "
             "Structure ZIP.\n"
             "2. Sequence only: use the filename containing _sequence_ only "
-            "when no experimental or predicted structure file is available.\n\n"
+            "when no experimental or predicted structure file is available. "
+            "ColabProSST runs ESMFold v1 locally; a GPU is strongly recommended, "
+            f"and each sequence may contain at most {ESMFOLD_MAX_RESIDUES} "
+            "residues. The model is downloaded on first use.\n\n"
             "Protein-pair files use sequence_1 and sequence_2. Their structure "
             "input also uses structure_file_1 and structure_file_2. Optional "
             "chain, chain_1, and chain_2 columns select chains.\n\n"
