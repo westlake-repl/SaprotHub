@@ -25,6 +25,9 @@ from saprot.utils.colab_prosst_templates import get_input_template_name
 
 
 COLAB_ENVIRONMENT_GENERATION = "2026-07-22-local-esmfold-v1"
+COLAB_COMPATIBLE_ENVIRONMENT_GENERATIONS = frozenset(
+    {"2026-07-22-esmc-completion-v1"}
+)
 COLAB_ENVIRONMENT_MARKER = Path(
     "/content/.cache/colabprosst/environment_generation"
 )
@@ -41,6 +44,13 @@ def _validate_colab_environment():
         if COLAB_ENVIRONMENT_MARKER.is_file()
         else ""
     )
+    if actual_generation in COLAB_COMPATIBLE_ENVIRONMENT_GENERATIONS:
+        COLAB_ENVIRONMENT_MARKER.write_text(
+            COLAB_ENVIRONMENT_GENERATION,
+            encoding="utf-8",
+        )
+        print("ColabProSST environment upgraded in place; no restart is needed.")
+        return
     if actual_generation != COLAB_ENVIRONMENT_GENERATION:
         raise RuntimeError(
             "This Colab tab is running an outdated ColabProSST bootstrap. "
