@@ -186,6 +186,25 @@ def _prepare_esmfold_residue_constants(model, torch, device) -> None:
         structure_module.group_idx = structure_module.group_idx.long()
 
 
+def _load_local_esmfold_model(model_name: str, device):
+    from transformers import AutoConfig, EsmForProteinFolding
+
+    config = AutoConfig.from_pretrained(model_name)
+    load_kwargs = {
+        "config": config,
+        "low_cpu_mem_usage": True,
+    }
+    if device.type == "cuda":
+        config.esmfold_config.fp16_esm = True
+        load_kwargs["device_map"] = {"": str(device)}
+
+    model = EsmForProteinFolding.from_pretrained(model_name, **load_kwargs)
+    if device.type != "cuda":
+        model = model.to(device)
+    model.trunk.set_chunk_size(ESMFOLD_TRUNK_CHUNK_SIZE)
+    return model.eval()
+
+
 def predict_structures_with_esmfold(
     sequences: list[str],
     cache_dir: str,
@@ -213,7 +232,7 @@ def predict_structures_with_esmfold(
 
     try:
         import torch
-        from transformers import AutoTokenizer, EsmForProteinFolding
+        from transformers import AutoTokenizer
     except ImportError as exc:
         raise ESMFoldPredictionError(
             "Local ESMFold v1 requires torch and transformers. Run the "
@@ -222,25 +241,23 @@ def predict_structures_with_esmfold(
 
     if not torch.cuda.is_available():
         logger(
-            "Local ESMFold v1 is running on CPU. This is supported but can be "
-            "very slow; a Colab GPU runtime is strongly recommended."
+            "Local ESMFold v1 is running on CPU. It can require more than 16 GB "
+            "of system RAM and is very slow; a Colab GPU runtime is strongly "
+            "recommended."
         )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = None
     model = None
     try:
-        logger(
-            f"Loading local ESMFold v1 on {device.type}: {ESMFOLD_MODEL}"
-        )
-        tokenizer = AutoTokenizer.from_pretrained(ESMFOLD_MODEL)
-        model = EsmForProteinFolding.from_pretrained(
-            ESMFOLD_MODEL,
-            low_cpu_mem_usage=True,
-        )
         if device.type == "cuda":
-            model.esm = model.esm.half()
-        model.trunk.set_chunk_size(ESMFOLD_TRUNK_CHUNK_SIZE)
-        model = model.to(device).eval()
+            logger(
+                "Loading local ESMFold v1 directly on GPU "
+                "(ESM FP16, folding trunk FP32)."
+            )
+        else:
+            logger(f"Loading local ESMFold v1 on CPU: {ESMFOLD_MODEL}")
+        tokenizer = AutoTokenizer.from_pretrained(ESMFOLD_MODEL)
+        model = _load_local_esmfold_model(ESMFOLD_MODEL, device)
         _prepare_esmfold_residue_constants(model, torch, device)
 
         batches = _build_esmfold_batches(missing_sequences)
