@@ -178,6 +178,14 @@ def _convert_esmfold_outputs_to_pdb(outputs, sequence_lengths: list[int]) -> lis
     return pdbs
 
 
+def _prepare_esmfold_residue_constants(model, torch, device) -> None:
+    structure_module = model.trunk.structure_module
+    structure_module._init_residue_constants(torch.float32, device)
+    # transformers 4.43 builds this index buffer as int32; torch 2.2 needs int64.
+    if structure_module.group_idx.dtype != torch.long:
+        structure_module.group_idx = structure_module.group_idx.long()
+
+
 def predict_structures_with_esmfold(
     sequences: list[str],
     cache_dir: str,
@@ -233,6 +241,7 @@ def predict_structures_with_esmfold(
             model.esm = model.esm.half()
         model.trunk.set_chunk_size(ESMFOLD_TRUNK_CHUNK_SIZE)
         model = model.to(device).eval()
+        _prepare_esmfold_residue_constants(model, torch, device)
 
         batches = _build_esmfold_batches(missing_sequences)
         cached_count = len(normalized_sequences) - len(missing_sequences)
