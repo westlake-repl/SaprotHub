@@ -75,8 +75,8 @@ def normalize_protein_sequence(
         )
     if max_residues is not None and len(sequence) > int(max_residues):
         raise ValueError(
-            f"{context} has {len(sequence)} residues, but the automatic "
-            f"local ESMFold v1 workflow accepts at most {int(max_residues)}. "
+            f"{context} has {len(sequence)} residues, but local ESMFold v1 "
+            f"accepts at most {int(max_residues)}. "
             "Use the "
             "sequence + structure files input method for longer proteins."
         )
@@ -90,17 +90,17 @@ def _esmfold_cache_path(sequence: str, cache_dir: str) -> Path:
     return Path(cache_dir) / "esmfold" / f"{digest}.pdb"
 
 
-def _validate_pdb_response(pdb_text: str) -> None:
+def _validate_pdb_output(pdb_text: str) -> None:
     if not pdb_text.strip() or not any(
         line.startswith("ATOM") for line in pdb_text.splitlines()
     ):
         raise ESMFoldPredictionError(
-            "ESMFold returned an invalid response without protein coordinates."
+            "ESMFold generated an invalid PDB without protein coordinates."
         )
 
 
 def _write_cached_pdb(pdb_text: str, output_path: Path) -> None:
-    _validate_pdb_response(pdb_text)
+    _validate_pdb_output(pdb_text)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     handle = tempfile.NamedTemporaryFile(
         mode="w",
@@ -419,7 +419,6 @@ def prepare_sequence_csv_with_structure_tokens(
             raise FileNotFoundError(
                 f"ESMFold structure file does not exist: {pdb_path}"
             )
-        predicted_structure_paths[sequence] = pdb_path
         result = structure_quantizer(
             str(pdb_path),
             cache_dir=str(cache_dir),
