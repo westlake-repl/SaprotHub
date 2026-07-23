@@ -152,11 +152,38 @@ def _build_esmfold_batches(
     return batches
 
 
+def _cuda_memory_info(torch, device) -> tuple[int, int, str]:
+    device_index = device.index
+    if device_index is None:
+        device_index = torch.cuda.current_device()
+
+    try:
+        free_bytes, total_bytes = torch.cuda.mem_get_info(device_index)
+        return int(free_bytes), int(total_bytes), "CUDA runtime"
+    except Exception:
+        try:
+            with torch.cuda.device(device_index):
+                free_bytes, total_bytes = torch.cuda.mem_get_info()
+            return int(free_bytes), int(total_bytes), "CUDA runtime"
+        except Exception:
+            try:
+                total_bytes = int(
+                    torch.cuda.get_device_properties(device_index).total_memory
+                )
+                reserved_bytes = int(torch.cuda.memory_reserved(device_index))
+                free_bytes = max(0, total_bytes - reserved_bytes)
+                return free_bytes, total_bytes, "conservative PyTorch estimate"
+            except Exception as estimate_error:
+                raise RuntimeError(
+                    "CUDA memory information is unavailable."
+                ) from estimate_error
+
+
 def _adaptive_esmfold_batch_size(torch, device, logger: Callable[[str], None]) -> int:
     if device.type != "cuda":
         return ESMFOLD_MAX_BATCH_SIZE
     try:
-        free_bytes, total_bytes = torch.cuda.mem_get_info(device)
+        free_bytes, total_bytes, source = _cuda_memory_info(torch, device)
     except Exception:
         logger(
             "Could not read free GPU memory; using the safest ESMFold batch size 1."
@@ -173,19 +200,31 @@ def _adaptive_esmfold_batch_size(torch, device, logger: Callable[[str], None]) -
         max_batch_size = ESMFOLD_MAX_BATCH_SIZE
     logger(
         f"ESMFold GPU memory after model loading: {free_gib:.2f}/{total_gib:.2f} "
-        f"GiB free; adaptive maximum batch size={max_batch_size}."
+        f"GiB free ({source}); adaptive maximum batch size={max_batch_size}."
     )
     return max_batch_size
 
 
-def _esmfold_chunk_size(sequence_length: int) -> int:
+def _esmfold_chunk_size(
+    sequence_length: int,
+    free_gpu_bytes: Optional[int] = None,
+) -> int:
     if sequence_length > 768:
-        return ESMFOLD_MIN_TRUNK_CHUNK_SIZE
-    if sequence_length > 512:
-        return 16
-    if sequence_length > 256:
-        return 32
-    return ESMFOLD_TRUNK_CHUNK_SIZE
+        chunk_size = ESMFOLD_MIN_TRUNK_CHUNK_SIZE
+    elif sequence_length > 512:
+        chunk_size = 16
+    elif sequence_length > 256:
+        chunk_size = 32
+    else:
+        chunk_size = ESMFOLD_TRUNK_CHUNK_SIZE
+
+    if free_gpu_bytes is not None:
+        free_gib = free_gpu_bytes / 1024**3
+        if free_gib < 5:
+            chunk_size = min(chunk_size, ESMFOLD_MIN_TRUNK_CHUNK_SIZE)
+        elif free_gib < 8:
+            chunk_size = min(chunk_size, 16)
+    return chunk_size
 
 
 def _convert_esmfold_outputs_to_pdb(outputs, sequence_lengths: list[int]) -> list[str]:
@@ -321,12 +360,28 @@ def predict_structures_with_esmfold(
             batch = pending_batches.popleft()
             batch_attempt += 1
             lengths = [len(sequence) for sequence in batch]
-            chunk_size = _esmfold_chunk_size(max(lengths))
+            free_gpu_bytes = None
+            free_gpu_note = ""
+            if device.type == "cuda":
+                try:
+                    free_gpu_bytes, _total_gpu_bytes, memory_source = (
+                        _cuda_memory_info(torch, device)
+                    )
+                    free_gpu_note = (
+                        f", {free_gpu_bytes / 1024**3:.2f} GiB GPU free "
+                        f"({memory_source})"
+                    )
+                except Exception:
+                    free_gpu_note = ", GPU free memory unavailable"
+            chunk_size = _esmfold_chunk_size(
+                max(lengths),
+                free_gpu_bytes=free_gpu_bytes,
+            )
             model.trunk.set_chunk_size(chunk_size)
             logger(
                 f"ESMFold batch attempt {batch_attempt}: {len(batch)} protein(s), "
                 f"{min(lengths)}-{max(lengths)} residues, chunk size={chunk_size}; "
-                f"{len(pending_batches)} batch(es) queued."
+                f"{len(pending_batches)} batch(es) queued{free_gpu_note}."
             )
             while True:
                 encoded = tokenizer(
