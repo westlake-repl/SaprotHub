@@ -3,6 +3,7 @@ import hashlib
 import os
 import tempfile
 import zipfile
+from collections import deque
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -20,6 +21,7 @@ ESMFOLD_MODEL = "facebook/esmfold_v1"
 ESMFOLD_MAX_RESIDUES = 1024
 ESMFOLD_CACHE_VERSION = "esmfold-v1-local"
 ESMFOLD_TRUNK_CHUNK_SIZE = 64
+ESMFOLD_MIN_TRUNK_CHUNK_SIZE = 8
 ESMFOLD_BATCH_SQUARE_BUDGET = ESMFOLD_MAX_RESIDUES**2
 ESMFOLD_MAX_BATCH_SIZE = 4
 SUPPORTED_SEQUENCE_CHARACTERS = frozenset("ACDEFGHIKLMNPQRSTVWYX")
@@ -120,7 +122,10 @@ def _write_cached_pdb(pdb_text: str, output_path: Path) -> None:
             temp_path.unlink()
 
 
-def _build_esmfold_batches(sequences: list[str]) -> list[list[str]]:
+def _build_esmfold_batches(
+    sequences: list[str],
+    max_batch_size: int = ESMFOLD_MAX_BATCH_SIZE,
+) -> list[list[str]]:
     batches = []
     current = []
     current_max_length = 0
@@ -132,7 +137,7 @@ def _build_esmfold_batches(sequences: list[str]) -> list[list[str]]:
         if (
             current
             and (
-                next_size > ESMFOLD_MAX_BATCH_SIZE
+                next_size > max_batch_size
                 or next_size * next_max_length * next_max_length
                 > ESMFOLD_BATCH_SQUARE_BUDGET
             )
@@ -145,6 +150,42 @@ def _build_esmfold_batches(sequences: list[str]) -> list[list[str]]:
     if current:
         batches.append(current)
     return batches
+
+
+def _adaptive_esmfold_batch_size(torch, device, logger: Callable[[str], None]) -> int:
+    if device.type != "cuda":
+        return ESMFOLD_MAX_BATCH_SIZE
+    try:
+        free_bytes, total_bytes = torch.cuda.mem_get_info(device)
+    except Exception:
+        logger(
+            "Could not read free GPU memory; using the safest ESMFold batch size 1."
+        )
+        return 1
+
+    free_gib = free_bytes / 1024**3
+    total_gib = total_bytes / 1024**3
+    if free_gib < 8:
+        max_batch_size = 1
+    elif free_gib < 12:
+        max_batch_size = 2
+    else:
+        max_batch_size = ESMFOLD_MAX_BATCH_SIZE
+    logger(
+        f"ESMFold GPU memory after model loading: {free_gib:.2f}/{total_gib:.2f} "
+        f"GiB free; adaptive maximum batch size={max_batch_size}."
+    )
+    return max_batch_size
+
+
+def _esmfold_chunk_size(sequence_length: int) -> int:
+    if sequence_length > 768:
+        return ESMFOLD_MIN_TRUNK_CHUNK_SIZE
+    if sequence_length > 512:
+        return 16
+    if sequence_length > 256:
+        return 32
+    return ESMFOLD_TRUNK_CHUNK_SIZE
 
 
 def _convert_esmfold_outputs_to_pdb(outputs, sequence_lengths: list[int]) -> list[str]:
@@ -262,7 +303,12 @@ def predict_structures_with_esmfold(
         model = _load_local_esmfold_model(ESMFOLD_MODEL, device)
         _prepare_esmfold_residue_constants(model, torch, device)
 
-        batches = _build_esmfold_batches(missing_sequences)
+        max_batch_size = _adaptive_esmfold_batch_size(torch, device, logger)
+        batches = _build_esmfold_batches(
+            missing_sequences,
+            max_batch_size=max_batch_size,
+        )
+        pending_batches = deque(batches)
         cached_count = len(normalized_sequences) - len(missing_sequences)
         logger(
             "Local ESMFold v1: "
@@ -270,57 +316,96 @@ def predict_structures_with_esmfold(
             f"{len(batches)} batch(es); {cached_count} cached."
         )
         completed = 0
-        for batch_index, batch in enumerate(batches, start=1):
+        batch_attempt = 0
+        while pending_batches:
+            batch = pending_batches.popleft()
+            batch_attempt += 1
             lengths = [len(sequence) for sequence in batch]
+            chunk_size = _esmfold_chunk_size(max(lengths))
+            model.trunk.set_chunk_size(chunk_size)
             logger(
-                f"ESMFold batch {batch_index}/{len(batches)}: "
-                f"{len(batch)} protein(s), {min(lengths)}-{max(lengths)} residues."
+                f"ESMFold batch attempt {batch_attempt}: {len(batch)} protein(s), "
+                f"{min(lengths)}-{max(lengths)} residues, chunk size={chunk_size}; "
+                f"{len(pending_batches)} batch(es) queued."
             )
-            encoded = tokenizer(
-                batch,
-                return_tensors="pt",
-                add_special_tokens=False,
-                padding=True,
-            )
-            input_ids = encoded["input_ids"].to(device)
-            attention_mask = encoded.get("attention_mask")
-            if attention_mask is not None:
-                attention_mask = attention_mask.to(device)
-            outputs = None
-            pdbs = None
-            try:
-                with torch.inference_mode():
-                    outputs = model(
-                        input_ids=input_ids,
-                        attention_mask=attention_mask,
-                    )
-                pdbs = _convert_esmfold_outputs_to_pdb(outputs, lengths)
-
-                for sequence, pdb_text in zip(batch, pdbs):
-                    _write_cached_pdb(pdb_text, output_paths[sequence])
-                    completed += 1
-                logger(
-                    f"Local ESMFold v1 progress: {completed}/"
-                    f"{len(missing_sequences)} structure(s) saved."
+            while True:
+                encoded = tokenizer(
+                    batch,
+                    return_tensors="pt",
+                    add_special_tokens=False,
+                    padding=True,
                 )
-            except torch.cuda.OutOfMemoryError as exc:
-                raise ESMFoldPredictionError(
-                    "Local ESMFold v1 ran out of GPU memory. Retry with a "
-                    "higher-memory Colab GPU, or use sequence + structure "
-                    "files for this protein."
-                ) from exc
-            finally:
-                del encoded, input_ids, attention_mask, outputs, pdbs
-                gc.collect()
-                if device.type == "cuda":
-                    torch.cuda.empty_cache()
-                    allocated_gib = torch.cuda.memory_allocated(device) / 1024**3
-                    reserved_gib = torch.cuda.memory_reserved(device) / 1024**3
+                input_ids = encoded["input_ids"].to(device)
+                attention_mask = encoded.get("attention_mask")
+                if attention_mask is not None:
+                    attention_mask = attention_mask.to(device)
+                outputs = None
+                pdbs = None
+                oom_error = None
+                try:
+                    with torch.inference_mode():
+                        outputs = model(
+                            input_ids=input_ids,
+                            attention_mask=attention_mask,
+                        )
+                    pdbs = _convert_esmfold_outputs_to_pdb(outputs, lengths)
+
+                    for sequence, pdb_text in zip(batch, pdbs):
+                        _write_cached_pdb(pdb_text, output_paths[sequence])
+                        completed += 1
                     logger(
-                        "GPU memory after batch cleanup: "
-                        f"{allocated_gib:.2f} GiB allocated, "
-                        f"{reserved_gib:.2f} GiB reserved."
+                        f"Local ESMFold v1 progress: {completed}/"
+                        f"{len(missing_sequences)} structure(s) saved."
                     )
+                except torch.cuda.OutOfMemoryError as exc:
+                    oom_error = exc
+                finally:
+                    del encoded, input_ids, attention_mask, outputs, pdbs
+                    gc.collect()
+                    if device.type == "cuda":
+                        torch.cuda.empty_cache()
+                        allocated_gib = (
+                            torch.cuda.memory_allocated(device) / 1024**3
+                        )
+                        reserved_gib = torch.cuda.memory_reserved(device) / 1024**3
+                        logger(
+                            "GPU memory after batch cleanup: "
+                            f"{allocated_gib:.2f} GiB allocated, "
+                            f"{reserved_gib:.2f} GiB reserved."
+                        )
+
+                if oom_error is None:
+                    break
+                if len(batch) > 1:
+                    midpoint = (len(batch) + 1) // 2
+                    first_half = batch[:midpoint]
+                    second_half = batch[midpoint:]
+                    pending_batches.appendleft(second_half)
+                    pending_batches.appendleft(first_half)
+                    logger(
+                        "ESMFold GPU memory was insufficient. The batch was "
+                        f"automatically split into {len(first_half)} and "
+                        f"{len(second_half)} protein(s) for retry."
+                    )
+                    oom_error = None
+                    break
+                if chunk_size > ESMFOLD_MIN_TRUNK_CHUNK_SIZE:
+                    chunk_size = max(
+                        ESMFOLD_MIN_TRUNK_CHUNK_SIZE,
+                        chunk_size // 2,
+                    )
+                    model.trunk.set_chunk_size(chunk_size)
+                    logger(
+                        "ESMFold GPU memory was insufficient for this protein. "
+                        f"Retrying with chunk size={chunk_size}."
+                    )
+                    oom_error = None
+                    continue
+                raise ESMFoldPredictionError(
+                    "Local ESMFold v1 still ran out of GPU memory for one "
+                    f"{lengths[0]}-residue protein at the safest chunk size. "
+                    "Use sequence + structure files or a higher-memory GPU."
+                ) from oom_error
     except ESMFoldPredictionError:
         raise
     except Exception as exc:
