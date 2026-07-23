@@ -1,4 +1,5 @@
 import base64
+import builtins
 import collections
 import csv
 import ctypes
@@ -28,6 +29,18 @@ COLAB_ENVIRONMENT_GENERATION = "2026-07-22-local-esmfold-v1"
 COLAB_ENVIRONMENT_MARKER = Path(
     "/content/.cache/colabprosst/environment_generation"
 )
+_TASK_STATE_KEY = "_colabprosst_active_task_state"
+if not hasattr(builtins, _TASK_STATE_KEY):
+    setattr(
+        builtins,
+        _TASK_STATE_KEY,
+        {
+            "lock": threading.Lock(),
+            "thread": None,
+            "owner": None,
+        },
+    )
+_SESSION_TASK_STATE = getattr(builtins, _TASK_STATE_KEY)
 
 
 def _validate_colab_environment():
@@ -731,7 +744,7 @@ class ColabProSSTUI:
         self.latest_task_type = "classification"
         self.latest_num_labels = 2
         self._polling = False
-        self._task_lock = threading.Lock()
+        self._task_lock = _SESSION_TASK_STATE["lock"]
         self._build_system_widgets()
 
     def _html(self, value, **layout_kwargs):
@@ -1209,23 +1222,47 @@ class ColabProSSTUI:
                     except Exception as exc:
                         print(f"{type(exc).__name__}: {exc}")
                         traceback.print_exc()
+                        self._display_result_downloads(
+                            *self._preparation_download_files(
+                                self.workflow._last_preparation_artifacts
+                            )
+                        )
             finally:
+                release_resources = getattr(
+                    self.workflow,
+                    "release_runtime_resources",
+                    None,
+                )
+                if release_resources is not None:
+                    try:
+                        release_resources()
+                    except Exception:
+                        pass
                 button.disabled = False
                 with self._task_lock:
                     if self.active_thread is threading.current_thread():
                         self.active_thread = None
+                    if _SESSION_TASK_STATE["thread"] is threading.current_thread():
+                        _SESSION_TASK_STATE["thread"] = None
+                        _SESSION_TASK_STATE["owner"] = None
 
         with self._task_lock:
-            if self.active_thread is not None:
+            if _SESSION_TASK_STATE["thread"] is not None:
                 thread = None
             else:
                 button.disabled = True
                 thread = threading.Thread(target=runner, daemon=True)
                 self.active_thread = thread
+                _SESSION_TASK_STATE["thread"] = thread
+                _SESSION_TASK_STATE["owner"] = self
 
         if thread is None:
             with output:
-                print("A task is already running. Stop it before starting another one.")
+                print(
+                    "A ColabProSST task is already running, possibly from an "
+                    "older interface in this notebook. Wait for it to finish, "
+                    "stop it from that interface, or restart the runtime."
+                )
             return
 
         try:
@@ -1234,6 +1271,9 @@ class ColabProSSTUI:
             with self._task_lock:
                 if self.active_thread is thread:
                     self.active_thread = None
+                if _SESSION_TASK_STATE["thread"] is thread:
+                    _SESSION_TASK_STATE["thread"] = None
+                    _SESSION_TASK_STATE["owner"] = None
             button.disabled = False
             raise
 
