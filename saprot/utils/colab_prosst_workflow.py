@@ -1,5 +1,6 @@
 ﻿import json
 import queue
+import gc
 import re
 import shutil
 import zipfile
@@ -20,6 +21,7 @@ from saprot.data.sequence_to_prosst import (
     preparation_artifact_paths,
     prepare_sequence_csv_with_structure_tokens,
 )
+from saprot.data.pdb2prosst import clear_sst_predictor_cache
 from saprot.data.structure_to_prosst import (
     prepare_structure_csv_with_structure_tokens,
 )
@@ -104,6 +106,14 @@ class ColabProSSTWorkflow:
     def set_output_dir(self, output_dir: str) -> None:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def release_runtime_resources() -> int:
+        released_quantizers = clear_sst_predictor_cache()
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        return released_quantizers
 
     def _download(self, path: Path) -> None:
         try:
@@ -1443,11 +1453,6 @@ class ColabProSSTWorkflow:
             }
         )
 
-        model = my_load_model(config.model)
-        data_module = my_load_dataset(config.dataset)
-        trainer = load_trainer(config)
-
-        # The initial adapter is already loaded into memory at this point.
         # Remove same-name outputs so a previous run cannot be mistaken for the
         # best adapter or test predictions from this run.
         if adapter_path.exists():
@@ -1455,7 +1460,20 @@ class ColabProSSTWorkflow:
         if test_result_csv.exists():
             test_result_csv.unlink()
 
+        released_quantizers = self.release_runtime_resources()
+        if released_quantizers:
+            print(
+                f"Released {released_quantizers} ProSST structure quantizer(s) "
+                "before loading the training model."
+            )
+
+        model = None
+        data_module = None
+        trainer = None
         try:
+            model = my_load_model(config.model)
+            data_module = my_load_dataset(config.dataset)
+            trainer = load_trainer(config)
             trainer.fit(model=model, datamodule=data_module)
             if not adapter_path.exists():
                 print(
@@ -1469,7 +1487,15 @@ class ColabProSSTWorkflow:
 
             trainer.test(model=model, datamodule=data_module)
         finally:
-            self._close_lmdb_datamodule(data_module)
+            if data_module is not None:
+                self._close_lmdb_datamodule(data_module)
+            trainer = None
+            data_module = None
+            model = None
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            print("Released training resources.")
 
         print("test predictions:", test_result_csv)
         print("LoRA adapter:", adapter_path)

@@ -1,3 +1,4 @@
+import gc
 import hashlib
 import importlib
 import json
@@ -126,6 +127,20 @@ def get_sst_predictor(
         )
 
     return _PREDICTOR_CACHE[cache_key]
+
+
+def clear_sst_predictor_cache() -> int:
+    """Release cached ProSST structure quantizers before downstream modeling."""
+    released = len(_PREDICTOR_CACHE)
+    _PREDICTOR_CACHE.clear()
+    gc.collect()
+    try:
+        import torch
+    except ImportError:
+        return released
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    return released
 
 
 def _parse_structure_file(structure_path: Union[str, Path]):
