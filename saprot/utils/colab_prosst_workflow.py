@@ -350,6 +350,32 @@ class ColabProSSTWorkflow:
             )
         return str(adapter)
 
+    def _preserve_initial_adapter(
+        self,
+        initial_adapter: str,
+        output_adapter: Path,
+    ) -> str:
+        if not initial_adapter:
+            return ""
+
+        initial_path = Path(initial_adapter).resolve()
+        if initial_path != output_adapter.resolve():
+            return initial_adapter
+
+        preserved_path = (
+            self.saprothub_dir
+            / "loaded_lora"
+            / f"{output_adapter.name}_resume_source"
+        )
+        shutil.rmtree(preserved_path, ignore_errors=True)
+        preserved_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(initial_path, preserved_path)
+        print(
+            "Preserved the initial adapter before replacing the same-name "
+            f"training output: {preserved_path}"
+        )
+        return str(preserved_path)
+
     @staticmethod
     def _normalize_artifact_metadata(metadata: dict) -> dict:
         if not isinstance(metadata, dict):
@@ -1342,6 +1368,7 @@ class ColabProSSTWorkflow:
         if not 0 <= lora_dropout < 1:
             raise ValueError("LoRA dropout must be in the range [0, 1).")
         task_name = self._validate_task_name(task_name)
+        adapter_path = self.weight_dir / f"{task_name}_lora"
         structure_vocab_size = resolve_structure_vocab_size(
             model_path,
             structure_vocab_size,
@@ -1355,6 +1382,10 @@ class ColabProSSTWorkflow:
                 model_path,
                 structure_vocab_size,
                 num_labels,
+            )
+            initial_adapter = self._preserve_initial_adapter(
+                initial_adapter,
+                adapter_path,
             )
 
         input_csv = self.maybe_upload_path(input_csv, upload_csv)
@@ -1404,7 +1435,6 @@ class ColabProSSTWorkflow:
             "pair_regression": "prosst/prosst_pair_regression_dataset",
         }[task_type]
 
-        adapter_path = self.weight_dir / f"{task_name}_lora"
         test_result_csv = self.output_dir / f"{task_name}_{task_type}_test_predictions.csv"
         model_kwargs = {
             "config_path": model_path,
