@@ -5,6 +5,7 @@ import csv
 import ctypes
 import json
 import pkgutil
+import queue
 import threading
 import time
 import traceback
@@ -743,7 +744,10 @@ class ColabProSSTUI:
         self.latest_model_path = DEFAULT_PROSST_MODEL.model_path
         self.latest_task_type = "classification"
         self.latest_num_labels = 2
+        self.latest_result_files = ()
         self._polling = False
+        self._ui_thread = threading.current_thread()
+        self._pending_ui_updates = queue.SimpleQueue()
         self._task_lock = _SESSION_TASK_STATE["lock"]
         self._build_system_widgets()
 
@@ -846,9 +850,56 @@ class ColabProSSTUI:
         )
 
     def _display_result_downloads(self, *files):
-        downloads = self._result_downloads(files)
-        if downloads is not None:
-            self.display(downloads)
+        files = tuple(files)
+        result_page = self.current_page
+
+        def update():
+            if self.current_page != result_page:
+                return
+            downloads = self._result_downloads(files)
+            self.latest_result_files = files if downloads is not None else ()
+            self.show_results_button.disabled = downloads is None
+            self.result_panel.children = (
+                (downloads,) if downloads is not None else ()
+            )
+
+        self._run_on_ui_thread(update)
+
+    def _clear_result_downloads(self):
+        self.result_panel.children = ()
+
+    def _restore_result_downloads(self):
+        if self.latest_result_files:
+            self._display_result_downloads(*self.latest_result_files)
+
+    def _run_on_ui_thread(self, callback):
+        if threading.current_thread() is self._ui_thread:
+            callback()
+        else:
+            self._pending_ui_updates.put(callback)
+
+    def _show_html_widget(self, widget, value):
+        def update():
+            widget.value = value
+            widget.layout.display = None
+
+        self._run_on_ui_thread(update)
+
+    def _process_ui_updates(self):
+        while True:
+            try:
+                callback = self._pending_ui_updates.get_nowait()
+            except queue.Empty:
+                return
+            try:
+                callback()
+            except Exception as exc:
+                self.system_status.clear_output(wait=True)
+                with self.system_status:
+                    print(
+                        "Could not update the ColabProSST result interface: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
 
     @staticmethod
     def _preparation_download_files(result):
@@ -1109,24 +1160,49 @@ class ColabProSSTUI:
         self.back_button = self._button("Go back", width="120px", style="success")
         self.refresh_button = self._button("Refresh", width="120px", style="success")
         self.stop_button = self._button("Stop", width="120px", style="danger")
+        self.show_results_button = self._button(
+            "Show results",
+            width="120px",
+            style="info",
+        )
+        self.show_results_button.disabled = True
         self.system_status = self._new_system_status()
+        self.result_panel = self.widgets.VBox(
+            [],
+            layout=self.widgets.Layout(
+                width="100%",
+                max_width=self.GUIDE_WIDTH,
+                overflow="visible",
+            ),
+        )
 
         self.back_button.on_click(lambda _button: self._go_back())
         self.refresh_button.on_click(lambda _button: self._refresh_page())
         self.stop_button.on_click(lambda _button: self.stop_task())
+        self.show_results_button.on_click(
+            lambda _button: self._restore_result_downloads()
+        )
 
         self.system_widgets = [
+            self.result_panel,
             self._html(
                 "<b><font color='red'>Note: At any time you can use the buttons "
                 "below to stop and restart.</font></b>"
             ),
             self.widgets.HBox(
-                [self.back_button, self.refresh_button, self.stop_button]
+                [
+                    self.back_button,
+                    self.refresh_button,
+                    self.stop_button,
+                    self.show_results_button,
+                ]
             ),
             self._html(
                 "<b>Go back:</b> stop the running task and return to the previous "
                 "interface.<br><b>Refresh:</b> stop the running task and reset the "
                 "current interface.<br><b>Stop:</b> stop the running task."
+                "<br><b>Show results:</b> restore the latest task's download "
+                "buttons."
             ),
             self.system_status,
         ]
@@ -1194,6 +1270,7 @@ class ColabProSSTUI:
         # Download Javascript captured by an Output widget can replay if that
         # widget is displayed again. Every page receives a fresh status slot.
         self._reset_system_status()
+        self._clear_result_downloads()
         self.clear_output(wait=True)
         page()
         self._update_navigation_controls()
@@ -1212,7 +1289,6 @@ class ColabProSSTUI:
 
     def _start_task(self, button, output, action):
         def runner():
-            output.clear_output(wait=True)
             try:
                 with output:
                     try:
@@ -1238,7 +1314,9 @@ class ColabProSSTUI:
                         release_resources()
                     except Exception:
                         pass
-                button.disabled = False
+                self._run_on_ui_thread(
+                    lambda: setattr(button, "disabled", False)
+                )
                 with self._task_lock:
                     if self.active_thread is threading.current_thread():
                         self.active_thread = None
@@ -1251,6 +1329,10 @@ class ColabProSSTUI:
                 thread = None
             else:
                 button.disabled = True
+                output.clear_output(wait=True)
+                self._clear_result_downloads()
+                self.latest_result_files = ()
+                self.show_results_button.disabled = True
                 thread = threading.Thread(target=runner, daemon=True)
                 self.active_thread = thread
                 _SESSION_TASK_STATE["thread"] = thread
@@ -1633,7 +1715,8 @@ class ColabProSSTUI:
                 ("test predictions CSV", result["test_result_csv"]),
                 *self._preparation_download_files(result),
             )
-            finish_hint.value = (
+            self._show_html_widget(
+                finish_hint,
                 "<h3>The training is completed. You can then:</h3>"
                 "<ul>"
                 "<li><b>Train again:</b> click <b>Refresh</b>, adjust the "
@@ -1644,9 +1727,8 @@ class ColabProSSTUI:
                 "is selected automatically in this session.</li>"
                 "<li><b>Share this model:</b> click <b>Go back</b> and choose "
                 "<b>I want to share my model publicly</b>.</li>"
-                "</ul>"
+                "</ul>",
             )
-            finish_hint.layout.display = None
 
         update_task({"new": task_type.value})
         task_type.observe(update_task, names="value")
@@ -1842,7 +1924,8 @@ class ColabProSSTUI:
             self.latest_model_path = model.value
             self.latest_task_type = task_type.value
             self.latest_num_labels = num_labels.value
-            self.display(result.head())
+            print("Prediction preview:")
+            print(result.head().to_string(index=False))
             self._display_result_downloads(
                 ("predictions CSV", result.attrs.get("output_csv")),
                 *self._preparation_download_files(result),
@@ -1975,8 +2058,6 @@ class ColabProSSTUI:
             self.latest_model_path = metadata["model_path"]
 
         def extract():
-            completion.value = ""
-            completion.layout.display = "none"
             if not csv_input.value:
                 raise ValueError("Upload a protein CSV or enter its path.")
             use_artifact = embedding_model_source.value == "artifact"
@@ -2024,13 +2105,13 @@ class ColabProSSTUI:
                 ("embedding index CSV", result["output_index_csv"]),
                 *self._preparation_download_files(result),
             )
-            completion.value = (
+            self._show_html_widget(
+                completion,
                 "<b>Embedding extraction completed.</b><br>"
                 f"Package: <code>{result['archive_path']}</code><br>"
                 "Use the result buttons to download the package or either "
-                "individual file."
+                "individual file.",
             )
-            completion.layout.display = None
 
         embedding_artifact.on_loaded(apply_embedding_artifact)
         embedding_model_source.observe(update_embedding_source, names="value")
@@ -2102,8 +2183,8 @@ class ColabProSSTUI:
             self.latest_model_path = model.value
             print("scored mutations:", len(result["score_table"]))
             print("saturation package:", result["archive_path"])
-            self.display(self.Image(filename=result["output_heatmap_png"]))
-            self.display(result["score_table"].head())
+            print("Mutation score preview:")
+            print(result["score_table"].head().to_string(index=False))
             self._display_result_downloads(
                 ("saturation ZIP", result["archive_path"]),
                 ("mutation scores CSV", result["output_csv"]),
@@ -2172,7 +2253,8 @@ class ColabProSSTUI:
                 download=False,
             )
             self.latest_model_path = model.value
-            self.display(result.head())
+            print("Mutation prediction preview:")
+            print(result.head().to_string(index=False))
             self._display_result_downloads(
                 ("mutation scores CSV", result.attrs.get("output_csv")),
                 *self._preparation_download_files(result),
@@ -2378,15 +2460,15 @@ class ColabProSSTUI:
             )
             print("Local model package:", package)
             model_url = f"https://huggingface.co/{repo_id}"
-            contribution_hint.value = (
+            self._show_html_widget(
+                contribution_hint,
                 f"<b>Upload complete:</b> <a href='{model_url}' "
                 f"target='_blank'>{repo_id}</a><br>"
                 "The model is now in your personal Hugging Face account. To "
                 f"contribute it to <a href='{PROSST_HUB_URL}' target='_blank'>"
                 f"{PROSST_HUB_NAMESPACE}</a>, send this repository link to the "
-                "ProSSTHub maintainers for review and transfer."
+                "ProSSTHub maintainers for review and transfer.",
             )
-            contribution_hint.layout.display = None
 
         task_type.observe(update_task, names="value")
         adapter.on_loaded(
@@ -2456,6 +2538,7 @@ class ColabProSSTUI:
             with ui_events() as poll_events:
                 while self._polling:
                     poll_events(10)
+                    self._process_ui_updates()
                     self._process_pending_download()
                     time.sleep(0.1)
         except KeyboardInterrupt:
