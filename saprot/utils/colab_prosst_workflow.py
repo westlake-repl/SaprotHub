@@ -10,6 +10,7 @@ from typing import Optional
 import pandas as pd
 import torch
 from easydict import EasyDict
+from pytorch_lightning import Callback
 
 from saprot.data.prosst_labels import (
     RESIDUE_LABEL_IGNORE_INDEX,
@@ -64,6 +65,18 @@ INPUT_MODE_STRUCTURE = "structure"
 INPUT_MODES = {INPUT_MODE_SEQUENCE, INPUT_MODE_STRUCTURE}
 TRAINING_STAGES = ("train", "valid", "test")
 AUTO_SPLIT_SEED = 20000812
+
+
+class _StableTrainingProgress(Callback):
+    """Print stable epoch updates without Colab's dynamic progress redraws."""
+
+    def on_train_epoch_start(self, trainer, pl_module):
+        epoch = trainer.current_epoch + 1
+        print(f"Training epoch {epoch}/{trainer.max_epochs}...")
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        epoch = trainer.current_epoch + 1
+        print(f"Training epoch {epoch}/{trainer.max_epochs} completed.")
 
 
 class ColabProSSTWorkflow:
@@ -1449,6 +1462,7 @@ class ColabProSSTWorkflow:
                     "accumulate_grad_batches": 1,
                     "precision": 16 if torch.cuda.is_available() else 32,
                     "num_sanity_val_steps": 0,
+                    "enable_progress_bar": False,
                 },
             }
         )
@@ -1474,6 +1488,7 @@ class ColabProSSTWorkflow:
             model = my_load_model(config.model)
             data_module = my_load_dataset(config.dataset)
             trainer = load_trainer(config)
+            trainer.callbacks.append(_StableTrainingProgress())
             trainer.fit(model=model, datamodule=data_module)
             if not adapter_path.exists():
                 print(
