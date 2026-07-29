@@ -91,13 +91,25 @@ def _patch_sst_module(sst_module) -> None:
         return
 
     original_iter_parallel_map = sst_module.iter_parallel_map
+    original_tqdm = sst_module.tqdm
 
     def iter_parallel_map(func, data, workers: int = 2):
         if workers <= 0:
             return map(func, data)
         return original_iter_parallel_map(func, data, workers)
 
+    def quiet_tqdm(*args, **kwargs):
+        kwargs["disable"] = True
+        return original_tqdm(*args, **kwargs)
+
+    def concise_print(*args, **kwargs):
+        message = " ".join(str(arg) for arg in args)
+        if "Building Subgraphs" not in message:
+            print(*args, **kwargs)
+
     sst_module.iter_parallel_map = iter_parallel_map
+    sst_module.tqdm = quiet_tqdm
+    sst_module.print = concise_print
     sst_module._colabprosst_patched = True
 
 

@@ -27,6 +27,19 @@ ESMFOLD_MAX_BATCH_SIZE = 4
 SUPPORTED_SEQUENCE_CHARACTERS = frozenset("ACDEFGHIKLMNPQRSTVWYX")
 
 
+def should_log_progress(
+    completed: int,
+    total: int,
+    max_updates: int = 10,
+) -> bool:
+    if total <= 0 or completed <= 0:
+        return False
+    if total <= max_updates:
+        return True
+    interval = max(1, (total + max_updates - 1) // max_updates)
+    return completed == 1 or completed == total or completed % interval == 0
+
+
 def preparation_artifact_paths(output_csv: str) -> dict[str, Path]:
     output_path = Path(output_csv)
     stem = output_path.stem
@@ -360,6 +373,14 @@ def predict_structures_with_esmfold(
             batch = pending_batches.popleft()
             batch_attempt += 1
             lengths = [len(sequence) for sequence in batch]
+            progress_after_batch = min(
+                completed + len(batch),
+                len(missing_sequences),
+            )
+            report_batch = batch_attempt == 1 or should_log_progress(
+                progress_after_batch,
+                len(missing_sequences),
+            )
             free_gpu_bytes = None
             free_gpu_note = ""
             if device.type == "cuda":
@@ -378,11 +399,13 @@ def predict_structures_with_esmfold(
                 free_gpu_bytes=free_gpu_bytes,
             )
             model.trunk.set_chunk_size(chunk_size)
-            logger(
-                f"ESMFold batch attempt {batch_attempt}: {len(batch)} protein(s), "
-                f"{min(lengths)}-{max(lengths)} residues, chunk size={chunk_size}; "
-                f"{len(pending_batches)} batch(es) queued{free_gpu_note}."
-            )
+            if report_batch:
+                logger(
+                    f"ESMFold batch toward {progress_after_batch}/"
+                    f"{len(missing_sequences)}: {len(batch)} protein(s), "
+                    f"{min(lengths)}-{max(lengths)} residues, "
+                    f"chunk size={chunk_size}{free_gpu_note}."
+                )
             while True:
                 encoded = tokenizer(
                     batch,
@@ -408,10 +431,6 @@ def predict_structures_with_esmfold(
                     for sequence, pdb_text in zip(batch, pdbs):
                         _write_cached_pdb(pdb_text, output_paths[sequence])
                         completed += 1
-                    logger(
-                        f"Local ESMFold v1 progress: {completed}/"
-                        f"{len(missing_sequences)} structure(s) saved."
-                    )
                 except torch.cuda.OutOfMemoryError as exc:
                     oom_error = exc
                 finally:
@@ -423,11 +442,12 @@ def predict_structures_with_esmfold(
                             torch.cuda.memory_allocated(device) / 1024**3
                         )
                         reserved_gib = torch.cuda.memory_reserved(device) / 1024**3
-                        logger(
-                            "GPU memory after batch cleanup: "
-                            f"{allocated_gib:.2f} GiB allocated, "
-                            f"{reserved_gib:.2f} GiB reserved."
-                        )
+                        if report_batch:
+                            logger(
+                                "GPU memory after cleanup: "
+                                f"{allocated_gib:.2f} GiB allocated, "
+                                f"{reserved_gib:.2f} GiB reserved."
+                            )
 
                 if oom_error is None:
                     break
@@ -572,16 +592,19 @@ def prepare_sequence_csv_with_structure_tokens(
     else:
         predicted_structure_paths = {}
         for index, sequence in enumerate(ordered_sequences, start=1):
-            print(
-                f"Preparing structure {index}/{total}: "
-                f"{len(sequence)} residues"
-            )
+            if should_log_progress(index, total):
+                print(
+                    f"Structure prediction progress: {index}/{total} "
+                    f"({len(sequence)} residues)."
+                )
             predicted_structure_paths[sequence] = Path(
                 structure_predictor(sequence, cache_dir=str(cache_dir))
             )
 
+    print(f"Generating ProSST tokens for {total} structure(s).")
     for index, sequence in enumerate(ordered_sequences, start=1):
-        print(f"Generating ProSST tokens {index}/{total}.")
+        if should_log_progress(index, total):
+            print(f"ProSST token progress: {index}/{total}.")
         pdb_path = predicted_structure_paths[sequence]
         if not pdb_path.is_file():
             raise FileNotFoundError(

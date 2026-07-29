@@ -12,6 +12,7 @@ from saprot.data.sequence_completion import complete_unknown_residues
 from saprot.data.sequence_to_prosst import (
     clear_preparation_artifacts,
     normalize_protein_sequence,
+    should_log_progress,
 )
 
 
@@ -128,10 +129,11 @@ def prepare_structure_csv_with_structure_tokens(
                 chain_id = str(row[chain_column]).strip() or None
             cache_key = (str(structure_path), chain_id)
             if cache_key not in result_cache:
-                print(
-                    f"Preparing structure {completed}/{total}: "
-                    f"{structure_path.name}"
-                )
+                if should_log_progress(completed, total):
+                    print(
+                        f"ProSST token progress: {completed}/{total} "
+                        f"({structure_path.name})."
+                    )
                 result_cache[cache_key] = structure_quantizer(
                     str(structure_path),
                     cache_dir=str(cache_dir),
