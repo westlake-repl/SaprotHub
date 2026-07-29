@@ -12,7 +12,18 @@ STANDARD_AMINO_ACIDS = tuple("ACDEFGHIKLMNPQRSTVWY")
 LOW_CONFIDENCE_THRESHOLD = 0.5
 HIGH_X_COUNT_THRESHOLD = 10
 HIGH_X_RATIO_THRESHOLD = 0.05
-MAX_LOGGED_PREDICTIONS = 20
+MAX_LOGGED_PREDICTIONS = 10
+MAX_LOGGED_HIGH_BURDEN_WARNINGS = 10
+MAX_PROGRESS_UPDATES = 10
+
+
+def _should_log_progress(completed: int, total: int) -> bool:
+    if total <= 0 or completed <= 0:
+        return False
+    if total <= MAX_PROGRESS_UPDATES:
+        return True
+    interval = max(1, (total + MAX_PROGRESS_UPDATES - 1) // MAX_PROGRESS_UPDATES)
+    return completed == 1 or completed == total or completed % interval == 0
 
 
 def _cache_path(sequence: str, cache_dir: str, model_name: str) -> Path:
@@ -200,6 +211,8 @@ def complete_unknown_residues(
         f"{len(affected)} unique sequence(s), {total_x} X position(s)."
     )
     high_x_burden = {}
+    high_burden_count = 0
+    logged_high_burden_warnings = 0
     for sequence_index, sequence in enumerate(affected, start=1):
         x_count = sequence.count("X")
         is_high = (
@@ -208,11 +221,20 @@ def complete_unknown_residues(
         )
         high_x_burden[sequence] = is_high
         if is_high:
-            logger(
-                f"Warning: sequence {sequence_index} contains {x_count} X "
-                f"residue(s) ({x_count / len(sequence):.1%}). Treat its "
-                "completed sequence with caution."
-            )
+            high_burden_count += 1
+            if logged_high_burden_warnings < MAX_LOGGED_HIGH_BURDEN_WARNINGS:
+                logger(
+                    f"Warning: sequence {sequence_index} contains {x_count} X "
+                    f"residue(s) ({x_count / len(sequence):.1%}). Treat its "
+                    "completed sequence with caution."
+                )
+                logged_high_burden_warnings += 1
+    if high_burden_count > MAX_LOGGED_HIGH_BURDEN_WARNINGS:
+        logger(
+            "High-X warning preview is limited to "
+            f"{MAX_LOGGED_HIGH_BURDEN_WARNINGS} sequence(s); "
+            f"{high_burden_count} sequence(s) are marked in the audit report."
+        )
 
     payloads = []
     uncached = []
@@ -262,12 +284,13 @@ def complete_unknown_residues(
         )
         try:
             for batch_index, batch in enumerate(batches, start=1):
-                logger(
-                    f"Completing X batch {batch_index}/{len(batches)}: "
-                    f"{len(batch)} sequence(s), "
-                    f"{sum(item.count('X') for item in batch)} position(s), "
-                    f"maximum length {max(map(len, batch))}."
-                )
+                if _should_log_progress(batch_index, len(batches)):
+                    logger(
+                        f"Completing X batch {batch_index}/{len(batches)}: "
+                        f"{len(batch)} sequence(s), "
+                        f"{sum(item.count('X') for item in batch)} position(s), "
+                        f"maximum length {max(map(len, batch))}."
+                    )
                 batch_payloads = _predict_batch(
                     model,
                     tokenizer,
