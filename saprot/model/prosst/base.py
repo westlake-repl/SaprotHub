@@ -399,6 +399,21 @@ class ProSSTBaseModel(AbstractModel):
             metadata["num_labels"] = int(self.num_labels)
         return {"colabprosst": metadata}
 
+    @staticmethod
+    def _normalize_saved_adapter_config(save_path: str) -> None:
+        config_path = Path(save_path) / "adapter_config.json"
+        if not config_path.is_file():
+            return
+
+        adapter_config = json.loads(config_path.read_text(encoding="utf-8"))
+        target_modules = adapter_config.get("target_modules")
+        if isinstance(target_modules, list):
+            adapter_config["target_modules"] = sorted(target_modules)
+        config_path.write_text(
+            json.dumps(adapter_config, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
     def save_checkpoint(
         self,
         save_path: str,
@@ -422,6 +437,7 @@ class ProSSTBaseModel(AbstractModel):
             pass
 
         self.model.save_pretrained(save_path)
+        self._normalize_saved_adapter_config(save_path)
         metadata = dict(checkpoint_info["colabprosst"])
         metadata["checkpoint_format"] = "peft_adapter"
         active_adapter = getattr(self.model, "active_adapter", "default")
