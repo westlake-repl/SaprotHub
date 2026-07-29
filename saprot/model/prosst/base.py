@@ -55,8 +55,40 @@ class ProSSTBaseModel(AbstractModel):
         if self.lora_kwargs is not None:
             self.lora_kwargs = EasyDict(lora_kwargs)
             self._init_lora()
+            if getattr(self.lora_kwargs, "is_trainable", False):
+                self._rebuild_optimizer_after_lora()
 
         self.valid_metrics_list = {"step": []}
+
+    def _rebuild_optimizer_after_lora(self) -> None:
+        # PEFT creates new LoRA and modules_to_save parameters, so the optimizer
+        # built by AbstractModel before PEFT wrapping must be replaced.
+        self.init_optimizers()
+        optimizer_param_ids = {
+            id(parameter)
+            for group in self.optimizer.param_groups
+            for parameter in group["params"]
+        }
+        missing = [
+            name
+            for name, parameter in self.model.named_parameters()
+            if parameter.requires_grad and id(parameter) not in optimizer_param_ids
+        ]
+        if missing:
+            raise RuntimeError(
+                "The ProSST optimizer does not contain all trainable LoRA "
+                f"parameters: {missing}"
+            )
+
+        trainable_count = sum(
+            parameter.numel()
+            for parameter in self.model.parameters()
+            if parameter.requires_grad
+        )
+        print(
+            f"LoRA optimizer initialized with {trainable_count:,} trainable "
+            "parameters."
+        )
 
     def _init_lora(self):
         from peft import LoraConfig, PeftModel, get_peft_model
