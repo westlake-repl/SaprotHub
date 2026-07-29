@@ -21,6 +21,7 @@ from saprot.data.sequence_to_prosst import (
     ESMFOLD_MAX_RESIDUES,
     preparation_artifact_paths,
     prepare_sequence_csv_with_structure_tokens,
+    should_log_progress,
 )
 from saprot.data.pdb2prosst import clear_sst_predictor_cache
 from saprot.data.structure_to_prosst import (
@@ -70,13 +71,16 @@ AUTO_SPLIT_SEED = 20000812
 class _StableTrainingProgress(Callback):
     """Print stable epoch updates without Colab's dynamic progress redraws."""
 
-    def on_train_epoch_start(self, trainer, pl_module):
-        epoch = trainer.current_epoch + 1
-        print(f"Training epoch {epoch}/{trainer.max_epochs}...")
+    def on_train_start(self, trainer, pl_module):
+        print(f"Training started: {trainer.max_epochs} epoch(s).")
 
     def on_train_epoch_end(self, trainer, pl_module):
         epoch = trainer.current_epoch + 1
-        print(f"Training epoch {epoch}/{trainer.max_epochs} completed.")
+        if should_log_progress(epoch, trainer.max_epochs):
+            print(
+                f"Training progress: epoch {epoch}/{trainer.max_epochs} "
+                "completed."
+            )
 
 
 class ColabProSSTWorkflow:
