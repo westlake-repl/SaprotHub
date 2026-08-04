@@ -51,6 +51,35 @@ INPUT_TEMPLATE_FILES = {
     },
 }
 
+INPUT_TEMPLATE_STRUCTURES = (
+    {
+        "filename": "AF-P83428-F1-model_v6.pdb",
+        "sequence": (
+            "ATTGCSCPQCIIFDPICASSYKNGRRGFSSGCHMRCYNRCHGTDYFQISKGSKCI"
+        ),
+    },
+    {
+        "filename": "AF-Q6GU94-F1-model_v6.pdb",
+        "sequence": (
+            "MKAIVVLLILALILCLYAMTTVEGACQFWSCNSSCISRGYRQGYCWGIQYKYCQCQ"
+        ),
+    },
+    {
+        "filename": "AF-P0DKS3-F1-model_v6.pdb",
+        "sequence": (
+            "LKCFQHGKVVTCHRDMKFCYHNTGMPFRNLKLILQGCSSSCSETENNKCCSTDRCNK"
+        ),
+    },
+    {
+        "filename": "AF-P19407-F1-model_v6.pdb",
+        "sequence": (
+            "MESVAKPATTKEGSAKQAAIVVGVLALGWFAIQVAFIPLFNKVRGGGSDKKDDDVNAFTPDT"
+        ),
+    },
+)
+
+INPUT_TEMPLATE_STRUCTURE_ARCHIVE = "example_structures.zip"
+
 INPUT_TEMPLATE_GUIDE = (
     (
         "TRAINING",

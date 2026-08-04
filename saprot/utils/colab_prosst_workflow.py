@@ -56,6 +56,8 @@ from saprot.utils.prosst_module_loader import (
 )
 from saprot.utils.colab_prosst_templates import (
     INPUT_TEMPLATE_GUIDE,
+    INPUT_TEMPLATE_STRUCTURE_ARCHIVE,
+    INPUT_TEMPLATE_STRUCTURES,
     get_input_template_name,
 )
 
@@ -521,6 +523,7 @@ class ColabProSSTWorkflow:
         for old_name in [
             "README.txt",
             "00_README_FIRST.txt",
+            INPUT_TEMPLATE_STRUCTURE_ARCHIVE,
             "prosst_input_templates.zip",
         ]:
             old_path = template_home / old_name
@@ -534,17 +537,48 @@ class ColabProSSTWorkflow:
                 input_mode,
             )
 
+        examples = [dict(example) for example in INPUT_TEMPLATE_STRUCTURES]
+        asset_dir = (
+            Path(__file__).resolve().parents[1]
+            / "assets"
+            / "prosst_template_structures"
+        )
+        example_dir = template_home / "example_structures"
+        if example_dir.exists():
+            shutil.rmtree(example_dir)
+        example_dir.mkdir(parents=True)
+        for example in examples:
+            source_path = asset_dir / example["filename"]
+            if not source_path.is_file():
+                raise FileNotFoundError(
+                    f"Missing ColabProSST template structure: {source_path}"
+                )
+            shutil.copy2(source_path, example_dir / source_path.name)
+        source_readme = asset_dir / "README.md"
+        if source_readme.is_file():
+            shutil.copy2(source_readme, example_dir / "README.md")
+
+        structure_zip = template_home / INPUT_TEMPLATE_STRUCTURE_ARCHIVE
+        with zipfile.ZipFile(
+            structure_zip,
+            "w",
+            compression=zipfile.ZIP_DEFLATED,
+        ) as archive:
+            for example in examples:
+                filename = example["filename"]
+                archive.write(example_dir / filename, arcname=filename)
+
         pd.DataFrame(
             [
                 {
-                    "sequence": "ACD",
-                    "mutant": "D3A",
-                    "structure_file": "protein_1.pdb",
+                    "sequence": examples[0]["sequence"],
+                    "mutant": "T2A",
+                    "structure_file": examples[0]["filename"],
                 },
                 {
-                    "sequence": "ACDE",
-                    "mutant": "D3A:E4A",
-                    "structure_file": "protein_2.cif",
+                    "sequence": examples[1]["sequence"],
+                    "mutant": "K2A:A3G",
+                    "structure_file": examples[1]["filename"],
                 },
             ]
         ).to_csv(
@@ -554,9 +588,13 @@ class ColabProSSTWorkflow:
         pd.DataFrame(
             [
                 {
-                    "sequence": "ACD",
-                    "mutant": "D3A",
-                }
+                    "sequence": examples[0]["sequence"],
+                    "mutant": "T2A",
+                },
+                {
+                    "sequence": examples[1]["sequence"],
+                    "mutant": "K2A:A3G",
+                },
             ]
         ).to_csv(
             template_path("zero_shot", "single", "sequence"), index=False
@@ -565,22 +603,40 @@ class ColabProSSTWorkflow:
         pd.DataFrame(
             [
                 {
-                    "sequence": "ACD",
+                    "sequence": examples[0]["sequence"],
+                    "label": 0,
+                    "stage": "train",
+                    "structure_file": examples[0]["filename"],
+                },
+                {
+                    "sequence": examples[1]["sequence"],
                     "label": 1,
                     "stage": "train",
-                    "structure_file": "train_protein.pdb",
+                    "structure_file": examples[1]["filename"],
                 },
                 {
-                    "sequence": "ACE",
+                    "sequence": examples[2]["sequence"],
                     "label": 0,
                     "stage": "valid",
-                    "structure_file": "valid_protein.pdb",
+                    "structure_file": examples[2]["filename"],
                 },
                 {
-                    "sequence": "ACF",
+                    "sequence": examples[3]["sequence"],
+                    "label": 1,
+                    "stage": "valid",
+                    "structure_file": examples[3]["filename"],
+                },
+                {
+                    "sequence": examples[0]["sequence"],
+                    "label": 0,
+                    "stage": "test",
+                    "structure_file": examples[0]["filename"],
+                },
+                {
+                    "sequence": examples[1]["sequence"],
                     "label": 1,
                     "stage": "test",
-                    "structure_file": "test_protein.pdb",
+                    "structure_file": examples[1]["filename"],
                 },
             ]
         ).to_csv(
@@ -591,17 +647,32 @@ class ColabProSSTWorkflow:
         pd.DataFrame(
             [
                 {
-                    "sequence": "ACD",
+                    "sequence": examples[0]["sequence"],
+                    "label": 0,
+                    "stage": "train",
+                },
+                {
+                    "sequence": examples[1]["sequence"],
                     "label": 1,
                     "stage": "train",
                 },
                 {
-                    "sequence": "ACE",
+                    "sequence": examples[2]["sequence"],
                     "label": 0,
                     "stage": "valid",
                 },
                 {
-                    "sequence": "ACF",
+                    "sequence": examples[3]["sequence"],
+                    "label": 1,
+                    "stage": "valid",
+                },
+                {
+                    "sequence": examples[0]["sequence"],
+                    "label": 0,
+                    "stage": "test",
+                },
+                {
+                    "sequence": examples[1]["sequence"],
                     "label": 1,
                     "stage": "test",
                 },
@@ -614,22 +685,58 @@ class ColabProSSTWorkflow:
         pd.DataFrame(
             [
                 {
-                    "sequence": "ACD",
-                    "residue_labels": "0 1 0",
+                    "sequence": examples[0]["sequence"],
+                    "residue_labels": " ".join(
+                        str(index % 2)
+                        for index in range(len(examples[0]["sequence"]))
+                    ),
                     "stage": "train",
-                    "structure_file": "train_protein.pdb",
+                    "structure_file": examples[0]["filename"],
                 },
                 {
-                    "sequence": "ACE",
-                    "residue_labels": "1 -100 0",
+                    "sequence": examples[1]["sequence"],
+                    "residue_labels": " ".join(
+                        str((index + 1) % 2)
+                        for index in range(len(examples[1]["sequence"]))
+                    ),
+                    "stage": "train",
+                    "structure_file": examples[1]["filename"],
+                },
+                {
+                    "sequence": examples[2]["sequence"],
+                    "residue_labels": " ".join(
+                        str(index % 2)
+                        for index in range(len(examples[2]["sequence"]))
+                    ),
                     "stage": "valid",
-                    "structure_file": "valid_protein.pdb",
+                    "structure_file": examples[2]["filename"],
                 },
                 {
-                    "sequence": "ACF",
-                    "residue_labels": "0 1 1",
+                    "sequence": examples[3]["sequence"],
+                    "residue_labels": " ".join(
+                        str((index + 1) % 2)
+                        for index in range(len(examples[3]["sequence"]))
+                    ),
+                    "stage": "valid",
+                    "structure_file": examples[3]["filename"],
+                },
+                {
+                    "sequence": examples[0]["sequence"],
+                    "residue_labels": " ".join(
+                        str(index % 2)
+                        for index in range(len(examples[0]["sequence"]))
+                    ),
                     "stage": "test",
-                    "structure_file": "test_protein.pdb",
+                    "structure_file": examples[0]["filename"],
+                },
+                {
+                    "sequence": examples[1]["sequence"],
+                    "residue_labels": " ".join(
+                        str((index + 1) % 2)
+                        for index in range(len(examples[1]["sequence"]))
+                    ),
+                    "stage": "test",
+                    "structure_file": examples[1]["filename"],
                 },
             ]
         ).to_csv(
@@ -640,18 +747,51 @@ class ColabProSSTWorkflow:
         pd.DataFrame(
             [
                 {
-                    "sequence": "ACD",
-                    "residue_labels": "0 1 0",
+                    "sequence": examples[0]["sequence"],
+                    "residue_labels": " ".join(
+                        str(index % 2)
+                        for index in range(len(examples[0]["sequence"]))
+                    ),
                     "stage": "train",
                 },
                 {
-                    "sequence": "ACE",
-                    "residue_labels": "1 -100 0",
+                    "sequence": examples[1]["sequence"],
+                    "residue_labels": " ".join(
+                        str((index + 1) % 2)
+                        for index in range(len(examples[1]["sequence"]))
+                    ),
+                    "stage": "train",
+                },
+                {
+                    "sequence": examples[2]["sequence"],
+                    "residue_labels": " ".join(
+                        str(index % 2)
+                        for index in range(len(examples[2]["sequence"]))
+                    ),
                     "stage": "valid",
                 },
                 {
-                    "sequence": "ACF",
-                    "residue_labels": "0 1 1",
+                    "sequence": examples[3]["sequence"],
+                    "residue_labels": " ".join(
+                        str((index + 1) % 2)
+                        for index in range(len(examples[3]["sequence"]))
+                    ),
+                    "stage": "valid",
+                },
+                {
+                    "sequence": examples[0]["sequence"],
+                    "residue_labels": " ".join(
+                        str(index % 2)
+                        for index in range(len(examples[0]["sequence"]))
+                    ),
+                    "stage": "test",
+                },
+                {
+                    "sequence": examples[1]["sequence"],
+                    "residue_labels": " ".join(
+                        str((index + 1) % 2)
+                        for index in range(len(examples[1]["sequence"]))
+                    ),
                     "stage": "test",
                 },
             ]
@@ -663,22 +803,40 @@ class ColabProSSTWorkflow:
         pd.DataFrame(
             [
                 {
-                    "sequence": "ACD",
-                    "label": 0.5,
-                    "stage": "train",
-                    "structure_file": "train_protein.pdb",
-                },
-                {
-                    "sequence": "ACE",
+                    "sequence": examples[0]["sequence"],
                     "label": 0.2,
-                    "stage": "valid",
-                    "structure_file": "valid_protein.pdb",
+                    "stage": "train",
+                    "structure_file": examples[0]["filename"],
                 },
                 {
-                    "sequence": "ACF",
+                    "sequence": examples[1]["sequence"],
                     "label": 0.8,
+                    "stage": "train",
+                    "structure_file": examples[1]["filename"],
+                },
+                {
+                    "sequence": examples[2]["sequence"],
+                    "label": 0.4,
+                    "stage": "valid",
+                    "structure_file": examples[2]["filename"],
+                },
+                {
+                    "sequence": examples[3]["sequence"],
+                    "label": 0.6,
+                    "stage": "valid",
+                    "structure_file": examples[3]["filename"],
+                },
+                {
+                    "sequence": examples[0]["sequence"],
+                    "label": 0.3,
                     "stage": "test",
-                    "structure_file": "test_protein.pdb",
+                    "structure_file": examples[0]["filename"],
+                },
+                {
+                    "sequence": examples[1]["sequence"],
+                    "label": 0.7,
+                    "stage": "test",
+                    "structure_file": examples[1]["filename"],
                 },
             ]
         ).to_csv(
@@ -688,18 +846,33 @@ class ColabProSSTWorkflow:
         pd.DataFrame(
             [
                 {
-                    "sequence": "ACD",
-                    "label": 0.5,
+                    "sequence": examples[0]["sequence"],
+                    "label": 0.2,
                     "stage": "train",
                 },
                 {
-                    "sequence": "ACE",
-                    "label": 0.2,
+                    "sequence": examples[1]["sequence"],
+                    "label": 0.8,
+                    "stage": "train",
+                },
+                {
+                    "sequence": examples[2]["sequence"],
+                    "label": 0.4,
                     "stage": "valid",
                 },
                 {
-                    "sequence": "ACF",
-                    "label": 0.8,
+                    "sequence": examples[3]["sequence"],
+                    "label": 0.6,
+                    "stage": "valid",
+                },
+                {
+                    "sequence": examples[0]["sequence"],
+                    "label": 0.3,
+                    "stage": "test",
+                },
+                {
+                    "sequence": examples[1]["sequence"],
+                    "label": 0.7,
                     "stage": "test",
                 },
             ]
@@ -709,30 +882,51 @@ class ColabProSSTWorkflow:
 
         pair_examples = [
             {
-                "sequence_1": "ACD",
-                "sequence_2": "AC",
+                "sequence_1": examples[0]["sequence"],
+                "sequence_2": examples[1]["sequence"],
                 "stage": "train",
-                "structure_file_1": "train_protein_1.pdb",
-                "structure_file_2": "train_protein_2.pdb",
+                "structure_file_1": examples[0]["filename"],
+                "structure_file_2": examples[1]["filename"],
             },
             {
-                "sequence_1": "ACE",
-                "sequence_2": "AD",
+                "sequence_1": examples[2]["sequence"],
+                "sequence_2": examples[3]["sequence"],
+                "stage": "train",
+                "structure_file_1": examples[2]["filename"],
+                "structure_file_2": examples[3]["filename"],
+            },
+            {
+                "sequence_1": examples[0]["sequence"],
+                "sequence_2": examples[2]["sequence"],
                 "stage": "valid",
-                "structure_file_1": "valid_protein_1.pdb",
-                "structure_file_2": "valid_protein_2.pdb",
+                "structure_file_1": examples[0]["filename"],
+                "structure_file_2": examples[2]["filename"],
             },
             {
-                "sequence_1": "ACF",
-                "sequence_2": "AE",
+                "sequence_1": examples[1]["sequence"],
+                "sequence_2": examples[3]["sequence"],
+                "stage": "valid",
+                "structure_file_1": examples[1]["filename"],
+                "structure_file_2": examples[3]["filename"],
+            },
+            {
+                "sequence_1": examples[0]["sequence"],
+                "sequence_2": examples[3]["sequence"],
                 "stage": "test",
-                "structure_file_1": "test_protein_1.pdb",
-                "structure_file_2": "test_protein_2.pdb",
+                "structure_file_1": examples[0]["filename"],
+                "structure_file_2": examples[3]["filename"],
+            },
+            {
+                "sequence_1": examples[1]["sequence"],
+                "sequence_2": examples[2]["sequence"],
+                "stage": "test",
+                "structure_file_1": examples[1]["filename"],
+                "structure_file_2": examples[2]["filename"],
             },
         ]
         pair_labels = {
-            "pair_classification": [0, 1, 0],
-            "pair_regression": [0.5, 0.2, 0.8],
+            "pair_classification": [0, 1, 0, 1, 0, 1],
+            "pair_regression": [0.2, 0.8, 0.4, 0.6, 0.3, 0.7],
         }
         for task_type, labels in pair_labels.items():
             token_rows = []
@@ -765,12 +959,12 @@ class ColabProSSTWorkflow:
         single_input_structures = pd.DataFrame(
             [
                 {
-                    "sequence": "ACD",
-                    "structure_file": "protein_1.pdb",
+                    "sequence": examples[0]["sequence"],
+                    "structure_file": examples[0]["filename"],
                 },
                 {
-                    "sequence": "ACE",
-                    "structure_file": "protein_2.pdb",
+                    "sequence": examples[1]["sequence"],
+                    "structure_file": examples[1]["filename"],
                 },
             ]
         )
@@ -785,7 +979,10 @@ class ColabProSSTWorkflow:
         )
 
         single_input_sequences = pd.DataFrame(
-            [{"sequence": "ACD"}, {"sequence": "ACE"}]
+            [
+                {"sequence": examples[0]["sequence"]},
+                {"sequence": examples[1]["sequence"]},
+            ]
         )
         for group in ["prediction", "embedding"]:
             single_input_sequences.to_csv(
@@ -830,6 +1027,15 @@ class ColabProSSTWorkflow:
             "IMPORTANT: first choose the task in ColabProSST, then use the "
             "matching template below. Do not use a protein-pair template for "
             "a single-protein task, or a training template for prediction.\n\n"
+            "Ready-to-run structure examples:\n"
+            f"- Upload {INPUT_TEMPLATE_STRUCTURE_ARCHIVE} as the Structure ZIP "
+            "with any template whose filename contains _structure_.\n"
+            "- The matching real PDB files are also available in the "
+            "example_structures folder for inspection.\n"
+            "- Example labels are synthetic and only test the workflow; do not "
+            "use their outputs as scientific results.\n"
+            "- For your own data, replace the example sequences, labels, and "
+            "structure filenames, then upload your own Structure ZIP.\n\n"
             "Training data split:\n"
             "- The stage column is optional. Delete the entire column to let "
             "ColabProSST split the dataset into train, valid, and test (8:1:1).\n"
@@ -853,9 +1059,9 @@ class ColabProSSTWorkflow:
         instructions.append(
             "For each task, choose exactly one input method:\n"
             "1. Sequence + structure files (recommended): use the filename "
-            "containing _structure_, replace its example structure filenames, "
-            "and upload the referenced PDB/mmCIF files together as one "
-            "Structure ZIP.\n"
+            f"containing _structure_ and upload {INPUT_TEMPLATE_STRUCTURE_ARCHIVE} "
+            "to run the included example directly. For your own data, upload "
+            "the referenced PDB/mmCIF files together as one Structure ZIP.\n"
             "2. Sequence only: use the filename containing _sequence_ only "
             "when no experimental or predicted structure file is available. "
             "ColabProSST runs ESMFold v1 locally; a GPU is strongly recommended, "
@@ -886,13 +1092,25 @@ class ColabProSSTWorkflow:
             encoding="utf-8",
         )
         template_zip = template_home / "prosst_input_templates.zip"
-        with zipfile.ZipFile(template_zip, "w") as archive:
+        with zipfile.ZipFile(
+            template_zip,
+            "w",
+            compression=zipfile.ZIP_DEFLATED,
+        ) as archive:
             for csv_path in sorted(template_home.glob("*.csv")):
                 archive.write(csv_path, arcname=csv_path.name)
             archive.write(instructions_path, arcname=instructions_path.name)
+            archive.write(structure_zip, arcname=structure_zip.name)
+            for asset_path in sorted(example_dir.iterdir()):
+                if asset_path.is_file():
+                    archive.write(
+                        asset_path,
+                        arcname=f"example_structures/{asset_path.name}",
+                    )
 
         print("input template directory:", template_home)
         print("input template package:", template_zip)
+        print("ready-to-upload example Structure ZIP:", structure_zip)
         if download:
             self._download(template_zip)
 
