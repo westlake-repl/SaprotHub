@@ -546,17 +546,12 @@ class ColabProSSTWorkflow:
         example_dir = template_home / "example_structures"
         if example_dir.exists():
             shutil.rmtree(example_dir)
-        example_dir.mkdir(parents=True)
         for example in examples:
             source_path = asset_dir / example["filename"]
             if not source_path.is_file():
                 raise FileNotFoundError(
                     f"Missing ColabProSST template structure: {source_path}"
                 )
-            shutil.copy2(source_path, example_dir / source_path.name)
-        source_readme = asset_dir / "README.md"
-        if source_readme.is_file():
-            shutil.copy2(source_readme, example_dir / "README.md")
 
         structure_zip = template_home / INPUT_TEMPLATE_STRUCTURE_ARCHIVE
         with zipfile.ZipFile(
@@ -566,7 +561,7 @@ class ColabProSSTWorkflow:
         ) as archive:
             for example in examples:
                 filename = example["filename"]
-                archive.write(example_dir / filename, arcname=filename)
+                archive.write(asset_dir / filename, arcname=filename)
 
         pd.DataFrame(
             [
@@ -1030,8 +1025,6 @@ class ColabProSSTWorkflow:
             "Ready-to-run structure examples:\n"
             f"- Upload {INPUT_TEMPLATE_STRUCTURE_ARCHIVE} as the Structure ZIP "
             "with any template whose filename contains _structure_.\n"
-            "- The matching real PDB files are also available in the "
-            "example_structures folder for inspection.\n"
             "- Example labels are synthetic and only test the workflow; do not "
             "use their outputs as scientific results.\n"
             "- For your own data, replace the example sequences, labels, and "
@@ -1101,12 +1094,6 @@ class ColabProSSTWorkflow:
                 archive.write(csv_path, arcname=csv_path.name)
             archive.write(instructions_path, arcname=instructions_path.name)
             archive.write(structure_zip, arcname=structure_zip.name)
-            for asset_path in sorted(example_dir.iterdir()):
-                if asset_path.is_file():
-                    archive.write(
-                        asset_path,
-                        arcname=f"example_structures/{asset_path.name}",
-                    )
 
         print("input template directory:", template_home)
         print("input template package:", template_zip)
