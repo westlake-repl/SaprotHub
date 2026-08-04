@@ -1149,9 +1149,10 @@ class ColabProSSTUI:
             "<h3 style='margin:0 0 8px'>Input templates</h3>"
             "<p>Download ready-to-use input examples for "
             "every supported task. The package contains separate sequence-only "
-            "and sequence + structure-file examples, four matching PDB files, "
-            "and an <code>example_structures.zip</code> that can be uploaded "
-            "directly with any included structure-input CSV. Example labels "
+            "and sequence + structure-file examples, plus an "
+            "<code>example_structures.zip</code> containing four matching PDB "
+            "files. Upload that ZIP directly with any included structure-input "
+            "CSV. Example labels "
             "are synthetic and intended only to verify the workflow. These "
             "input formats work with every official ProSST model.</p>",
             width="100%",
