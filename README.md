@@ -20,7 +20,7 @@ Finding models through [SaprotHub Search](https://huggingface.co/spaces/SaProtHu
 ## News
 - **2026/01/28:** We are delighted to announce that [ColabESM3](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ESM-Play-V3.ipynb) and [ColabESMC](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ESM-Play-VC.ipynb) are now ready for use.
 - **2025/10/24:** ColabSaprot and SaprotHub are published in Nature Biotechnology, see [here](https://www.nature.com/articles/s41587-025-02859-7).
-- **2024/05/06:** We are delighted  to announce that [ColabSeprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabSeprot.ipynb?hl=en)  and [SeprotHub](https://huggingface.co/SeprotHub) are now ready for use. ColabSeprot offers access to several state-of-the-art sequence-only Protein Language Models (PLMs), including ESM1b, ESM2, ProTrek, and ProtBert, enabling streamlined fine-tuning and prediction for protein sequence analysis.
+- **2025/05/06:** We are delighted  to announce that [ColabSeprot](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabSeprot.ipynb?hl=en)  and [SeprotHub](https://huggingface.co/SeprotHub) are now ready for use. ColabSeprot offers access to several state-of-the-art sequence-only Protein Language Models (PLMs), including ESM1b, ESM2, ProTrek, and ProtBert, enabling streamlined fine-tuning and prediction for protein sequence analysis.
   
 - **2025/01/01:**  We are delighted  to announce that  [ColabSaprot v2](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub_v2.ipynb?hl=en) (**New!!**) and [SaprotHub](https://huggingface.co/SaProtHub) are now ready for use. [Note ColabSaprot [v1](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/SaprotHub.ipynb) will no longer be updated.] Check out the [video tutorial](https://www.youtube.com/watch?v=nmLtjlCI_7M&t=5s) and [document](https://github.com/westlake-repl/SaprotHub/wiki/SaprotHub-v2-(latest)#a-simple-way-to-handle-unexpected-issues).
 
@@ -33,7 +33,7 @@ Finding models through [SaprotHub Search](https://huggingface.co/spaces/SaProtHu
 ### WeChat
 2024/12/01: You can scan the QR code to join our wechat groups （We currently host 5 active weichat groups with a total membership of over 1000 researchers and practitioners）:
 
-<img src="https://github.com/user-attachments/assets/fc147ac2-5114-4777-b3d8-004130c19e37" width="50%">
+<img src="https://github.com/user-attachments/assets/f51a5b60-c8b9-4197-9890-24af6ef449bc" width="50%">
 
 > We have 2 PhD positions for international students at Westlake University! see [here](https://x.com/duguyuan/status/1897101692665258245).
 
@@ -47,6 +47,7 @@ For users who want to deploy ColabSaprot on their local server, please refer to 
 - [ColabESMC](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ESM-Play-VC.ipynb) (300M,600M)
 - [ColabESM3](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ESM-Play-V3.ipynb) （1.4B, structure-aware）
 - [ColabProtT5](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabProtT5.ipynb) (AA)
+- [ColabProSST](https://colab.research.google.com/github/westlake-repl/SaprotHub/blob/main/colab/ColabProSST.ipynb) (AA+structure tokens)
 - [SaProt-T/O](http://113.45.254.183:9527/) (edit protein based on partial sequence/structure and text, Support multiple site mutations)
 - [ColabMETL](https://github.com/gitter-lab/metl?tab=readme-ov-file#mutational-effect-transfer-learning)
 - [Evolla](http://www.chat-protein.com/) (80B protein ChatGPT)
